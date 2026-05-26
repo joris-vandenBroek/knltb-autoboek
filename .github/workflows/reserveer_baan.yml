@@ -20,8 +20,8 @@ on:
         required: true
 
   schedule:
-    - cron: '0 5 * * *'   # 07:00 CEST (zomertijd)
-    - cron: '0 6 * * *'   # 07:00 CET  (wintertijd)
+    - cron: '0 5 * * *'  # 07:00 CEST (zomertijd)
+    - cron: '0 6 * * *'  # 07:00 CET  (wintertijd)
 
 jobs:
   reserveer-baan:
