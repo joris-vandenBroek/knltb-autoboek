@@ -1,0 +1,38 @@
+name: Ledenlijst ophalen
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * 1'  # Elke maandag 07:00 CEST
+
+jobs:
+  haal-leden-op:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: browser-actions/setup-chrome@v1
+
+      - run: pip install selenium webdriver-manager
+
+      - name: Leden ophalen
+        env:
+          KNLTB_BONDSNUMMER: ${{ secrets.KNLTB_BONDSNUMMER }}
+          KNLTB_WACHTWOORD:  ${{ secrets.KNLTB_WACHTWOORD }}
+        run: python haal_leden_op.py
+
+      - name: leden.json committen
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add leden.json
+          git diff --cached --quiet || git commit -m "Ledenlijst bijgewerkt"
+          git push
