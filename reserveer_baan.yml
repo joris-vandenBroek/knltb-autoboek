@@ -1,0 +1,68 @@
+name: 🎾 Padelbaan Automatisch Reserveren
+
+on:
+  workflow_dispatch:
+    inputs:
+      datum:
+        description: 'Speeldatum (YYYY-MM-DD)'
+        required: true
+      tijd:
+        description: 'Voorkeurstijd (HH:MM)'
+        required: true
+      speler2:
+        description: 'Naam medespeler 2'
+        required: true
+      speler3:
+        description: 'Naam medespeler 3'
+        required: true
+      speler4:
+        description: 'Naam medespeler 4'
+        required: true
+
+  schedule:
+    - cron: '0 5 * * *'   # 07:00 CEST (zomertijd)
+    - cron: '0 6 * * *'   # 07:00 CET  (wintertijd)
+
+jobs:
+  reserveer-baan:
+    name: Padelbaan Reserveren
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 📥 Code ophalen
+        uses: actions/checkout@v4
+
+      - name: 🐍 Python 3.11 instellen
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 🌐 Chrome installeren
+        uses: browser-actions/setup-chrome@v1
+
+      - name: 📦 Pakketten installeren
+        run: pip install selenium webdriver-manager
+
+      - name: 🎾 Padelbaan Reserveren
+        env:
+          KNLTB_BONDSNUMMER:    ${{ secrets.KNLTB_BONDSNUMMER }}
+          KNLTB_WACHTWOORD:     ${{ secrets.KNLTB_WACHTWOORD }}
+          KNLTB_CLUB:           ${{ secrets.KNLTB_CLUB }}
+          GMAIL_ADRES:          ${{ secrets.GMAIL_ADRES }}
+          GMAIL_APP_WACHTWOORD: ${{ secrets.GMAIL_APP_WACHTWOORD }}
+        run: |
+          python boek_baan.py \
+            --datum   "${{ github.event.inputs.datum }}" \
+            --tijd    "${{ github.event.inputs.tijd }}" \
+            --speler2 "${{ github.event.inputs.speler2 }}" \
+            --speler3 "${{ github.event.inputs.speler3 }}" \
+            --speler4 "${{ github.event.inputs.speler4 }}"
+
+      - name: 📸 Screenshot opslaan bij fout
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fout-screenshots
+          path: '*.png'
+          retention-days: 3
