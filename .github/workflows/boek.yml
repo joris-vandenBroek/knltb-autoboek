@@ -1,0 +1,57 @@
+name: Boek Padelbaan
+
+on:
+  workflow_dispatch:
+    inputs:
+      datum:
+        description: 'Speeldatum (YYYY-MM-DD)'
+        required: true
+      tijd:
+        description: 'Voorkeurstijd (HH:MM)'
+        required: true
+      speler2:
+        description: 'Naam medespeler 2'
+        required: true
+      speler3:
+        description: 'Naam medespeler 3'
+        required: true
+      speler4:
+        description: 'Naam medespeler 4'
+        required: true
+
+jobs:
+  boek:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: browser-actions/setup-chrome@v1
+
+      - run: pip install selenium webdriver-manager
+
+      - name: Reserveer baan
+        env:
+          KNLTB_BONDSNUMMER:    ${{ secrets.KNLTB_BONDSNUMMER }}
+          KNLTB_WACHTWOORD:     ${{ secrets.KNLTB_WACHTWOORD }}
+          GMAIL_ADRES:          ${{ secrets.GMAIL_ADRES }}
+          GMAIL_APP_WACHTWOORD: ${{ secrets.GMAIL_APP_WACHTWOORD }}
+        run: |
+          python boek_baan.py \
+            --datum   "${{ inputs.datum }}" \
+            --tijd    "${{ inputs.tijd }}" \
+            --speler2 "${{ inputs.speler2 }}" \
+            --speler3 "${{ inputs.speler3 }}" \
+            --speler4 "${{ inputs.speler4 }}"
+
+      - name: Screenshots bij fout
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: '*.png'
+          retention-days: 3
