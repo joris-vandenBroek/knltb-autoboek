@@ -22,7 +22,7 @@ on:
 jobs:
   boek:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -32,15 +32,21 @@ jobs:
 
       - uses: browser-actions/setup-chrome@v1
 
-      - run: pip install selenium webdriver-manager
+      - name: Installeer dependencies
+        run: |
+          sudo apt-get install -y xvfb
+          pip install undetected-chromedriver selenium
 
       - name: Reserveer baan
         env:
+          DISPLAY: :99
           KNLTB_BONDSNUMMER:    ${{ secrets.KNLTB_BONDSNUMMER }}
           KNLTB_WACHTWOORD:     ${{ secrets.KNLTB_WACHTWOORD }}
           GMAIL_ADRES:          ${{ secrets.GMAIL_ADRES }}
           GMAIL_APP_WACHTWOORD: ${{ secrets.GMAIL_APP_WACHTWOORD }}
         run: |
+          Xvfb :99 -screen 0 1280x900x24 &
+          sleep 2
           python boek_baan.py \
             --datum   "${{ inputs.datum }}" \
             --tijd    "${{ inputs.tijd }}" \

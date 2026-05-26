@@ -4,9 +4,8 @@ Werkt door A-Z te zoeken in het spelerszoekvenster en alle autocomplete-suggesti
 """
 
 import os, sys, json, time, logging
-from selenium import webdriver
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
@@ -26,13 +25,13 @@ ZOEKTERMEN = list("abcdefghijklmnopqrstuvwxyz") + ["van ", "de ", "den "]
 
 
 def maak_driver():
-    opties = Options()
-    opties.add_argument("--headless")
+    opties = uc.ChromeOptions()
     opties.add_argument("--no-sandbox")
     opties.add_argument("--disable-dev-shm-usage")
     opties.add_argument("--disable-gpu")
     opties.add_argument("--window-size=1280,900")
-    driver = webdriver.Chrome(options=opties)
+    # Geen --headless: draait via Xvfb virtual display zodat Cloudflare ons niet detecteert
+    driver = uc.Chrome(options=opties)
     driver.implicitly_wait(3)
     return driver
 

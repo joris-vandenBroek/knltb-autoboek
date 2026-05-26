@@ -8,7 +8,7 @@ on:
 jobs:
   haal-leden-op:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
       contents: write
 
@@ -21,13 +21,20 @@ jobs:
 
       - uses: browser-actions/setup-chrome@v1
 
-      - run: pip install selenium webdriver-manager
+      - name: Installeer dependencies
+        run: |
+          sudo apt-get install -y xvfb
+          pip install undetected-chromedriver selenium
 
       - name: Leden ophalen
         env:
+          DISPLAY: :99
           KNLTB_BONDSNUMMER: ${{ secrets.KNLTB_BONDSNUMMER }}
           KNLTB_WACHTWOORD:  ${{ secrets.KNLTB_WACHTWOORD }}
-        run: python haal_leden_op.py
+        run: |
+          Xvfb :99 -screen 0 1280x900x24 &
+          sleep 2
+          python haal_leden_op.py
 
       - name: leden.json committen
         run: |

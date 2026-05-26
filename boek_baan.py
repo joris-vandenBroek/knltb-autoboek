@@ -19,10 +19,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
 
-from selenium import webdriver
+import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
@@ -107,15 +106,15 @@ def stuur_email(onderwerp: str, inhoud: str):
         log.error(f"❌ E-mail versturen mislukt: {e}")
 
 
-def maak_driver() -> webdriver.Chrome:
-    opties = Options()
-    opties.add_argument("--headless")
+def maak_driver() -> uc.Chrome:
+    opties = uc.ChromeOptions()
     opties.add_argument("--no-sandbox")
     opties.add_argument("--disable-dev-shm-usage")
     opties.add_argument("--disable-gpu")
     opties.add_argument("--window-size=1280,900")
     opties.add_argument("--lang=nl-NL")
-    driver = webdriver.Chrome(options=opties)
+    # Geen --headless: draait via Xvfb virtual display zodat Cloudflare ons niet detecteert
+    driver = uc.Chrome(options=opties)
     driver.implicitly_wait(5)
     return driver
 
@@ -132,7 +131,7 @@ def screenshot(driver, naam):
 
 
 # ── STAP 1: Inloggen ──────────────────────────────────────────────────────────
-def login(driver: webdriver.Chrome) -> bool:
+def login(driver: uc.Chrome) -> bool:
     log.info(f"Navigeer naar {LOGIN_URL}")
     driver.get(LOGIN_URL)
     time.sleep(3)
@@ -173,7 +172,7 @@ def login(driver: webdriver.Chrome) -> bool:
 
 
 # ── STAP 2: Baan afhangen klikken ────────────────────────────────────────────
-def klik_baan_afhangen(driver: webdriver.Chrome) -> bool:
+def klik_baan_afhangen(driver: uc.Chrome) -> bool:
     log.info("Navigeer naar reserveringspagina...")
     driver.get(RESERVEER_URL)
     time.sleep(2)
@@ -195,7 +194,7 @@ def klik_baan_afhangen(driver: webdriver.Chrome) -> bool:
 
 
 # ── STAP 3: Spelers toevoegen ─────────────────────────────────────────────────
-def voeg_spelers_toe(driver: webdriver.Chrome, speler2: str, speler3: str, speler4: str) -> bool:
+def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str) -> bool:
     log.info("Spelers toevoegen...")
     time.sleep(2)
     screenshot(driver, "05_spelers_pagina")
@@ -243,7 +242,7 @@ def voeg_spelers_toe(driver: webdriver.Chrome, speler2: str, speler3: str, spele
 
 
 # ── STAP 4: Dag en dagdeel kiezen ────────────────────────────────────────────
-def kies_dag(driver: webdriver.Chrome, datum: str, tijd: str) -> bool:
+def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     log.info(f"Dag kiezen: {datum}, dagdeel: {dagdeel(tijd)}")
     time.sleep(2)
     screenshot(driver, "07_dag_pagina")
@@ -297,7 +296,7 @@ def kies_dag(driver: webdriver.Chrome, datum: str, tijd: str) -> bool:
 
 
 # ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
-def kies_baan_en_tijd(driver: webdriver.Chrome, voorkeur_tijd: str) -> tuple:
+def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     """
     Kies een beschikbare padelbaan op de voorkeurstijd (of alternatief).
     Geeft (baannaam, geboekte_tijd) terug bij succes, anders ("", "").
@@ -335,7 +334,7 @@ def kies_baan_en_tijd(driver: webdriver.Chrome, voorkeur_tijd: str) -> tuple:
 
 
 # ── STAP 6: Bevestigen ────────────────────────────────────────────────────────
-def bevestig(driver: webdriver.Chrome) -> bool:
+def bevestig(driver: uc.Chrome) -> bool:
     log.info("Bevestigen...")
     try:
         # Eerst Volgende
@@ -362,7 +361,7 @@ def bevestig(driver: webdriver.Chrome) -> bool:
 
 
 # ── Naamcheck ─────────────────────────────────────────────────────────────────
-def zoek_speler(driver: webdriver.Chrome, naam: str) -> bool:
+def zoek_speler(driver: uc.Chrome, naam: str) -> bool:
     """Controleer of een speler gevonden kan worden op de spelersselectiepagina."""
     try:
         zoek_veld = wacht_op(driver, By.XPATH,
