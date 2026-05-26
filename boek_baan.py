@@ -249,6 +249,107 @@ def reserveer_baan(driver: webdriver.Chrome, datum: str, voorkeur_tijd: str,
     return 0, ""
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# NAAMCHECK — apart commando, direct uitvoeren bij opdracht van Joris
+# Gebruik: python boek_baan.py --check-namen --speler2 "Jan" --speler3 "Piet" --speler4 "Kees"
+# ══════════════════════════════════════════════════════════════════════════════
+
+def zoek_speler(driver: webdriver.Chrome, naam: str) -> bool:
+    """
+    Zoek een speler op naam in de KNLTB ledenzoeker.
+    Geeft True terug als de naam gevonden wordt, anders False.
+    """
+    try:
+        # Navigeer naar ledenzoeker / speler toevoegen scherm
+        driver.get(KNLTB_URL)
+        time.sleep(2)
+
+        # Probeer zoekfunctie te vinden
+        zoek_veld = wacht_op(driver, By.XPATH,
+            "//input[contains(@placeholder,'naam') or contains(@placeholder,'zoek') or "
+            "contains(@placeholder,'speler') or contains(@placeholder,'lid')]",
+            timeout=8)
+        zoek_veld.clear()
+        zoek_veld.send_keys(naam)
+        time.sleep(2)
+
+        # Kijk of er resultaten zijn
+        resultaten = driver.find_elements(By.XPATH,
+            f"//li[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
+            f"'{naam.split()[0].lower()}')]"
+            f" | //div[contains(@class,'result')][contains("
+            f"translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
+            f"'{naam.split()[0].lower()}')]"
+        )
+        return len(resultaten) > 0
+
+    except TimeoutException:
+        log.warning(f"Zoekscherm niet bereikbaar voor '{naam}'")
+        return False
+
+
+def check_namen(speler2: str, speler3: str, speler4: str) -> dict:
+    """
+    Controleer alle 3 medespelers in de KNLTB app.
+    Geeft dict terug: {naam: True/False}
+    """
+    log.info("=" * 50)
+    log.info("🔍 NAAMCHECK — Spelers opzoeken in KNLTB")
+    log.info("=" * 50)
+
+    driver = maak_driver()
+    resultaten = {}
+
+    try:
+        if not login(driver):
+            log.error("❌ Kon niet inloggen voor naamcheck")
+            return {s: None for s in [speler2, speler3, speler4]}
+
+        for naam in [speler2, speler3, speler4]:
+            gevonden = zoek_speler(driver, naam)
+            resultaten[naam] = gevonden
+            status = "✅ Gevonden" if gevonden else "❌ NIET gevonden"
+            log.info(f"   {status}: {naam}")
+
+    finally:
+        driver.quit()
+
+    return resultaten
+
+
+def main_check_namen(args):
+    """Voer naamcheck uit en rapporteer resultaat via stdout (voor GitHub Actions output)."""
+    resultaten = check_namen(args.speler2, args.speler3, args.speler4)
+
+    niet_gevonden = [naam for naam, ok in resultaten.items() if not ok]
+    gevonden      = [naam for naam, ok in resultaten.items() if ok]
+
+    print("\n── NAAMCHECK RESULTAAT ──")
+    for naam in gevonden:
+        print(f"✅ {naam}")
+    for naam in niet_gevonden:
+        print(f"❌ {naam}")
+
+    if niet_gevonden:
+        # Schrijf niet-gevonden namen naar een bestand zodat GitHub Actions het oppikt
+        with open("namen_niet_gevonden.txt", "w") as f:
+            f.write("\n".join(niet_gevonden))
+        print(f"\n⚠️  Niet gevonden: {', '.join(niet_gevonden)}")
+        print("Pas de naam(en) aan en probeer opnieuw.")
+
+        stuur_email(
+            "⚠️ KNLTB: Spelernaam niet gevonden — controleer voor boeking",
+            f"De volgende speler(s) zijn niet gevonden in de KNLTB app:\n\n"
+            + "\n".join(f"  ❌ {n}" for n in niet_gevonden)
+            + f"\n\nWel gevonden:\n"
+            + "\n".join(f"  ✅ {n}" for n in gevonden)
+            + f"\n\nCorrigeer de naam(en) en geef de opdracht opnieuw aan Claude."
+        )
+        sys.exit(1)  # Foutcode → GitHub Actions markeert de run als mislukt
+    else:
+        print("\n✅ Alle spelers gevonden — boeking kan doorgaan!")
+        sys.exit(0)
+
 def main():
     parser = argparse.ArgumentParser(description="KNLTB Padelbaan Auto-Reservering")
     parser.add_argument("--check-namen", action="store_true",
@@ -369,103 +470,3 @@ if __name__ == "__main__":
     main()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# NAAMCHECK — apart commando, direct uitvoeren bij opdracht van Joris
-# Gebruik: python boek_baan.py --check-namen --speler2 "Jan" --speler3 "Piet" --speler4 "Kees"
-# ══════════════════════════════════════════════════════════════════════════════
-
-def zoek_speler(driver: webdriver.Chrome, naam: str) -> bool:
-    """
-    Zoek een speler op naam in de KNLTB ledenzoeker.
-    Geeft True terug als de naam gevonden wordt, anders False.
-    """
-    try:
-        # Navigeer naar ledenzoeker / speler toevoegen scherm
-        driver.get(KNLTB_URL)
-        time.sleep(2)
-
-        # Probeer zoekfunctie te vinden
-        zoek_veld = wacht_op(driver, By.XPATH,
-            "//input[contains(@placeholder,'naam') or contains(@placeholder,'zoek') or "
-            "contains(@placeholder,'speler') or contains(@placeholder,'lid')]",
-            timeout=8)
-        zoek_veld.clear()
-        zoek_veld.send_keys(naam)
-        time.sleep(2)
-
-        # Kijk of er resultaten zijn
-        resultaten = driver.find_elements(By.XPATH,
-            f"//li[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
-            f"'{naam.split()[0].lower()}')]"
-            f" | //div[contains(@class,'result')][contains("
-            f"translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
-            f"'{naam.split()[0].lower()}')]"
-        )
-        return len(resultaten) > 0
-
-    except TimeoutException:
-        log.warning(f"Zoekscherm niet bereikbaar voor '{naam}'")
-        return False
-
-
-def check_namen(speler2: str, speler3: str, speler4: str) -> dict:
-    """
-    Controleer alle 3 medespelers in de KNLTB app.
-    Geeft dict terug: {naam: True/False}
-    """
-    log.info("=" * 50)
-    log.info("🔍 NAAMCHECK — Spelers opzoeken in KNLTB")
-    log.info("=" * 50)
-
-    driver = maak_driver()
-    resultaten = {}
-
-    try:
-        if not login(driver):
-            log.error("❌ Kon niet inloggen voor naamcheck")
-            return {s: None for s in [speler2, speler3, speler4]}
-
-        for naam in [speler2, speler3, speler4]:
-            gevonden = zoek_speler(driver, naam)
-            resultaten[naam] = gevonden
-            status = "✅ Gevonden" if gevonden else "❌ NIET gevonden"
-            log.info(f"   {status}: {naam}")
-
-    finally:
-        driver.quit()
-
-    return resultaten
-
-
-def main_check_namen(args):
-    """Voer naamcheck uit en rapporteer resultaat via stdout (voor GitHub Actions output)."""
-    resultaten = check_namen(args.speler2, args.speler3, args.speler4)
-
-    niet_gevonden = [naam for naam, ok in resultaten.items() if not ok]
-    gevonden      = [naam for naam, ok in resultaten.items() if ok]
-
-    print("\n── NAAMCHECK RESULTAAT ──")
-    for naam in gevonden:
-        print(f"✅ {naam}")
-    for naam in niet_gevonden:
-        print(f"❌ {naam}")
-
-    if niet_gevonden:
-        # Schrijf niet-gevonden namen naar een bestand zodat GitHub Actions het oppikt
-        with open("namen_niet_gevonden.txt", "w") as f:
-            f.write("\n".join(niet_gevonden))
-        print(f"\n⚠️  Niet gevonden: {', '.join(niet_gevonden)}")
-        print("Pas de naam(en) aan en probeer opnieuw.")
-
-        stuur_email(
-            "⚠️ KNLTB: Spelernaam niet gevonden — controleer voor boeking",
-            f"De volgende speler(s) zijn niet gevonden in de KNLTB app:\n\n"
-            + "\n".join(f"  ❌ {n}" for n in niet_gevonden)
-            + f"\n\nWel gevonden:\n"
-            + "\n".join(f"  ✅ {n}" for n in gevonden)
-            + f"\n\nCorrigeer de naam(en) en geef de opdracht opnieuw aan Claude."
-        )
-        sys.exit(1)  # Foutcode → GitHub Actions markeert de run als mislukt
-    else:
-        print("\n✅ Alle spelers gevonden — boeking kan doorgaan!")
-        sys.exit(0)
