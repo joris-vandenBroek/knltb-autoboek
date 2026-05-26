@@ -14,6 +14,8 @@
     :root {
       --groen: #1a5c2e;
       --groen-dark: #0f3d1e;
+      --groen-btn: #38a169;
+      --groen-btn-dark: #276749;
       --groen-light: #f0fff4;
       --geel: #feee00;
       --geel-dark: #d4c700;
@@ -25,173 +27,122 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f7fafc;
+      background: #f0f4f8;
       min-height: 100vh;
-      padding-bottom: calc(100px + var(--safe-bottom));
+      padding-bottom: calc(110px + var(--safe-bottom));
     }
 
-    /* Header */
+    /* ── Header ─────────────────────────────────────────── */
     .header {
       background: var(--groen);
       color: white;
       padding: 52px 20px 22px;
       padding-top: max(52px, calc(44px + env(safe-area-inset-top)));
+      position: relative;
     }
-    .header-inner {
-      display: flex;
-      align-items: center;
-      gap: 14px;
+    .header-inner { display: flex; align-items: center; gap: 14px; }
+    .header-logo  { width: 56px; height: 56px; border-radius: 12px; flex-shrink: 0; }
+    .header h1    { font-size: 1.55rem; font-weight: 700; line-height: 1.2; }
+    .header p     { font-size: 0.92rem; opacity: 0.8; margin-top: 3px; }
+    .gear-btn {
+      position: absolute;
+      top: max(14px, calc(8px + env(safe-area-inset-top)));
+      right: 16px;
+      background: rgba(255,255,255,0.22);
+      border: none; border-radius: 8px;
+      padding: 7px 11px; font-size: 1.15rem;
+      cursor: pointer; color: white;
     }
-    .header-logo {
-      width: 54px;
-      height: 54px;
-      border-radius: 12px;
-      flex-shrink: 0;
-    }
-    .header h1 { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
-    .header p  { font-size: 0.9rem; opacity: 0.8; margin-top: 3px; }
 
-    /* Sections */
+    /* ── Kaarten ─────────────────────────────────────────── */
     .section {
       background: white;
       margin: 16px 16px 0;
-      border-radius: 16px;
+      border-radius: 18px;
       overflow: hidden;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
     }
-
     .section-header {
-      padding: 14px 18px 9px;
-      font-size: 0.75rem;
+      padding: 15px 20px 9px;
+      font-size: 0.72rem;
       font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.07em;
+      letter-spacing: 0.08em;
       color: var(--grijs);
     }
 
+    /* ── Rijen ────────────────────────────────────────────── */
     .row {
       display: flex;
       align-items: center;
-      padding: 0 18px;
-      min-height: 64px;
+      padding: 0 20px;
+      min-height: 68px;
       border-top: 1px solid var(--border);
     }
     .row:first-of-type { border-top: none; }
-
-    .row-icon {
-      font-size: 1.35rem;
-      width: 34px;
-      flex-shrink: 0;
-    }
+    .row-icon { font-size: 1.35rem; width: 34px; flex-shrink: 0; }
 
     .row label {
-      font-size: 1rem;
+      font-size: 1.05rem;
       color: #4a5568;
-      width: 68px;
+      width: 72px;
       flex-shrink: 0;
     }
-
-    .row input, .row select {
+    .row input[type="date"],
+    .row select {
       flex: 1;
       border: none;
       outline: none;
       font-size: 1.1rem;
       color: #2d3748;
       background: transparent;
-      padding: 16px 0;
-      min-height: 64px;
+      padding: 18px 0;
+      min-height: 68px;
       width: 100%;
     }
 
-    /* Player rows */
+    /* ── Speler-rijen (tappable) ─────────────────────────── */
+    .player-row {
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      transition: background 0.12s;
+    }
+    .player-row:active { background: #f7fafc; }
+
     .player-badge {
-      width: 32px; height: 32px;
-      background: #38a169;
+      width: 34px; height: 34px;
+      background: var(--groen-btn);
       color: white;
       border-radius: 50%;
-      font-size: 0.9rem;
+      font-size: 1rem;
       font-weight: 700;
       display: flex; align-items: center; justify-content: center;
       flex-shrink: 0;
-      margin-right: 12px;
+      margin-right: 14px;
     }
-
-    /* Boek-knop */
-    .btn-wrap {
-      position: fixed;
-      bottom: 0; left: 0; right: 0;
-      padding: 14px 16px;
-      padding-bottom: calc(14px + var(--safe-bottom));
-      background: white;
-      border-top: 1px solid var(--border);
+    .player-label {
+      flex: 1;
+      font-size: 1.1rem;
+      color: #2d3748;
     }
+    .player-label.placeholder { color: #a0aec0; }
+    .row-chevron { color: #cbd5e0; font-size: 1.4rem; flex-shrink: 0; }
 
-    .btn-boek {
-      width: 100%;
-      background: #38a169;
-      color: white;
-      border: none;
-      border-radius: 16px;
-      padding: 20px;
-      font-size: 1.15rem;
-      font-weight: 700;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      transition: background 0.15s, transform 0.1s;
-    }
-    .btn-boek:active { transform: scale(0.97); background: #276749; }
-    .btn-boek:disabled { opacity: 0.55; }
-
-    .spinner {
-      width: 22px; height: 22px;
-      border: 2.5px solid rgba(0,0,0,0.2);
-      border-top-color: #1a1a1a;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* Toast */
-    .toast {
-      position: fixed;
-      bottom: calc(100px + var(--safe-bottom));
-      left: 16px; right: 16px;
-      background: #2d3748;
-      color: white;
-      border-radius: 14px;
-      padding: 16px 18px;
-      font-size: 1rem;
-      line-height: 1.5;
-      opacity: 0;
-      transform: translateY(12px);
-      transition: opacity 0.25s, transform 0.25s;
-      pointer-events: none;
-      white-space: pre-line;
-    }
-    .toast.show { opacity: 1; transform: translateY(0); }
-    .toast.success { background: var(--groen-dark); }
-    .toast.error   { background: #c53030; }
-
-    /* Leden info */
+    /* ── Leden info balk ─────────────────────────────────── */
     .leden-info-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 18px 14px;
+      padding: 10px 20px 15px;
     }
-    #leden-info {
-      font-size: 0.82rem;
-      color: var(--grijs);
-    }
+    #leden-info { font-size: 0.85rem; color: var(--grijs); }
     .btn-verversen {
       background: none;
       border: 1.5px solid var(--border);
       border-radius: 20px;
-      padding: 7px 14px;
-      font-size: 0.85rem;
+      padding: 8px 16px;
+      font-size: 0.88rem;
       color: var(--grijs);
       cursor: pointer;
       white-space: nowrap;
@@ -200,47 +151,152 @@
     .btn-verversen:active { border-color: var(--groen); color: var(--groen); }
     .btn-verversen:disabled { opacity: 0.5; }
 
-    /* Setup scherm */
+    /* ── Boek-knop ────────────────────────────────────────── */
+    .btn-wrap {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      padding: 14px 16px;
+      padding-bottom: calc(14px + var(--safe-bottom));
+      background: white;
+      border-top: 1px solid var(--border);
+    }
+    .btn-boek {
+      width: 100%;
+      background: var(--groen-btn);
+      color: white;
+      border: none;
+      border-radius: 16px;
+      padding: 20px;
+      font-size: 1.18rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-boek:active   { transform: scale(0.97); background: var(--groen-btn-dark); }
+    .btn-boek:disabled { opacity: 0.55; }
+
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid rgba(255,255,255,0.35);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Toast ────────────────────────────────────────────── */
+    .toast {
+      position: fixed;
+      bottom: calc(106px + var(--safe-bottom));
+      left: 16px; right: 16px;
+      background: #2d3748;
+      color: white;
+      border-radius: 14px;
+      padding: 16px 18px;
+      font-size: 1rem;
+      line-height: 1.55;
+      opacity: 0;
+      transform: translateY(14px);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+      white-space: pre-line;
+      z-index: 200;
+    }
+    .toast.show    { opacity: 1; transform: translateY(0); }
+    .toast.success { background: var(--groen-dark); }
+    .toast.error   { background: #c53030; }
+
+    /* ── Overlay / bottom-sheets ─────────────────────────── */
     .overlay {
       display: none;
       position: fixed; inset: 0;
-      background: rgba(0,0,0,0.5);
+      background: rgba(0,0,0,0.45);
       z-index: 100;
       align-items: flex-end;
     }
     .overlay.show { display: flex; }
+
     .sheet {
       background: white;
       width: 100%;
-      border-radius: 20px 20px 0 0;
-      padding: 24px 20px;
-      padding-bottom: calc(24px + var(--safe-bottom));
+      border-radius: 22px 22px 0 0;
+      padding: 22px 20px 20px;
+      padding-bottom: calc(20px + var(--safe-bottom));
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
     }
-    .sheet h2 { font-size: 1.1rem; margin-bottom: 6px; }
-    .sheet p  { font-size: 0.85rem; color: var(--grijs); margin-bottom: 16px; line-height: 1.5; }
-    .sheet input {
-      width: 100%; border: 1.5px solid var(--border);
-      border-radius: 10px; padding: 12px; font-size: 0.95rem;
-      outline: none; margin-bottom: 12px; font-family: monospace;
+    .sheet-handle {
+      width: 40px; height: 4px;
+      background: #e2e8f0;
+      border-radius: 2px;
+      margin: 0 auto 18px;
     }
-    .sheet input:focus { border-color: var(--groen); }
+    .sheet h2 { font-size: 1.15rem; margin-bottom: 14px; }
+    .sheet-search {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 1.05rem;
+      outline: none;
+      flex-shrink: 0;
+    }
+    .sheet-search:focus { border-color: var(--groen-btn); }
+
+    .sheet-list {
+      overflow-y: auto;
+      flex: 1;
+      margin-top: 10px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sheet-item {
+      padding: 18px 6px;
+      font-size: 1.05rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      color: #2d3748;
+    }
+    .sheet-item:last-child { border-bottom: none; }
+    .sheet-item:active { background: var(--groen-light); color: var(--groen); }
+    .sheet-item.custom {
+      font-weight: 600;
+      color: var(--groen-btn);
+    }
+    .sheet-item.empty { color: var(--grijs); font-style: italic; }
+
+    /* PAT-sheet */
+    .pat-sheet-input {
+      width: 100%;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 1rem;
+      outline: none;
+      margin-bottom: 14px;
+      font-family: monospace;
+    }
+    .pat-sheet-input:focus { border-color: var(--groen); }
     .btn-opslaan {
-      width: 100%; background: var(--geel); color: #1a1a1a;
-      border: none; border-radius: 12px; padding: 14px;
-      font-size: 1rem; font-weight: 800; cursor: pointer;
+      width: 100%;
+      background: var(--geel);
+      color: #1a1a1a;
+      border: none;
+      border-radius: 12px;
+      padding: 16px;
+      font-size: 1.05rem;
+      font-weight: 800;
+      cursor: pointer;
     }
     .btn-opslaan:active { background: var(--geel-dark); }
-    .gear-btn {
-      position: absolute; top: max(14px, calc(8px + env(safe-area-inset-top)));
-      right: 16px; background: rgba(255,255,255,0.25);
-      border: none; border-radius: 8px; padding: 6px 10px;
-      font-size: 1.1rem; cursor: pointer; color: white;
-    }
+    .pat-hint { font-size: 0.87rem; color: var(--grijs); margin-bottom: 16px; line-height: 1.5; }
   </style>
 </head>
 <body>
 
-<div class="header" style="position:relative">
+<!-- Header -->
+<div class="header">
   <div class="header-inner">
     <img src="logo.png" alt="ETV Volley" class="header-logo">
     <div>
@@ -248,16 +304,31 @@
       <p>ETV Volley — automatische reservering</p>
     </div>
   </div>
-  <button class="gear-btn" onclick="toonInstellingen()" title="Instellingen">⚙️</button>
+  <button class="gear-btn" onclick="toonPatSheet()" title="Instellingen">⚙️</button>
 </div>
 
-<!-- Setup / instellingen sheet -->
-<div class="overlay" id="overlay" onclick="sluitSheet(event)">
-  <div class="sheet">
+<!-- PAT instellingen sheet -->
+<div class="overlay" id="patOverlay" onclick="sluitPatSheet(event)">
+  <div class="sheet" style="max-height:55vh">
+    <div class="sheet-handle"></div>
     <h2>🔑 GitHub Token instellen</h2>
-    <p>Voer je GitHub Personal Access Token in. Dit wordt alleen lokaal opgeslagen op jouw telefoon en nooit gedeeld.</p>
-    <input type="password" id="patInput" placeholder="ghp_..." autocomplete="off" autocorrect="off" spellcheck="false">
+    <p class="pat-hint">Voer je GitHub Personal Access Token in. Wordt alleen lokaal opgeslagen op jouw telefoon.</p>
+    <input type="password" id="patInput" class="pat-sheet-input"
+           placeholder="ghp_…" autocomplete="off" autocorrect="off" spellcheck="false">
     <button class="btn-opslaan" onclick="slaPatOp()">Opslaan</button>
+  </div>
+</div>
+
+<!-- Speler-selectie sheet -->
+<div class="overlay" id="spelerOverlay" onclick="sluitSpelerSheet(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h2 id="spelerSheetTitel">Medespeler kiezen</h2>
+    <input type="text" id="spelerZoek" class="sheet-search"
+           placeholder="Naam zoeken…"
+           oninput="filterSpelerLijst()"
+           autocomplete="off" autocorrect="off" spellcheck="false">
+    <div class="sheet-list" id="spelerLijst"></div>
   </div>
 </div>
 
@@ -279,19 +350,28 @@
 <!-- Spelers -->
 <div class="section">
   <div class="section-header">Medespelers</div>
-  <div class="row">
+
+  <div class="row player-row" onclick="openSpelerSheet(2)">
     <div class="player-badge">2</div>
-    <input type="text" id="speler2" placeholder="Medespeler 2" autocomplete="off" list="leden-lijst">
+    <span id="label2" class="player-label placeholder">Medespeler 2</span>
+    <span class="row-chevron">›</span>
   </div>
-  <div class="row">
+  <div class="row player-row" onclick="openSpelerSheet(3)">
     <div class="player-badge">3</div>
-    <input type="text" id="speler3" placeholder="Medespeler 3" autocomplete="off" list="leden-lijst">
+    <span id="label3" class="player-label placeholder">Medespeler 3</span>
+    <span class="row-chevron">›</span>
   </div>
-  <div class="row">
+  <div class="row player-row" onclick="openSpelerSheet(4)">
     <div class="player-badge">4</div>
-    <input type="text" id="speler4" placeholder="Medespeler 4" autocomplete="off" list="leden-lijst">
+    <span id="label4" class="player-label placeholder">Medespeler 4</span>
+    <span class="row-chevron">›</span>
   </div>
-  <datalist id="leden-lijst"></datalist>
+
+  <!-- Verborgen inputs voor waarden -->
+  <input type="hidden" id="speler2">
+  <input type="hidden" id="speler3">
+  <input type="hidden" id="speler4">
+
   <div class="leden-info-row">
     <span id="leden-info">Ledenlijst laden…</span>
     <button class="btn-verversen" id="verversBtn" onclick="verversLeden()">🔄 Verversen</button>
@@ -308,42 +388,45 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  const REPO      = 'joris-vandenBroek/knltb-autoboek';
-  const WORKFLOW  = 'boek.yml';
-  const LEDEN_URL = `https://raw.githubusercontent.com/${REPO}/main/leden.json`;
-  const FALLBACK  = ['Herman Brugmans', 'Peter Nijhof', 'Toine Aanraad'];
-  const OPSLAAN_KEY = 'knltb_laatste_spelers';
-  const PAT_KEY     = 'knltb_pat';
+  const REPO       = 'joris-vandenBroek/knltb-autoboek';
+  const WORKFLOW   = 'boek.yml';
+  const LEDEN_URL  = `https://raw.githubusercontent.com/${REPO}/main/leden.json`;
+  const FALLBACK   = ['Herman Brugmans', 'Peter Nijhof', 'Toine Aanraad'];
+  const PAT_KEY    = 'knltb_pat';
+  const SPELERS_KEY = 'knltb_spelers';
 
+  let alleLedenLijst = [];
+  let huidigSpelerNr = 2;
+
+  // ── PAT ──────────────────────────────────────────────────
   function getPat() { return localStorage.getItem(PAT_KEY) || ''; }
 
-  function toonInstellingen() {
+  function toonPatSheet() {
     document.getElementById('patInput').value = getPat();
-    document.getElementById('overlay').classList.add('show');
+    document.getElementById('patOverlay').classList.add('show');
+    setTimeout(() => document.getElementById('patInput').focus(), 350);
   }
-  function sluitSheet(e) {
-    if (e.target === document.getElementById('overlay'))
-      document.getElementById('overlay').classList.remove('show');
+  function sluitPatSheet(e) {
+    if (!e || e.target === document.getElementById('patOverlay'))
+      document.getElementById('patOverlay').classList.remove('show');
   }
   function slaPatOp() {
     const v = document.getElementById('patInput').value.trim();
-    if (v) { localStorage.setItem(PAT_KEY, v); }
-    document.getElementById('overlay').classList.remove('show');
+    if (v) localStorage.setItem(PAT_KEY, v);
+    sluitPatSheet();
     toonToast('success', '✅ Token opgeslagen');
   }
 
-  // Toon setup bij eerste gebruik
-  if (!getPat()) setTimeout(toonInstellingen, 400);
+  if (!getPat()) setTimeout(toonPatSheet, 500);
 
-  // Datum: standaard morgen
+  // ── Datum & tijd ─────────────────────────────────────────
   const morgen = new Date();
   morgen.setDate(morgen.getDate() + 1);
   const iso = morgen.toISOString().slice(0, 10);
   const datumEl = document.getElementById('datum');
   datumEl.value = iso;
-  datumEl.min = iso;
+  datumEl.min   = iso;
 
-  // Tijden 08:00 – 21:30
   const tijdEl = document.getElementById('tijd');
   for (let h = 8; h <= 21; h++) {
     for (let m of [0, 30]) {
@@ -354,13 +437,84 @@
   }
   tijdEl.value = '15:00';
 
-  // Herstel laatste spelers
-  const opgeslagen = JSON.parse(localStorage.getItem(OPSLAAN_KEY) || '[]');
-  ['speler2','speler3','speler4'].forEach((id, i) => {
-    if (opgeslagen[i]) document.getElementById(id).value = opgeslagen[i];
+  // ── Herstel opgeslagen spelers ────────────────────────────
+  const opgeslagen = JSON.parse(localStorage.getItem(SPELERS_KEY) || '[]');
+  [2, 3, 4].forEach((nr, i) => {
+    if (opgeslagen[i]) zetSpeler(nr, opgeslagen[i], false);
   });
 
-  // Laad ledenlijst
+  function zetSpeler(nr, naam, opslaan) {
+    document.getElementById(`speler${nr}`).value = naam;
+    const label = document.getElementById(`label${nr}`);
+    label.textContent = naam;
+    label.classList.remove('placeholder');
+    if (opslaan !== false) {
+      const vals = [2,3,4].map(n => document.getElementById(`speler${n}`).value);
+      localStorage.setItem(SPELERS_KEY, JSON.stringify(vals));
+    }
+  }
+
+  // ── Speler-sheet ──────────────────────────────────────────
+  function openSpelerSheet(nr) {
+    huidigSpelerNr = nr;
+    document.getElementById('spelerSheetTitel').textContent = `Medespeler ${nr} kiezen`;
+    document.getElementById('spelerZoek').value = '';
+    renderSpelerLijst('');
+    document.getElementById('spelerOverlay').classList.add('show');
+    setTimeout(() => document.getElementById('spelerZoek').focus(), 350);
+  }
+
+  function sluitSpelerSheet(e) {
+    if (!e || e.target === document.getElementById('spelerOverlay'))
+      document.getElementById('spelerOverlay').classList.remove('show');
+  }
+
+  function filterSpelerLijst() {
+    renderSpelerLijst(document.getElementById('spelerZoek').value);
+  }
+
+  function renderSpelerLijst(query) {
+    const q = query.trim().toLowerCase();
+    const lijst = document.getElementById('spelerLijst');
+    lijst.innerHTML = '';
+
+    const gefilterd = q.length === 0
+      ? alleLedenLijst
+      : alleLedenLijst.filter(n => n.toLowerCase().includes(q));
+
+    // Optie: gebruik getypte naam direct
+    if (q.length > 1) {
+      const kapitaal = query.trim().split(' ')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const el = document.createElement('div');
+      el.className = 'sheet-item custom';
+      el.textContent = `✏️  Gebruik "${kapitaal}"`;
+      el.addEventListener('click', () => selectSpeler(kapitaal));
+      lijst.appendChild(el);
+    }
+
+    if (gefilterd.length === 0 && q.length === 0) {
+      const el = document.createElement('div');
+      el.className = 'sheet-item empty';
+      el.textContent = 'Nog geen ledenlijst — tik 🔄 Verversen';
+      lijst.appendChild(el);
+    } else {
+      gefilterd.forEach(naam => {
+        const el = document.createElement('div');
+        el.className = 'sheet-item';
+        el.textContent = naam;
+        el.addEventListener('click', () => selectSpeler(naam));
+        lijst.appendChild(el);
+      });
+    }
+  }
+
+  function selectSpeler(naam) {
+    zetSpeler(huidigSpelerNr, naam, true);
+    sluitSpelerSheet();
+  }
+
+  // ── Ledenlijst laden ──────────────────────────────────────
   async function laadLeden() {
     let leden = FALLBACK;
     try {
@@ -371,10 +525,7 @@
       }
     } catch (_) {}
 
-    const dl = document.getElementById('leden-lijst');
-    dl.innerHTML = '';
-    leden.forEach(n => { const o = document.createElement('option'); o.value = n; dl.appendChild(o); });
-
+    alleLedenLijst = leden;
     document.getElementById('leden-info').textContent =
       leden.length > 3 ? `${leden.length} leden` : 'Nog geen ledenlijst';
     return leden.length;
@@ -392,7 +543,6 @@
       return;
     }
 
-    // Trigger de haal_leden_op workflow op GitHub Actions
     try {
       const resp = await fetch(
         `https://api.github.com/repos/${REPO}/actions/workflows/haal_leden_op.yml/dispatches`,
@@ -407,25 +557,22 @@
           body: JSON.stringify({ ref: 'main' })
         }
       );
-
-      if (resp.status === 204) {
-        toonToast('success', '✅ Ledenlijst wordt opgehaald (~2 min)\nJe ontvangt de nieuwe lijst automatisch bij de volgende keer openen.');
-      } else {
+      if (resp.status === 204)
+        toonToast('success', '✅ Ledenlijst wordt bijgewerkt (~2 min)\nOpen de app opnieuw voor de nieuwe lijst.');
+      else
         toonToast('error', `❌ Workflow starten mislukt (${resp.status})`);
-      }
     } catch (e) {
       toonToast('error', `❌ Netwerkfout: ${e.message}`);
     }
 
-    // Ook de huidige leden.json direct herladen
-    const n = await laadLeden();
+    await laadLeden();
     btn.disabled = false;
     btn.textContent = '🔄 Verversen';
   }
 
   laadLeden();
 
-  // Toast
+  // ── Toast ─────────────────────────────────────────────────
   let toastTimer;
   function toonToast(type, tekst) {
     const el = document.getElementById('toast');
@@ -436,6 +583,7 @@
     toastTimer = setTimeout(() => el.classList.remove('show'), type === 'success' ? 5000 : 7000);
   }
 
+  // ── Baan boeken ───────────────────────────────────────────
   async function boekBaan() {
     const datum   = document.getElementById('datum').value;
     const tijd    = document.getElementById('tijd').value;
@@ -444,7 +592,13 @@
     const speler4 = document.getElementById('speler4').value.trim();
 
     if (!datum || !speler2 || !speler3 || !speler4) {
-      toonToast('error', '⚠️ Vul alle velden in.');
+      toonToast('error', '⚠️ Vul alle medespelers in.');
+      return;
+    }
+
+    const pat = getPat();
+    if (!pat) {
+      toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️');
       return;
     }
 
@@ -452,13 +606,7 @@
     btn.disabled = true;
     document.getElementById('btnTekst').innerHTML = '<div class="spinner"></div>';
 
-    // Sla spelers op voor volgende keer
-    localStorage.setItem(OPSLAAN_KEY, JSON.stringify([speler2, speler3, speler4]));
-
     const datumNL = datum.split('-').reverse().join('-');
-
-    const pat = getPat();
-    if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); btn.disabled = false; document.getElementById('btnTekst').textContent = 'Baan boeken'; return; }
 
     try {
       const resp = await fetch(
@@ -477,9 +625,9 @@
 
       if (resp.status === 204) {
         toonToast('success',
-          `✅ Gelukt!\n${datumNL} om ${tijd}\n${speler2}, ${speler3}, ${speler4}\n\nJe ontvangt een e-mail na de boeking.`);
+          `✅ Gelukt!\n${datumNL} om ${tijd}\n${speler2}, ${speler3}, ${speler4}\n\nJe ontvangt een e-mail zodra de baan geboekt is.`);
       } else {
-        toonToast('error', `❌ GitHub Actions fout (${resp.status})\nMogelijk tijdelijk down — probeer opnieuw.`);
+        toonToast('error', `❌ GitHub Actions fout (${resp.status})\nProbeer opnieuw.`);
       }
     } catch (e) {
       toonToast('error', `❌ Netwerkfout: ${e.message}`);
@@ -489,7 +637,7 @@
     document.getElementById('btnTekst').textContent = 'Baan boeken';
   }
 
-  // Service worker registreren
+  // ── Service worker ─────────────────────────────────────────
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }

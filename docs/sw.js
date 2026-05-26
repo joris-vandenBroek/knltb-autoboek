@@ -1,4 +1,4 @@
-const CACHE = 'padel-v2';
+const CACHE = 'padel-v3';
 const APP_SHELL = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
