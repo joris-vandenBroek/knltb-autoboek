@@ -1,13 +1,12 @@
 """
-KNLTB Padelbaan Auto-Reservering
-Automatisch een padelbaan reserveren via knltb.club
+ETV Volley Padelbaan Auto-Reservering
+Automatisch een padelbaan reserveren via etv-volley.nl/mijn
 
 Omgevingsvariabelen (GitHub Secrets):
-  KNLTB_BONDSNUMMER      - Jouw KNLTB bondsnummer
-  KNLTB_WACHTWOORD       - Jouw KNLTB wachtwoord
-  KNLTB_CLUB             - Naam van jouw club (bijv. "TC Amsterdam")
+  KNLTB_BONDSNUMMER      - Jouw bondsnummer / gebruikersnaam
+  KNLTB_WACHTWOORD       - Jouw wachtwoord
   GMAIL_ADRES            - Joris.vandenbroek@gmail.com
-  GMAIL_APP_WACHTWOORD   - Gmail App-wachtwoord (myaccount.google.com → Beveiliging → App-wachtwoorden)
+  GMAIL_APP_WACHTWOORD   - Gmail App-wachtwoord
 """
 
 import os
@@ -36,32 +35,35 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── Instellingen ──────────────────────────────────────────────────────────────
-KNLTB_URL            = "https://www.knltb.club/"
+BASE_URL             = "https://etv-volley.nl/mijn"
+LOGIN_URL            = "https://etv-volley.nl/mijn"
+RESERVEER_URL        = "https://etv-volley.nl/mijn/Reservations"
+SPELERS_URL          = "https://etv-volley.nl/mijn/ReservationsPlayers"
+DAG_URL              = "https://etv-volley.nl/mijn/ReservationsDay"
+BAAN_URL             = "https://etv-volley.nl/mijn/ReservationsCourt"
+
 BONDSNUMMER          = os.environ.get("KNLTB_BONDSNUMMER", "")
 WACHTWOORD           = os.environ.get("KNLTB_WACHTWOORD", "")
-CLUB_NAAM            = os.environ.get("KNLTB_CLUB", "")
 GMAIL_ADRES          = os.environ.get("GMAIL_ADRES", "Joris.vandenbroek@gmail.com")
 GMAIL_APP_WACHTWOORD = os.environ.get("GMAIL_APP_WACHTWOORD", "")
 SPELER1              = "Joris van den Broek"
-BAAN_VOORKEUR        = [1, 2, 3, 4, 5, 6]
-WACHT_TIMEOUT        = 15
 
-def genereer_tijden(voorkeur_tijd: str) -> list[str]:
-    """
-    Genereer een lijst van tijden om te proberen, beginnend bij de voorkeur.
-    Probeert eerst de gewenste tijd, dan steeds 30 min eerder/later afwisselend.
-    Blijft binnen 08:00 – 22:00.
-    Voorbeeld: voorkeur 10:00 → [10:00, 10:30, 09:30, 11:00, 09:00, 11:30, ...]
-    """
-    basis = datetime.strptime(voorkeur_tijd, "%H:%M")
+# Padelbanen op etv-volley.nl (rijnummers 9-14 = Padel 1-6)
+PADEL_BANEN          = ["Padel 1", "Padel 2", "Padel 3", "Padel 4", "Padel 5", "Padel 6"]
+WACHT_TIMEOUT        = 15
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def genereer_tijden(voorkeur_tijd: str) -> list:
+    """Genereer tijden rondom voorkeur, 30 min stappen, tussen 08:00 en 22:00."""
+    basis   = datetime.strptime(voorkeur_tijd, "%H:%M")
     vroegst = datetime.strptime("08:00", "%H:%M")
     laatst  = datetime.strptime("22:00", "%H:%M")
-
-    tijden = [basis]
+    tijden  = [basis]
     stap = 1
     while True:
-        later   = basis + timedelta(minutes=30 * stap)
-        eerder  = basis - timedelta(minutes=30 * stap)
+        later  = basis + timedelta(minutes=30 * stap)
+        eerder = basis - timedelta(minutes=30 * stap)
         toegevoegd = False
         if later <= laatst:
             tijden.append(later)
@@ -72,9 +74,18 @@ def genereer_tijden(voorkeur_tijd: str) -> list[str]:
         if not toegevoegd:
             break
         stap += 1
-
     return [t.strftime("%H:%M") for t in tijden]
-# ─────────────────────────────────────────────────────────────────────────────
+
+
+def dagdeel(tijd: str) -> str:
+    """Bepaal dagdeel op basis van tijd."""
+    uur = int(tijd.split(":")[0])
+    if uur < 12:
+        return "Ochtend"
+    elif uur < 17:
+        return "Middag"
+    else:
+        return "Avond"
 
 
 def stuur_email(onderwerp: str, inhoud: str):
@@ -115,186 +126,277 @@ def wacht_op(driver, by, waarde, timeout=WACHT_TIMEOUT):
     )
 
 
+def screenshot(driver, naam):
+    driver.save_screenshot(f"{naam}.png")
+    log.info(f"📸 Screenshot: {naam}.png | URL: {driver.current_url}")
+
+
+# ── STAP 1: Inloggen ──────────────────────────────────────────────────────────
 def login(driver: webdriver.Chrome) -> bool:
-    log.info("Navigeer naar KNLTB Club...")
-    driver.get(KNLTB_URL)
-    time.sleep(2)
+    log.info(f"Navigeer naar {LOGIN_URL}")
+    driver.get(LOGIN_URL)
+    time.sleep(3)
+    screenshot(driver, "01_login_pagina")
+
     try:
-        login_knop = wacht_op(driver, By.XPATH,
-            "//a[contains(text(),'Inloggen') or contains(text(),'Login') or contains(@href,'login')]")
-        login_knop.click()
-        time.sleep(1)
-
-        if CLUB_NAAM:
-            log.info(f"Club selecteren: {CLUB_NAAM}")
-            club_veld = wacht_op(driver, By.XPATH,
-                "//input[contains(@placeholder,'club') or contains(@name,'club')]")
-            club_veld.clear()
-            club_veld.send_keys(CLUB_NAAM)
-            time.sleep(1)
-            suggestie = wacht_op(driver, By.XPATH,
-                "//ul[contains(@class,'suggest')]//li[1] | //div[contains(@class,'autocomplete')]//div[1]")
-            suggestie.click()
-            time.sleep(1)
-
-        bond_veld = wacht_op(driver, By.XPATH,
-            "//input[@type='text' or @name='username' or @id='username' or contains(@placeholder,'bondsnummer')]")
-        bond_veld.clear()
-        bond_veld.send_keys(BONDSNUMMER)
+        gebruiker_veld = wacht_op(driver, By.XPATH,
+            "//input[@type='text' or @type='email' "
+            "or @name='username' or @name='Username' or @name='UserName' "
+            "or @id='username' or @id='Username' or @id='UserName' "
+            "or contains(@placeholder,'bondsnummer') or contains(@placeholder,'gebruikersnaam') "
+            "or contains(@placeholder,'e-mail') or contains(@placeholder,'email')]")
+        gebruiker_veld.clear()
+        gebruiker_veld.send_keys(BONDSNUMMER)
 
         ww_veld = wacht_op(driver, By.XPATH, "//input[@type='password']")
         ww_veld.clear()
         ww_veld.send_keys(WACHTWOORD)
-        ww_veld.send_keys(Keys.RETURN)
-        time.sleep(3)
+
+        inlog_knop = wacht_op(driver, By.XPATH,
+            "//button[@type='submit'] | //input[@type='submit'] "
+            "| //button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'login')] "
+            "| //button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'inloggen')]")
+        inlog_knop.click()
+        time.sleep(4)
+        screenshot(driver, "02_na_login")
+
+        if "login" in driver.current_url.lower() or "signin" in driver.current_url.lower():
+            log.error("❌ Inloggen mislukt — nog steeds op loginpagina")
+            return False
 
         log.info("✅ Ingelogd!")
         return True
     except TimeoutException as e:
         log.error(f"❌ Inloggen mislukt: {e}")
-        driver.save_screenshot("login_fout.png")
+        screenshot(driver, "login_fout")
         return False
 
 
-def ga_naar_baan_reserveren(driver: webdriver.Chrome, datum: str) -> bool:
-    log.info(f"Navigeer naar baan reserveren voor {datum}...")
+# ── STAP 2: Baan afhangen klikken ────────────────────────────────────────────
+def klik_baan_afhangen(driver: webdriver.Chrome) -> bool:
+    log.info("Navigeer naar reserveringspagina...")
+    driver.get(RESERVEER_URL)
+    time.sleep(2)
+    screenshot(driver, "03_reserveer_pagina")
+
     try:
-        spelen = wacht_op(driver, By.XPATH,
-            "//a[contains(text(),'Spelen') or contains(text(),'Baan reserveren') or contains(@href,'spelen')]")
-        spelen.click()
+        afhangen_knop = wacht_op(driver, By.XPATH,
+            "//a[contains(text(),'Baan afhangen') or contains(text(),'afhangen')] "
+            "| //button[contains(text(),'Baan afhangen') or contains(text(),'afhangen')]")
+        afhangen_knop.click()
         time.sleep(2)
-
-        doel_datum = datetime.strptime(datum, "%Y-%m-%d")
-        try:
-            kalender = wacht_op(driver, By.XPATH,
-                "//button[contains(@class,'calendar') or contains(@aria-label,'datum') or contains(@class,'date')]")
-            kalender.click()
-            time.sleep(1)
-            dag_str = str(doel_datum.day)
-            dag_cel = wacht_op(driver, By.XPATH,
-                f"//td[normalize-space(text())='{dag_str}' and not(contains(@class,'disabled'))]")
-            dag_cel.click()
-            time.sleep(1)
-        except TimeoutException:
-            log.warning("Kalender niet gevonden, probeer URL-navigatie...")
-
-        log.info(f"✅ Op juiste datum: {datum}")
+        screenshot(driver, "04_na_afhangen_klik")
+        log.info("✅ 'Baan afhangen' geklikt")
         return True
     except TimeoutException as e:
-        log.error(f"❌ Navigatie mislukt: {e}")
-        driver.save_screenshot("navigatie_fout.png")
+        log.error(f"❌ 'Baan afhangen' knop niet gevonden: {e}")
+        screenshot(driver, "afhangen_fout")
         return False
 
 
-def probeer_reservering(driver: webdriver.Chrome, baan_nr: int, tijd: str,
-                        speler2: str, speler3: str, speler4: str) -> bool:
-    """Probeer één specifieke baan op één specifiek tijdstip te boeken."""
-    try:
-        plus_knop = driver.find_element(By.XPATH,
-            f"//*[contains(text(),'Padelbaan {baan_nr}') or contains(text(),'Padel {baan_nr}') or "
-            f"contains(@data-baan,'{baan_nr}')]"
-            f"//ancestor::tr//td[contains(@data-tijd,'{tijd}')]//button[contains(@class,'plus') or "
-            f"contains(@class,'available') or contains(@aria-label,'reserveer')]"
-        )
-        plus_knop.click()
-        time.sleep(2)
+# ── STAP 3: Spelers toevoegen ─────────────────────────────────────────────────
+def voeg_spelers_toe(driver: webdriver.Chrome, speler2: str, speler3: str, speler4: str) -> bool:
+    log.info("Spelers toevoegen...")
+    time.sleep(2)
+    screenshot(driver, "05_spelers_pagina")
 
-        for i, speler in enumerate([speler2, speler3, speler4], start=2):
-            toevoeg_knop = wacht_op(driver, By.XPATH,
-                "//button[contains(text(),'speler toevoegen') or contains(text(),'Toevoegen')]")
-            toevoeg_knop.click()
-            time.sleep(1)
+    for speler in [speler2, speler3, speler4]:
+        log.info(f"Speler toevoegen: {speler}")
+
+        # Altijd via zoekbalk
+        try:
             zoek_veld = wacht_op(driver, By.XPATH,
-                "//input[contains(@placeholder,'naam') or contains(@placeholder,'zoek') or "
-                "contains(@placeholder,'speler')]")
+                "//input[contains(@placeholder,'zoek') or contains(@placeholder,'naam') "
+                "or contains(@placeholder,'speler') or contains(@class,'search')]")
             zoek_veld.clear()
-            zoek_veld.send_keys(speler)
+            zoek_veld.send_keys(speler.split()[0])  # Voornaam
             time.sleep(2)
-            resultaat = wacht_op(driver, By.XPATH,
-                f"//li[contains(text(),'{speler.split()[0]}')]"
-                f" | //div[contains(@class,'result')][contains(text(),'{speler.split()[0]}')]")
-            resultaat.click()
+
+            # Klik suggestie die achternaam bevat
+            suggestie = wacht_op(driver, By.XPATH,
+                f"//li[contains(text(),'{speler.split()[-1]}')]"
+                f" | //div[contains(@class,'suggestion') or contains(@class,'autocomplete')"
+                f" or contains(@class,'dropdown') or contains(@class,'result')]"
+                f"[contains(text(),'{speler.split()[-1]}')]")
+            suggestie.click()
             time.sleep(1)
+            log.info(f"  ✅ {speler} toegevoegd")
+        except TimeoutException:
+            log.error(f"  ❌ {speler} niet gevonden!")
+            return False
 
-        bevestig = wacht_op(driver, By.XPATH,
-            "//button[contains(text(),'Reserveren') or contains(text(),'Bevestigen') or contains(text(),'Boeken')]")
-        bevestig.click()
-        time.sleep(3)
+    screenshot(driver, "06_spelers_toegevoegd")
+
+    # Klik Volgende
+    try:
+        volgende = wacht_op(driver, By.XPATH,
+            "//button[contains(text(),'Volgende') or contains(text(),'Next')] "
+            "| //a[contains(text(),'Volgende')]")
+        volgende.click()
+        time.sleep(2)
+        log.info("✅ Spelers toegevoegd, naar dagkeuze")
         return True
-
-    except (NoSuchElementException, TimeoutException):
+    except TimeoutException:
+        log.error("❌ 'Volgende' knop niet gevonden na spelers")
+        screenshot(driver, "volgende_fout_spelers")
         return False
 
 
-def reserveer_baan(driver: webdriver.Chrome, datum: str, voorkeur_tijd: str,
-                   speler2: str, speler3: str, speler4: str) -> tuple[int, str]:
+# ── STAP 4: Dag en dagdeel kiezen ────────────────────────────────────────────
+def kies_dag(driver: webdriver.Chrome, datum: str, tijd: str) -> bool:
+    log.info(f"Dag kiezen: {datum}, dagdeel: {dagdeel(tijd)}")
+    time.sleep(2)
+    screenshot(driver, "07_dag_pagina")
+
+    doel_datum = datetime.strptime(datum, "%Y-%m-%d")
+    dag_nr     = str(doel_datum.day)
+    maand_kort = doel_datum.strftime("%b").lower()  # bijv. "mei"
+    gewenst_dagdeel = dagdeel(tijd)
+
+    try:
+        # Klik op de juiste dag
+        dag_cel = wacht_op(driver, By.XPATH,
+            f"//td[contains(text(),'{dag_nr}')] "
+            f"| //*[contains(@class,'day') and contains(text(),'{dag_nr}')] "
+            f"| //*[contains(text(),'{dag_nr}') and contains(text(),'{doel_datum.strftime('%b')}')]")
+        dag_cel.click()
+        time.sleep(1)
+        log.info(f"✅ Dag {dag_nr} geklikt")
+    except TimeoutException:
+        log.error(f"❌ Dag {dag_nr} niet gevonden")
+        screenshot(driver, "dag_fout")
+        return False
+
+    try:
+        # Klik op het juiste dagdeel
+        dagdeel_knop = wacht_op(driver, By.XPATH,
+            f"//*[contains(text(),'{gewenst_dagdeel}') and not(contains(@class,'disabled'))]")
+        dagdeel_knop.click()
+        time.sleep(1)
+        log.info(f"✅ Dagdeel '{gewenst_dagdeel}' geklikt")
+    except TimeoutException:
+        log.error(f"❌ Dagdeel '{gewenst_dagdeel}' niet gevonden")
+        screenshot(driver, "dagdeel_fout")
+        return False
+
+    screenshot(driver, "08_dag_geselecteerd")
+
+    # Klik Volgende
+    try:
+        volgende = wacht_op(driver, By.XPATH,
+            "//button[contains(text(),'Volgende') or contains(text(),'Next')] "
+            "| //a[contains(text(),'Volgende')]")
+        volgende.click()
+        time.sleep(2)
+        log.info("✅ Naar baankeuze")
+        return True
+    except TimeoutException:
+        log.error("❌ 'Volgende' knop niet gevonden na dag")
+        screenshot(driver, "volgende_fout_dag")
+        return False
+
+
+# ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
+def kies_baan_en_tijd(driver: webdriver.Chrome, voorkeur_tijd: str) -> tuple:
     """
-    Probeer alle tijden (rondom voorkeur) × alle banen (1-6).
-    Geeft (baannummer, geboekte_tijd) terug bij succes, anders (0, "").
+    Kies een beschikbare padelbaan op de voorkeurstijd (of alternatief).
+    Geeft (baannaam, geboekte_tijd) terug bij succes, anders ("", "").
     """
+    log.info("Baankeuze pagina...")
+    time.sleep(2)
+    screenshot(driver, "09_baan_pagina")
+
     tijden = genereer_tijden(voorkeur_tijd)
     log.info(f"Tijden om te proberen: {tijden}")
 
     for tijd in tijden:
-        log.info(f"── Probeer tijdslot {tijd} ──")
-        for baan_nr in BAAN_VOORKEUR:
-            log.info(f"   Padelbaan {baan_nr} om {tijd}...")
-            if probeer_reservering(driver, baan_nr, tijd, speler2, speler3, speler4):
-                log.info(f"🎾 GESLAAGD! Padelbaan {baan_nr} op {datum} om {tijd}")
-                return baan_nr, tijd
-            log.info(f"   → Niet beschikbaar")
+        for baan in PADEL_BANEN:
+            log.info(f"Probeer {baan} om {tijd}...")
+            try:
+                # Zoek tijdknop in de rij van de gewenste padelbaan
+                tijdknop = driver.find_element(By.XPATH,
+                    f"//*[contains(text(),'{baan}')]"
+                    f"/ancestor::tr"
+                    f"//td[normalize-space(text())='{tijd}'] "
+                    f"| //*[contains(text(),'{baan}')]"
+                    f"/ancestor::*[contains(@class,'row') or contains(@class,'baan')]"
+                    f"//*[normalize-space(text())='{tijd}']")
+                tijdknop.click()
+                time.sleep(2)
+                log.info(f"✅ {baan} om {tijd} geselecteerd!")
+                screenshot(driver, f"10_baan_geselecteerd")
+                return baan, tijd
+            except NoSuchElementException:
+                continue
 
-    log.error("❌ Geen enkele combinatie van tijd + baan beschikbaar!")
-    driver.save_screenshot("geen_baan_beschikbaar.png")
-    return 0, ""
+    log.error("❌ Geen beschikbare padelbaan/tijd gevonden!")
+    screenshot(driver, "baan_fout")
+    return "", ""
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# NAAMCHECK — apart commando, direct uitvoeren bij opdracht van Joris
-# Gebruik: python boek_baan.py --check-namen --speler2 "Jan" --speler3 "Piet" --speler4 "Kees"
-# ══════════════════════════════════════════════════════════════════════════════
-
-def zoek_speler(driver: webdriver.Chrome, naam: str) -> bool:
-    """
-    Zoek een speler op naam in de KNLTB ledenzoeker.
-    Geeft True terug als de naam gevonden wordt, anders False.
-    """
+# ── STAP 6: Bevestigen ────────────────────────────────────────────────────────
+def bevestig(driver: webdriver.Chrome) -> bool:
+    log.info("Bevestigen...")
     try:
-        # Navigeer naar ledenzoeker / speler toevoegen scherm
-        driver.get(KNLTB_URL)
+        # Eerst Volgende
+        volgende = wacht_op(driver, By.XPATH,
+            "//button[contains(text(),'Volgende') or contains(text(),'Next')] "
+            "| //a[contains(text(),'Volgende')]")
+        volgende.click()
         time.sleep(2)
+        screenshot(driver, "11_bevestig_pagina")
 
-        # Probeer zoekfunctie te vinden
-        zoek_veld = wacht_op(driver, By.XPATH,
-            "//input[contains(@placeholder,'naam') or contains(@placeholder,'zoek') or "
-            "contains(@placeholder,'speler') or contains(@placeholder,'lid')]",
-            timeout=8)
-        zoek_veld.clear()
-        zoek_veld.send_keys(naam)
-        time.sleep(2)
-
-        # Kijk of er resultaten zijn
-        resultaten = driver.find_elements(By.XPATH,
-            f"//li[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
-            f"'{naam.split()[0].lower()}')]"
-            f" | //div[contains(@class,'result')][contains("
-            f"translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),"
-            f"'{naam.split()[0].lower()}')]"
-        )
-        return len(resultaten) > 0
-
-    except TimeoutException:
-        log.warning(f"Zoekscherm niet bereikbaar voor '{naam}'")
+        # Dan Bevestigen
+        bevestig_knop = wacht_op(driver, By.XPATH,
+            "//button[contains(text(),'Bevestig') or contains(text(),'Confirm') or contains(text(),'Boek')] "
+            "| //a[contains(text(),'Bevestig')]")
+        bevestig_knop.click()
+        time.sleep(3)
+        screenshot(driver, "12_na_bevestiging")
+        log.info("✅ Bevestigd!")
+        return True
+    except TimeoutException as e:
+        log.error(f"❌ Bevestigen mislukt: {e}")
+        screenshot(driver, "bevestig_fout")
         return False
 
 
-def check_namen(speler2: str, speler3: str, speler4: str) -> dict:
-    """
-    Controleer alle 3 medespelers in de KNLTB app.
-    Geeft dict terug: {naam: True/False}
-    """
+# ── Naamcheck ─────────────────────────────────────────────────────────────────
+def zoek_speler(driver: webdriver.Chrome, naam: str) -> bool:
+    """Controleer of een speler gevonden kan worden op de spelersselectiepagina."""
+    try:
+        zoek_veld = wacht_op(driver, By.XPATH,
+            "//input[contains(@placeholder,'zoek') or contains(@placeholder,'naam') "
+            "or contains(@placeholder,'speler') or contains(@class,'search')]",
+            timeout=8)
+        zoek_veld.clear()
+        zoek_veld.send_keys(naam.split()[0])
+        time.sleep(2)
+
+        resultaten = driver.find_elements(By.XPATH,
+            f"//*[contains(text(),'{naam.split()[-1]}')]"
+            f"[ancestor::*[contains(@class,'suggestion') or contains(@class,'autocomplete') "
+            f"or contains(@class,'dropdown') or contains(@class,'result')]]")
+
+        # Ook checken in recent gespeeld
+        recent = driver.find_elements(By.XPATH,
+            f"//*[contains(@class,'recent')]//*[contains(text(),'{naam.split()[0]}')]"
+            f"[contains(text(),'{naam.split()[-1]}') or "
+            f"following::*[contains(text(),'{naam.split()[-1]}')]]")
+
+        gevonden = len(resultaten) > 0 or len(recent) > 0
+
+        # Reset zoekveld
+        zoek_veld.clear()
+        return gevonden
+    except TimeoutException:
+        return False
+
+
+def main_check_namen(args):
+    """Controleer of alle spelersnamen gevonden worden."""
     log.info("=" * 50)
-    log.info("🔍 NAAMCHECK — Spelers opzoeken in KNLTB")
+    log.info("🔍 NAAMCHECK")
     log.info("=" * 50)
 
     driver = maak_driver()
@@ -302,58 +404,48 @@ def check_namen(speler2: str, speler3: str, speler4: str) -> dict:
 
     try:
         if not login(driver):
-            log.error("❌ Kon niet inloggen voor naamcheck")
-            return {s: None for s in [speler2, speler3, speler4]}
-
-        for naam in [speler2, speler3, speler4]:
-            gevonden = zoek_speler(driver, naam)
-            resultaten[naam] = gevonden
-            status = "✅ Gevonden" if gevonden else "❌ NIET gevonden"
-            log.info(f"   {status}: {naam}")
-
+            for naam in [args.speler2, args.speler3, args.speler4]:
+                resultaten[naam] = None
+        else:
+            # Ga naar spelersselectie
+            if klik_baan_afhangen(driver):
+                time.sleep(2)
+                for naam in [args.speler2, args.speler3, args.speler4]:
+                    gevonden = zoek_speler(driver, naam)
+                    resultaten[naam] = gevonden
+                    log.info(f"  {'✅' if gevonden else '❌'} {naam}")
+            else:
+                for naam in [args.speler2, args.speler3, args.speler4]:
+                    resultaten[naam] = None
     finally:
         driver.quit()
 
-    return resultaten
-
-
-def main_check_namen(args):
-    """Voer naamcheck uit en rapporteer resultaat via stdout (voor GitHub Actions output)."""
-    resultaten = check_namen(args.speler2, args.speler3, args.speler4)
-
-    niet_gevonden = [naam for naam, ok in resultaten.items() if not ok]
-    gevonden      = [naam for naam, ok in resultaten.items() if ok]
+    niet_gevonden = [n for n, ok in resultaten.items() if not ok]
+    gevonden      = [n for n, ok in resultaten.items() if ok]
 
     print("\n── NAAMCHECK RESULTAAT ──")
-    for naam in gevonden:
-        print(f"✅ {naam}")
-    for naam in niet_gevonden:
-        print(f"❌ {naam}")
+    for naam in gevonden:      print(f"✅ {naam}")
+    for naam in niet_gevonden: print(f"❌ {naam}")
 
     if niet_gevonden:
-        # Schrijf niet-gevonden namen naar een bestand zodat GitHub Actions het oppikt
         with open("namen_niet_gevonden.txt", "w") as f:
             f.write("\n".join(niet_gevonden))
-        print(f"\n⚠️  Niet gevonden: {', '.join(niet_gevonden)}")
-        print("Pas de naam(en) aan en probeer opnieuw.")
-
         stuur_email(
-            "⚠️ KNLTB: Spelernaam niet gevonden — controleer voor boeking",
-            f"De volgende speler(s) zijn niet gevonden in de KNLTB app:\n\n"
-            + "\n".join(f"  ❌ {n}" for n in niet_gevonden)
-            + f"\n\nWel gevonden:\n"
-            + "\n".join(f"  ✅ {n}" for n in gevonden)
+            "⚠️ KNLTB: Spelernaam niet gevonden",
+            f"Niet gevonden:\n" + "\n".join(f"  ❌ {n}" for n in niet_gevonden)
+            + f"\n\nWel gevonden:\n" + "\n".join(f"  ✅ {n}" for n in gevonden)
             + f"\n\nCorrigeer de naam(en) en geef de opdracht opnieuw aan Claude."
         )
-        sys.exit(1)  # Foutcode → GitHub Actions markeert de run als mislukt
+        sys.exit(1)
     else:
-        print("\n✅ Alle spelers gevonden — boeking kan doorgaan!")
+        print("\n✅ Alle spelers gevonden!")
         sys.exit(0)
 
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser(description="KNLTB Padelbaan Auto-Reservering")
-    parser.add_argument("--check-namen", action="store_true",
-                        help="Alleen namen controleren, nog niet boeken")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check-namen", action="store_true")
     parser.add_argument("--datum",   required=False)
     parser.add_argument("--tijd",    required=False)
     parser.add_argument("--speler2", required=True)
@@ -361,14 +453,12 @@ def main():
     parser.add_argument("--speler4", required=True)
     args = parser.parse_args()
 
-    # ── Naamcheck modus ───────────────────────────────────────────────────────
     if args.check_namen:
         main_check_namen(args)
-        return  # Klaar, niet verder boeken
-    # ─────────────────────────────────────────────────────────────────────────
+        return
 
     if not args.datum or not args.tijd:
-        log.error("❌ --datum en --tijd zijn verplicht voor een boeking")
+        log.error("❌ --datum en --tijd zijn verplicht")
         sys.exit(1)
 
     if not BONDSNUMMER or not WACHTWOORD:
@@ -381,9 +471,8 @@ def main():
         log.error("❌ Datum moet YYYY-MM-DD zijn")
         sys.exit(1)
 
-    # ── 48-uurs check ─────────────────────────────────────────────────────────
-    speelmoment = datetime.combine(speeldatum.date(),
-                                   datetime.strptime(args.tijd, "%H:%M").time())
+    # 48-uurs check
+    speelmoment     = datetime.combine(speeldatum.date(), datetime.strptime(args.tijd, "%H:%M").time())
     uren_tot_spelen = (speelmoment - datetime.now()).total_seconds() / 3600
     log.info(f"⏱️  Uren tot speelmoment: {uren_tot_spelen:.1f}")
 
@@ -391,82 +480,81 @@ def main():
         boekingsdatum = speeldatum - timedelta(days=2)
         nu = datetime.now()
         if nu.date() < boekingsdatum.date():
-            log.info(f"📅 Boekingsdatum is {boekingsdatum.strftime('%d-%m-%Y')} om 07:00.")
-            log.info("⏳ Nog niet de boekingsdatum — script stopt. GitHub cron hervat dit op tijd.")
+            log.info(f"📅 Boekingsdatum is {boekingsdatum.strftime('%d-%m-%Y')} om 07:00 — script stopt.")
             sys.exit(0)
         elif nu.date() == boekingsdatum.date() and nu.hour < 7:
-            wacht_seconden = int((boekingsdatum.replace(hour=7, minute=0, second=0) - nu).total_seconds())
-            log.info(f"⏳ Wacht {wacht_seconden // 60} minuten tot 07:00...")
-            time.sleep(wacht_seconden)
+            wacht_sec = int((boekingsdatum.replace(hour=7, minute=0, second=0) - nu).total_seconds())
+            log.info(f"⏳ Wacht {wacht_sec // 60} min tot 07:00...")
+            time.sleep(wacht_sec)
         else:
             log.info("✅ Boekingsdatum en na 07:00 — direct boeken!")
     else:
-        log.info("⚡ Minder dan 48 uur tot speelmoment — direct boeken!")
-    # ─────────────────────────────────────────────────────────────────────────
+        log.info("⚡ Minder dan 48 uur — direct boeken!")
 
     log.info("=" * 50)
-    log.info("🎾 KNLTB Padelbaan Auto-Reservering")
-    log.info(f"   Datum:         {args.datum}")
-    log.info(f"   Voorkeurstijd: {args.tijd}")
-    log.info(f"   Spelers:       {SPELER1}, {args.speler2}, {args.speler3}, {args.speler4}")
+    log.info("🎾 ETV Volley Padelbaan Auto-Reservering")
+    log.info(f"   Datum:   {args.datum}")
+    log.info(f"   Tijd:    {args.tijd}")
+    log.info(f"   Spelers: {SPELER1}, {args.speler2}, {args.speler3}, {args.speler4}")
     log.info("=" * 50)
 
     driver = maak_driver()
-    baan_nr, geboekte_tijd = 0, ""
+    baan, geboekte_tijd = "", ""
+
     try:
         if not login(driver):
-            stuur_email(
-                "❌ KNLTB: Inloggen mislukt",
-                f"Automatisch reserveren op {args.datum} mislukt — kon niet inloggen.\n"
-                f"Log in zelf via de KNLTB app!"
-            )
+            stuur_email("❌ ETV Volley: Inloggen mislukt",
+                f"Automatisch reserveren op {args.datum} mislukt — kon niet inloggen.")
             sys.exit(1)
 
-        if not ga_naar_baan_reserveren(driver, args.datum):
-            stuur_email(
-                "❌ KNLTB: Navigatie mislukt",
-                f"Automatisch reserveren op {args.datum} mislukt — navigatie fout.\n"
-                f"Log in zelf via de KNLTB app!"
-            )
+        if not klik_baan_afhangen(driver):
+            stuur_email("❌ ETV Volley: Navigatie mislukt",
+                f"Kon 'Baan afhangen' niet vinden op {args.datum}.")
             sys.exit(1)
 
-        baan_nr, geboekte_tijd = reserveer_baan(
-            driver, args.datum, args.tijd,
-            args.speler2, args.speler3, args.speler4
-        )
+        if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4):
+            stuur_email("❌ ETV Volley: Speler niet gevonden",
+                f"Een speler kon niet worden toegevoegd op {args.datum}.")
+            sys.exit(1)
+
+        if not kies_dag(driver, args.datum, args.tijd):
+            stuur_email("❌ ETV Volley: Dag kiezen mislukt",
+                f"Kon dag {args.datum} niet selecteren.")
+            sys.exit(1)
+
+        baan, geboekte_tijd = kies_baan_en_tijd(driver, args.tijd)
+        if not baan:
+            stuur_email(
+                f"❌ ETV Volley: Geen baan beschikbaar op {args.datum}",
+                f"Geen padelbaan beschikbaar op {args.datum} rondom {args.tijd}.\n"
+                f"Reserveer zelf via etv-volley.nl/mijn")
+            sys.exit(1)
+
+        if not bevestig(driver):
+            stuur_email("❌ ETV Volley: Bevestigen mislukt",
+                f"Baan geselecteerd maar bevestigen mislukt op {args.datum}.")
+            sys.exit(1)
+
     finally:
         driver.quit()
 
     datum_nl = datetime.strptime(args.datum, "%Y-%m-%d").strftime("%d-%m-%Y")
-
-    if baan_nr == 0:
-        stuur_email(
-            f"❌ KNLTB: Geen baan beschikbaar op {datum_nl}",
-            f"Geen enkele padelbaan (1-6) was beschikbaar op {datum_nl},\n"
-            f"ook niet op andere tijden rondom {args.tijd}.\n\n"
-            f"Probeer zelf handmatig te reserveren via de KNLTB app."
-        )
-        sys.exit(1)
-    else:
-        tijdsverschil = "" if geboekte_tijd == args.tijd else f" (voorkeur was {args.tijd})"
-        stuur_email(
-            f"KNLTB GEBOEKT: Padelbaan {baan_nr} – {datum_nl} om {geboekte_tijd}",
-            f"✅ Padelbaan succesvol gereserveerd!\n\n"
-            f"🎾 Padelbaan:  {baan_nr}\n"
-            f"📅 Datum:      {datum_nl}\n"
-            f"🕐 Tijd:       {geboekte_tijd} – 60 min{tijdsverschil}\n"
-            f"👥 Spelers:\n"
-            f"   1. {SPELER1}\n"
-            f"   2. {args.speler2}\n"
-            f"   3. {args.speler3}\n"
-            f"   4. {args.speler4}\n\n"
-            f"Zeg tegen Claude: \"Padelbaan {baan_nr} om {geboekte_tijd} is geboekt\""
-            f" om je agenda bij te werken."
-        )
-        log.info("✅ Klaar!")
+    tijdsverschil = f" (voorkeur was {args.tijd})" if geboekte_tijd != args.tijd else ""
+    stuur_email(
+        f"KNLTB GEBOEKT: {baan} – {datum_nl} om {geboekte_tijd}",
+        f"✅ Padelbaan succesvol gereserveerd!\n\n"
+        f"🎾 Baan:    {baan}\n"
+        f"📅 Datum:   {datum_nl}\n"
+        f"🕐 Tijd:    {geboekte_tijd} – 60 min{tijdsverschil}\n"
+        f"👥 Spelers:\n"
+        f"   1. {SPELER1}\n"
+        f"   2. {args.speler2}\n"
+        f"   3. {args.speler3}\n"
+        f"   4. {args.speler4}\n\n"
+        f"Zeg tegen Claude: '{baan} om {geboekte_tijd} is geboekt' om je agenda bij te werken."
+    )
+    log.info("✅ Klaar!")
 
 
 if __name__ == "__main__":
     main()
-
-
