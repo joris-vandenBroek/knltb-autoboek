@@ -3,11 +3,11 @@ KNLTB Padelbaan Auto-Reservering
 Automatisch een padelbaan reserveren via knltb.club
 
 Omgevingsvariabelen (GitHub Secrets):
-  KNLTB_BONDSNUMMER      - Jouw KNLTB bondsnummer
-  KNLTB_WACHTWOORD       - Jouw KNLTB wachtwoord
-  KNLTB_CLUB             - Naam van jouw club (bijv. "TC Amsterdam")
+  KNLTB_BONDSNUMMER      - 12346357
+  KNLTB_WACHTWOORD       - FeMiTo3! 
+  KNLTB_CLUB             - E.T.V. Volley
   GMAIL_ADRES            - Joris.vandenbroek@gmail.com
-  GMAIL_APP_WACHTWOORD   - Gmail App-wachtwoord (myaccount.google.com → Beveiliging → App-wachtwoorden)
+  GMAIL_APP_WACHTWOORD   - arbw izif ecqj equz
 """
 
 import os
