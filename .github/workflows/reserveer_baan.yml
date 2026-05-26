@@ -19,6 +19,9 @@ on:
         description: 'Naam medespeler 4'
         required: true
 
+  repository_dispatch:
+    types: [boek-baan]
+
   schedule:
     - cron: '0 5 * * *'  # 07:00 CEST (zomertijd)
     - cron: '0 6 * * *'  # 07:00 CET  (wintertijd)
@@ -53,11 +56,11 @@ jobs:
           GMAIL_APP_WACHTWOORD: ${{ secrets.GMAIL_APP_WACHTWOORD }}
         run: |
           python boek_baan.py \
-            --datum   "${{ github.event.inputs.datum }}" \
-            --tijd    "${{ github.event.inputs.tijd }}" \
-            --speler2 "${{ github.event.inputs.speler2 }}" \
-            --speler3 "${{ github.event.inputs.speler3 }}" \
-            --speler4 "${{ github.event.inputs.speler4 }}"
+            --datum   "${{ github.event.inputs.datum || github.event.client_payload.datum }}" \
+            --tijd    "${{ github.event.inputs.tijd || github.event.client_payload.tijd }}" \
+            --speler2 "${{ github.event.inputs.speler2 || github.event.client_payload.speler2 }}" \
+            --speler3 "${{ github.event.inputs.speler3 || github.event.client_payload.speler3 }}" \
+            --speler4 "${{ github.event.inputs.speler4 || github.event.client_payload.speler4 }}"
 
       - name: 📸 Screenshot opslaan bij fout
         if: failure()
