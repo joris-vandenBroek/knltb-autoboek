@@ -12,9 +12,11 @@
   <title>Padel Boeken</title>
   <style>
     :root {
-      --groen: #38a169;
-      --groen-dark: #276749;
+      --groen: #1a5c2e;
+      --groen-dark: #0f3d1e;
       --groen-light: #f0fff4;
+      --geel: #feee00;
+      --geel-dark: #d4c700;
       --grijs: #718096;
       --border: #e2e8f0;
       --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -35,8 +37,19 @@
       padding: 52px 20px 18px;
       padding-top: max(52px, calc(44px + env(safe-area-inset-top)));
     }
-    .header h1 { font-size: 1.4rem; font-weight: 700; }
-    .header p  { font-size: 0.85rem; opacity: 0.85; margin-top: 2px; }
+    .header-inner {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+    .header h1 { font-size: 1.35rem; font-weight: 700; line-height: 1.2; }
+    .header p  { font-size: 0.82rem; opacity: 0.8; margin-top: 2px; }
 
     /* Sections */
     .section {
@@ -93,8 +106,8 @@
     /* Player rows */
     .player-badge {
       width: 26px; height: 26px;
-      background: var(--groen-light);
-      color: var(--groen);
+      background: var(--geel);
+      color: #1a1a1a;
       border-radius: 50%;
       font-size: 0.78rem;
       font-weight: 700;
@@ -115,13 +128,13 @@
 
     .btn-boek {
       width: 100%;
-      background: var(--groen);
-      color: white;
+      background: var(--geel);
+      color: #1a1a1a;
       border: none;
       border-radius: 14px;
       padding: 16px;
       font-size: 1.05rem;
-      font-weight: 700;
+      font-weight: 800;
       cursor: pointer;
       display: flex;
       align-items: center;
@@ -129,13 +142,13 @@
       gap: 8px;
       transition: background 0.15s, transform 0.1s;
     }
-    .btn-boek:active { transform: scale(0.97); background: var(--groen-dark); }
+    .btn-boek:active { transform: scale(0.97); background: var(--geel-dark); }
     .btn-boek:disabled { opacity: 0.55; }
 
     .spinner {
       width: 20px; height: 20px;
-      border: 2.5px solid rgba(255,255,255,0.4);
-      border-top-color: white;
+      border: 2.5px solid rgba(0,0,0,0.2);
+      border-top-color: #1a1a1a;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
     }
@@ -212,11 +225,11 @@
     }
     .sheet input:focus { border-color: var(--groen); }
     .btn-opslaan {
-      width: 100%; background: var(--groen); color: white;
+      width: 100%; background: var(--geel); color: #1a1a1a;
       border: none; border-radius: 12px; padding: 14px;
-      font-size: 1rem; font-weight: 700; cursor: pointer;
+      font-size: 1rem; font-weight: 800; cursor: pointer;
     }
-    .btn-opslaan:active { background: var(--groen-dark); }
+    .btn-opslaan:active { background: var(--geel-dark); }
     .gear-btn {
       position: absolute; top: max(14px, calc(8px + env(safe-area-inset-top)));
       right: 16px; background: rgba(255,255,255,0.25);
@@ -228,8 +241,13 @@
 <body>
 
 <div class="header" style="position:relative">
-  <h1>🎾 Padelbaan Boeken</h1>
-  <p>ETV Volley — automatische reservering</p>
+  <div class="header-inner">
+    <img src="logo.png" alt="ETV Volley" class="header-logo">
+    <div>
+      <h1>Padelbaan Boeken</h1>
+      <p>ETV Volley — automatische reservering</p>
+    </div>
+  </div>
   <button class="gear-btn" onclick="toonInstellingen()" title="Instellingen">⚙️</button>
 </div>
 
