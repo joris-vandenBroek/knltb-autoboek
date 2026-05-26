@@ -163,12 +163,29 @@
     .toast.error   { background: #c53030; }
 
     /* Leden info */
-    .leden-info {
+    .leden-info-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 16px 12px;
+    }
+    #leden-info {
       font-size: 0.75rem;
       color: var(--grijs);
-      padding: 8px 16px 12px;
-      text-align: center;
     }
+    .btn-verversen {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 0.78rem;
+      color: var(--grijs);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-verversen:active { border-color: var(--groen); color: var(--groen); }
+    .btn-verversen:disabled { opacity: 0.5; }
 
     /* Setup scherm */
     .overlay {
@@ -257,7 +274,10 @@
     <input type="text" id="speler4" placeholder="Medespeler 4" autocomplete="off" list="leden-lijst">
   </div>
   <datalist id="leden-lijst"></datalist>
-  <p class="leden-info" id="leden-info">Ledenlijst laden…</p>
+  <div class="leden-info-row">
+    <span id="leden-info">Ledenlijst laden…</span>
+    <button class="btn-verversen" id="verversBtn" onclick="verversLeden()">🔄 Verversen</button>
+  </div>
 </div>
 
 <!-- Boek-knop -->
@@ -323,7 +343,7 @@
   });
 
   // Laad ledenlijst
-  (async () => {
+  async function laadLeden() {
     let leden = FALLBACK;
     try {
       const r = await fetch(LEDEN_URL + '?t=' + Date.now());
@@ -334,11 +354,58 @@
     } catch (_) {}
 
     const dl = document.getElementById('leden-lijst');
+    dl.innerHTML = '';
     leden.forEach(n => { const o = document.createElement('option'); o.value = n; dl.appendChild(o); });
 
     document.getElementById('leden-info').textContent =
-      leden.length > 3 ? `${leden.length} leden beschikbaar` : 'Gebruik "Ledenlijst ophalen" in GitHub Actions voor alle leden';
-  })();
+      leden.length > 3 ? `${leden.length} leden` : 'Nog geen ledenlijst';
+    return leden.length;
+  }
+
+  async function verversLeden() {
+    const btn = document.getElementById('verversBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳…';
+
+    const pat = getPat();
+    if (!pat) {
+      toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️');
+      btn.disabled = false; btn.textContent = '🔄 Verversen';
+      return;
+    }
+
+    // Trigger de haal_leden_op workflow op GitHub Actions
+    try {
+      const resp = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/workflows/haal_leden_op.yml/dispatches`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${pat}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ref: 'main' })
+        }
+      );
+
+      if (resp.status === 204) {
+        toonToast('success', '✅ Ledenlijst wordt opgehaald (~2 min)\nJe ontvangt de nieuwe lijst automatisch bij de volgende keer openen.');
+      } else {
+        toonToast('error', `❌ Workflow starten mislukt (${resp.status})`);
+      }
+    } catch (e) {
+      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+    }
+
+    // Ook de huidige leden.json direct herladen
+    const n = await laadLeden();
+    btn.disabled = false;
+    btn.textContent = '🔄 Verversen';
+  }
+
+  laadLeden();
 
   // Toast
   let toastTimer;
