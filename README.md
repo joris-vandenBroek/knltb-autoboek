@@ -1,17 +1,34 @@
-# 🎾 KNLTB Padelbaan Auto-Reservering
+# 🎾 ETV Volley Padelbaan Auto-Reservering
 
-Automatisch een padelbaan (1 t/m 6) reserveren via knltb.club.
-Claude regelt de planning — GitHub voert het uit.
+Automatisch een padelbaan reserveren via [etv-volley.nl/mijn](https://etv-volley.nl/mijn).
+Bedien de reservering vanuit een mobiele app — GitHub voert het uit.
 
 ---
 
-## 📁 Bestanden in deze repository
+## 📱 Mobiele app
+
+De app is een Progressive Web App (PWA) gehost op GitHub Pages.
+
+**URL:** `https://joris-vandenbroek.github.io/knltb-autoboek/`
+
+**Installeren op je telefoon:**
+- **Android (Chrome):** drie puntjes → "Toevoegen aan beginscherm"
+- **iPhone (Safari):** deel-icoon → "Zet op beginscherm"
+
+**Eerste keer openen:** voer je GitHub Personal Access Token in via ⚙️ — dit wordt alleen lokaal op je telefoon opgeslagen.
+
+---
+
+## 📁 Bestanden
 
 | Bestand | Wat doet het? |
 |---------|---------------|
-| `boek_baan.py` | Het hoofdscript — logt in, controleert namen, boekt baan |
-| `.github/workflows/reserveer_baan.yml` | Voert de boeking uit om 07:00 |
-| `.github/workflows/check_namen.yml` | Controleert spelersnamen direct bij opdracht |
+| `boek_baan.py` | Hoofdscript — logt in op etv-volley.nl, selecteert baan en tijd, bevestigt boeking |
+| `haal_leden_op.py` | Haalt alle ledenlijst op uit het reserveringssysteem |
+| `.github/workflows/boek.yml` | Voert een boeking uit (gestart vanuit de app) |
+| `.github/workflows/haal_leden_op.yml` | Ververst de ledenlijst wekelijks (elke maandag 07:00) |
+| `leden.json` | Gecachte ledenlijst — gebruikt door de app als autocomplete |
+| `docs/` | Bronbestanden van de mobiele PWA |
 
 ---
 
@@ -19,11 +36,10 @@ Claude regelt de planning — GitHub voert het uit.
 
 Ga naar: **Settings → Secrets and variables → Actions → New repository secret**
 
-| Secret naam | Waarde |
-|-------------|--------|
-| `KNLTB_BONDSNUMMER` | Jouw KNLTB bondsnummer |
+| Secret | Waarde |
+|--------|--------|
+| `KNLTB_BONDSNUMMER` | Jouw KNLTB bondsnummer / gebruikersnaam |
 | `KNLTB_WACHTWOORD` | Jouw KNLTB wachtwoord |
-| `KNLTB_CLUB` | Naam van jouw club (bijv. `TC Amsterdam`) |
 | `GMAIL_ADRES` | `Joris.vandenbroek@gmail.com` |
 | `GMAIL_APP_WACHTWOORD` | Gmail App-wachtwoord (zie hieronder) |
 
@@ -38,51 +54,37 @@ Ga naar: **Settings → Secrets and variables → Actions → New repository sec
 ## 🚀 Hoe het werkt
 
 ```
-Jij zegt tegen Claude:
-"Boek padelbaan zaterdag 7 juni om 10:00
- met Jan, Piet en Kees"
+1. Open de app op je telefoon
+2. Kies datum, tijd en 3 medespelers
+3. Tik op "Baan boeken"
 
-Claude doet:
-1. ✅ Agenda-afspraak aanmaken
-2. ✅ Naamcheck workflow starten (direct)
+GitHub Actions doet de rest:
+  ✅ < 48 uur voor speelmoment → direct boeken
+  ✅ > 48 uur → wacht tot 2 dagen voor speeldatum om 07:00
 
-GitHub controleert namen (±1 min):
-3. ✅ Alle namen gevonden → boekingsworkflow starten
-   ❌ Naam niet gevonden → e-mail naar Joris → naam corrigeren
+Script probeert Padelbaan 1 t/m 6 op voorkeurstijd.
+Bij bezette baan probeert het automatisch alternatieve tijden.
 
-GitHub boekt automatisch:
-4. ✅ < 48 uur: direct boeken
-   ✅ > 48 uur: wacht tot 2 dagen voor speeldatum om 07:00
-
-Script boekt padelbaan 1→6 op voorkeurstijd,
-bij bezette tijd probeert het automatisch andere tijden.
-
-5. ✅ E-mail: "KNLTB GEBOEKT: Padelbaan 3 – 07-06-2026 om 10:00"
-
-Jij zegt tegen Claude:
-"Padelbaan 3 is geboekt"
-
-Claude doet:
-6. ✅ Agenda bijwerken naar "🎾 Padel – Padelbaan 3"
+4. ✅ E-mail: "KNLTB GEBOEKT: Padelbaan 3 – 07-06-2026 om 10:00"
 ```
 
 ---
 
-## 🔄 Workflows handmatig starten
+## 🔄 Ledenlijst bijhouden
 
-### Naamcheck
-**Actions → 🔍 Spelersnamen Controleren → Run workflow**
-- Speler 2, 3, 4 invullen → Run
+De ledenlijst (`leden.json`) wordt elke maandag automatisch bijgewerkt.
+Handmatig verversen kan op twee manieren:
 
-### Boeking
-**Actions → 🎾 Padelbaan Automatisch Reserveren → Run workflow**
-- Datum (YYYY-MM-DD), tijd (HH:MM), spelers invullen → Run
+- **In de app:** tik op de **🔄 Verversen** knop onderin de spelerssectie
+- **GitHub:** Actions → Ledenlijst ophalen → Run workflow
 
 ---
 
 ## ❓ Problemen?
 
-- **Script mislukt** → Actions → rode run → "fout-screenshots" bekijken
-- **Naam niet gevonden** → e-mail ontvangen → naam corrigeren bij Claude
-- **Geen e-mail** → check `GMAIL_APP_WACHTWOORD` in Secrets
-- **KNLTB support** → Support@knltb.nl / 085 001 3364
+| Probleem | Oplossing |
+|----------|-----------|
+| Boeking mislukt | Actions → rode run → download "screenshots" voor foutdiagnose |
+| Geen e-mail ontvangen | Controleer `GMAIL_APP_WACHTWOORD` in Secrets |
+| Naam niet gevonden in autocomplete | Tik op 🔄 Verversen om de ledenlijst bij te werken |
+| App vraagt token | Voer GitHub PAT in via ⚙️ (eenmalig per apparaat) |
