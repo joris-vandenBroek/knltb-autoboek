@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#38a169">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Padel Boeken">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Padel Boeken</title>
+  <style>
+    :root {
+      --groen: #38a169;
+      --groen-dark: #276749;
+      --groen-light: #f0fff4;
+      --grijs: #718096;
+      --border: #e2e8f0;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f7fafc;
+      min-height: 100vh;
+      padding-bottom: calc(88px + var(--safe-bottom));
+    }
+
+    /* Header */
+    .header {
+      background: var(--groen);
+      color: white;
+      padding: 52px 20px 18px;
+      padding-top: max(52px, calc(44px + env(safe-area-inset-top)));
+    }
+    .header h1 { font-size: 1.4rem; font-weight: 700; }
+    .header p  { font-size: 0.85rem; opacity: 0.85; margin-top: 2px; }
+
+    /* Sections */
+    .section {
+      background: white;
+      margin: 14px 16px 0;
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+
+    .section-header {
+      padding: 12px 16px 8px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--grijs);
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+      min-height: 52px;
+      border-top: 1px solid var(--border);
+    }
+    .row:first-of-type { border-top: none; }
+
+    .row-icon {
+      font-size: 1.2rem;
+      width: 30px;
+      flex-shrink: 0;
+    }
+
+    .row label {
+      font-size: 0.9rem;
+      color: #4a5568;
+      width: 62px;
+      flex-shrink: 0;
+    }
+
+    .row input, .row select {
+      flex: 1;
+      border: none;
+      outline: none;
+      font-size: 1rem;
+      color: #2d3748;
+      background: transparent;
+      padding: 14px 0;
+      min-height: 52px;
+      width: 100%;
+    }
+
+    /* Player rows */
+    .player-badge {
+      width: 26px; height: 26px;
+      background: var(--groen-light);
+      color: var(--groen);
+      border-radius: 50%;
+      font-size: 0.78rem;
+      font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      margin-right: 10px;
+    }
+
+    /* Boek-knop */
+    .btn-wrap {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      padding: 12px 16px;
+      padding-bottom: calc(12px + var(--safe-bottom));
+      background: white;
+      border-top: 1px solid var(--border);
+    }
+
+    .btn-boek {
+      width: 100%;
+      background: var(--groen);
+      color: white;
+      border: none;
+      border-radius: 14px;
+      padding: 16px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-boek:active { transform: scale(0.97); background: var(--groen-dark); }
+    .btn-boek:disabled { opacity: 0.55; }
+
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2.5px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: calc(90px + var(--safe-bottom));
+      left: 16px; right: 16px;
+      background: #2d3748;
+      color: white;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 0.92rem;
+      line-height: 1.5;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: opacity 0.25s, transform 0.25s;
+      pointer-events: none;
+      white-space: pre-line;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.success { background: var(--groen-dark); }
+    .toast.error   { background: #c53030; }
+
+    /* Leden info */
+    .leden-info {
+      font-size: 0.75rem;
+      color: var(--grijs);
+      padding: 8px 16px 12px;
+      text-align: center;
+    }
+
+    /* Setup scherm */
+    .overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      align-items: flex-end;
+    }
+    .overlay.show { display: flex; }
+    .sheet {
+      background: white;
+      width: 100%;
+      border-radius: 20px 20px 0 0;
+      padding: 24px 20px;
+      padding-bottom: calc(24px + var(--safe-bottom));
+    }
+    .sheet h2 { font-size: 1.1rem; margin-bottom: 6px; }
+    .sheet p  { font-size: 0.85rem; color: var(--grijs); margin-bottom: 16px; line-height: 1.5; }
+    .sheet input {
+      width: 100%; border: 1.5px solid var(--border);
+      border-radius: 10px; padding: 12px; font-size: 0.95rem;
+      outline: none; margin-bottom: 12px; font-family: monospace;
+    }
+    .sheet input:focus { border-color: var(--groen); }
+    .btn-opslaan {
+      width: 100%; background: var(--groen); color: white;
+      border: none; border-radius: 12px; padding: 14px;
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+    }
+    .btn-opslaan:active { background: var(--groen-dark); }
+    .gear-btn {
+      position: absolute; top: max(14px, calc(8px + env(safe-area-inset-top)));
+      right: 16px; background: rgba(255,255,255,0.25);
+      border: none; border-radius: 8px; padding: 6px 10px;
+      font-size: 1.1rem; cursor: pointer; color: white;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header" style="position:relative">
+  <h1>🎾 Padelbaan Boeken</h1>
+  <p>ETV Volley — automatische reservering</p>
+  <button class="gear-btn" onclick="toonInstellingen()" title="Instellingen">⚙️</button>
+</div>
+
+<!-- Setup / instellingen sheet -->
+<div class="overlay" id="overlay" onclick="sluitSheet(event)">
+  <div class="sheet">
+    <h2>🔑 GitHub Token instellen</h2>
+    <p>Voer je GitHub Personal Access Token in. Dit wordt alleen lokaal opgeslagen op jouw telefoon en nooit gedeeld.</p>
+    <input type="password" id="patInput" placeholder="ghp_..." autocomplete="off" autocorrect="off" spellcheck="false">
+    <button class="btn-opslaan" onclick="slaPatOp()">Opslaan</button>
+  </div>
+</div>
+
+<!-- Datum & tijd -->
+<div class="section">
+  <div class="section-header">Wanneer</div>
+  <div class="row">
+    <span class="row-icon">📅</span>
+    <label for="datum">Datum</label>
+    <input type="date" id="datum">
+  </div>
+  <div class="row">
+    <span class="row-icon">🕐</span>
+    <label for="tijd">Tijd</label>
+    <select id="tijd"></select>
+  </div>
+</div>
+
+<!-- Spelers -->
+<div class="section">
+  <div class="section-header">Medespelers</div>
+  <div class="row">
+    <div class="player-badge">2</div>
+    <input type="text" id="speler2" placeholder="Medespeler 2" autocomplete="off" list="leden-lijst">
+  </div>
+  <div class="row">
+    <div class="player-badge">3</div>
+    <input type="text" id="speler3" placeholder="Medespeler 3" autocomplete="off" list="leden-lijst">
+  </div>
+  <div class="row">
+    <div class="player-badge">4</div>
+    <input type="text" id="speler4" placeholder="Medespeler 4" autocomplete="off" list="leden-lijst">
+  </div>
+  <datalist id="leden-lijst"></datalist>
+  <p class="leden-info" id="leden-info">Ledenlijst laden…</p>
+</div>
+
+<!-- Boek-knop -->
+<div class="btn-wrap">
+  <button class="btn-boek" id="boekBtn" onclick="boekBaan()">
+    <span id="btnTekst">Baan boeken</span>
+  </button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const REPO      = 'joris-vandenBroek/knltb-autoboek';
+  const WORKFLOW  = 'boek.yml';
+  const LEDEN_URL = `https://raw.githubusercontent.com/${REPO}/main/leden.json`;
+  const FALLBACK  = ['Herman Brugmans', 'Peter Nijhof', 'Toine Aanraad'];
+  const OPSLAAN_KEY = 'knltb_laatste_spelers';
+  const PAT_KEY     = 'knltb_pat';
+
+  function getPat() { return localStorage.getItem(PAT_KEY) || ''; }
+
+  function toonInstellingen() {
+    document.getElementById('patInput').value = getPat();
+    document.getElementById('overlay').classList.add('show');
+  }
+  function sluitSheet(e) {
+    if (e.target === document.getElementById('overlay'))
+      document.getElementById('overlay').classList.remove('show');
+  }
+  function slaPatOp() {
+    const v = document.getElementById('patInput').value.trim();
+    if (v) { localStorage.setItem(PAT_KEY, v); }
+    document.getElementById('overlay').classList.remove('show');
+    toonToast('success', '✅ Token opgeslagen');
+  }
+
+  // Toon setup bij eerste gebruik
+  if (!getPat()) setTimeout(toonInstellingen, 400);
+
+  // Datum: standaard morgen
+  const morgen = new Date();
+  morgen.setDate(morgen.getDate() + 1);
+  const iso = morgen.toISOString().slice(0, 10);
+  const datumEl = document.getElementById('datum');
+  datumEl.value = iso;
+  datumEl.min = iso;
+
+  // Tijden 08:00 – 21:30
+  const tijdEl = document.getElementById('tijd');
+  for (let h = 8; h <= 21; h++) {
+    for (let m of [0, 30]) {
+      if (h === 21 && m === 30) continue;
+      const t = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+      tijdEl.innerHTML += `<option value="${t}">${t}</option>`;
+    }
+  }
+  tijdEl.value = '15:00';
+
+  // Herstel laatste spelers
+  const opgeslagen = JSON.parse(localStorage.getItem(OPSLAAN_KEY) || '[]');
+  ['speler2','speler3','speler4'].forEach((id, i) => {
+    if (opgeslagen[i]) document.getElementById(id).value = opgeslagen[i];
+  });
+
+  // Laad ledenlijst
+  (async () => {
+    let leden = FALLBACK;
+    try {
+      const r = await fetch(LEDEN_URL + '?t=' + Date.now());
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data) && data.length > 0) leden = data;
+      }
+    } catch (_) {}
+
+    const dl = document.getElementById('leden-lijst');
+    leden.forEach(n => { const o = document.createElement('option'); o.value = n; dl.appendChild(o); });
+
+    document.getElementById('leden-info').textContent =
+      leden.length > 3 ? `${leden.length} leden beschikbaar` : 'Gebruik "Ledenlijst ophalen" in GitHub Actions voor alle leden';
+  })();
+
+  // Toast
+  let toastTimer;
+  function toonToast(type, tekst) {
+    const el = document.getElementById('toast');
+    el.className = 'toast ' + type;
+    el.textContent = tekst;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), type === 'success' ? 5000 : 7000);
+  }
+
+  async function boekBaan() {
+    const datum   = document.getElementById('datum').value;
+    const tijd    = document.getElementById('tijd').value;
+    const speler2 = document.getElementById('speler2').value.trim();
+    const speler3 = document.getElementById('speler3').value.trim();
+    const speler4 = document.getElementById('speler4').value.trim();
+
+    if (!datum || !speler2 || !speler3 || !speler4) {
+      toonToast('error', '⚠️ Vul alle velden in.');
+      return;
+    }
+
+    const btn = document.getElementById('boekBtn');
+    btn.disabled = true;
+    document.getElementById('btnTekst').innerHTML = '<div class="spinner"></div>';
+
+    // Sla spelers op voor volgende keer
+    localStorage.setItem(OPSLAAN_KEY, JSON.stringify([speler2, speler3, speler4]));
+
+    const datumNL = datum.split('-').reverse().join('-');
+
+    const pat = getPat();
+    if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); btn.disabled = false; document.getElementById('btnTekst').textContent = 'Baan boeken'; return; }
+
+    try {
+      const resp = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${pat}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ref: 'main', inputs: { datum, tijd, speler2, speler3, speler4 } })
+        }
+      );
+
+      if (resp.status === 204) {
+        toonToast('success',
+          `✅ Gelukt!\n${datumNL} om ${tijd}\n${speler2}, ${speler3}, ${speler4}\n\nJe ontvangt een e-mail na de boeking.`);
+      } else {
+        toonToast('error', `❌ GitHub Actions fout (${resp.status})\nMogelijk tijdelijk down — probeer opnieuw.`);
+      }
+    } catch (e) {
+      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+    }
+
+    btn.disabled = false;
+    document.getElementById('btnTekst').textContent = 'Baan boeken';
+  }
+
+  // Service worker registreren
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+</script>
+</body>
+</html>

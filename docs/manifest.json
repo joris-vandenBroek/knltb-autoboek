@@ -1,0 +1,24 @@
+{
+  "name": "Padelbaan Boeken",
+  "short_name": "Padel Boeken",
+  "description": "ETV Volley padelbaan automatisch reserveren",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#38a169",
+  "theme_color": "#38a169",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
