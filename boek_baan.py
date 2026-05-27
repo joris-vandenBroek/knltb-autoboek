@@ -646,26 +646,36 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
             var tijd = arguments[0];
             var alle = Array.from(document.querySelectorAll('*'));
 
+            // Verzamel alle kandidaten die de tijdtekst bevatten.
+            // Geef voorkeur aan leaf-elementen (children.length === 0) zodat
+            // een Bootstrap collapse-wrapper niet per ongeluk wordt geklikt.
+            var kandidaten = [];
             for (var el of alle) {
-                if (!el.offsetParent) continue;  // niet zichtbaar
+                if (!el.offsetParent) continue;
                 var txt = (el.innerText || '').trim();
 
-                // Exacte match of "15:00 - 16:00" / "15:00 tot 16:00" / "15:00[newline]..."
                 if (txt !== tijd &&
                     !txt.startsWith(tijd + ' ') &&
                     !txt.startsWith(tijd + '-') &&
                     txt.split(/\s/)[0] !== tijd) continue;
 
-                // Geen disabled-vinkje
                 if (el.classList.contains('disabled') ||
                     el.hasAttribute('disabled') ||
                     el.getAttribute('aria-disabled') === 'true') continue;
 
-                el.click();
-                return 'OK tijd=' + tijd + ' tag=' + el.tagName +
-                       ' class=' + (el.className || '');
+                kandidaten.push(el);
             }
-            return 'NIET_GEVONDEN tijd=' + tijd;
+
+            if (!kandidaten.length) return 'NIET_GEVONDEN tijd=' + tijd;
+
+            // Sorteer: leaf-elementen (geen kinderen) eerst
+            kandidaten.sort(function(a, b) { return a.children.length - b.children.length; });
+
+            var target = kandidaten[0];
+            target.click();
+            return 'OK tijd=' + tijd + ' tag=' + target.tagName
+                 + ' class=' + (target.className || '')
+                 + ' children=' + target.children.length;
         """, tijd)
 
         log.info(f"  JS: {resultaat}")
