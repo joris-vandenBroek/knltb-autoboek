@@ -465,7 +465,7 @@ def haal_alle_leden_via_api(template: str, cookies: dict, user_agent: str) -> se
     # Test lengte 1
     test1 = zoek("j")
     if test1:
-        log.info(f"1-letter queries werken ('{' }'→{len(test1)}). Scan 26 letters...")
+        log.info(f"1-letter queries werken ('j'→{len(test1)}). Scan 26 letters...")
         return parallel_zoek(LETTERS, workers=8)
 
     # Test lengte 2

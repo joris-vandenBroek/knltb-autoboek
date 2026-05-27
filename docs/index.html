@@ -98,21 +98,38 @@
     }
     .field-label .req { color: var(--fout); margin-left: 2px; }
 
-    /* ── Datum — tekstveld DD-MM-JJJJ ───────────────────── */
-    input.date-input {
+    /* ── Datumpicker ─────────────────────────────────────── */
+    .date-picker-wrap {
+      position: relative;
       flex: 1;
+    }
+    .date-picker-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 14px;
       border: 1.5px solid var(--border);
       border-radius: 10px;
-      padding: 13px 14px;
       font-size: 1.1rem;
-      font-family: inherit;
       color: #2d3748;
       background: white;
-      outline: none;
       min-height: 52px;
+      user-select: none;
+      -webkit-user-select: none;
+      pointer-events: none; /* klikken gaat via de overlappende input */
     }
-    input.date-input:focus  { border-color: var(--border-focus); }
-    input.date-input.invalid { border-color: var(--fout); }
+    .date-picker-btn.invalid { border-color: var(--fout); }
+    .date-native {
+      position: absolute;
+      inset: 0;
+      opacity: 0;
+      width: 100%;
+      height: 100%;
+      cursor: pointer;
+      z-index: 2;
+      border: none;
+      background: transparent;
+    }
 
     /* ── Tijd select ─────────────────────────────────────── */
     .time-select {
@@ -382,7 +399,13 @@
 
   <div class="field-group">
     <label class="field-label" for="datum">Datum <span class="req">*</span></label>
-    <input type="text" id="datum" class="date-input" placeholder="DD-MM-JJJJ" inputmode="numeric" maxlength="10" autocomplete="off">
+    <div class="date-picker-wrap">
+      <div class="date-picker-btn" id="datumBtn">
+        <span id="datumTekst">DD-MM-JJJJ</span>
+        <span>📅</span>
+      </div>
+      <input type="date" id="datum" class="date-native">
+    </div>
   </div>
 
   <div class="field-group">
@@ -500,32 +523,26 @@
 
   if (!getPat()) setTimeout(openPatSheet, 500);
 
-  /* ─── Datum ────────────────────────────────────────────── */
-  const datumEl = document.getElementById('datum');
-  const morgen  = new Date();
+  /* ─── Datum (native datepicker) ───────────────────────── */
+  const datumInput = document.getElementById('datum');
+  const datumBtn   = document.getElementById('datumBtn');
+  const datumTekst = document.getElementById('datumTekst');
+
+  function toonDatum(isoWaarde) {
+    if (!isoWaarde) return;
+    const [y, m, d] = isoWaarde.split('-');
+    datumTekst.textContent = `${d}-${m}-${y}`;
+    datumBtn.classList.remove('invalid');
+  }
+
+  // Standaard morgen
+  const morgen = new Date();
   morgen.setDate(morgen.getDate() + 1);
-  // Toon standaard morgen in DD-MM-JJJJ formaat
-  const [_y, _m, _d] = morgen.toISOString().slice(0, 10).split('-');
-  datumEl.value = `${_d}-${_m}-${_y}`;
+  datumInput.value = morgen.toISOString().slice(0, 10);
+  toonDatum(datumInput.value);
 
-  // Auto-format: voeg streepjes toe tijdens typen
-  datumEl.addEventListener('input', e => {
-    let v = e.target.value.replace(/\D/g, '').slice(0, 8);
-    if (v.length > 4)      v = v.slice(0, 2) + '-' + v.slice(2, 4) + '-' + v.slice(4);
-    else if (v.length > 2) v = v.slice(0, 2) + '-' + v.slice(2);
-    e.target.value = v;
-  });
-
-  // Converteer DD-MM-JJJJ → YYYY-MM-DD voor API
-  function datumNaarISO(nl) {
-    const [d, m, y] = nl.split('-');
-    return `${y}-${m}-${d}`;
-  }
-
-  function formatDatumNL(iso) {
-    const [y, m, d] = iso.split('-');
-    return `${d}-${m}-${y}`;
-  }
+  // Update display als gebruiker een datum kiest
+  datumInput.addEventListener('change', () => toonDatum(datumInput.value));
 
   /* ─── Tijden ───────────────────────────────────────────── */
   const tijdEl = document.getElementById('tijd');
@@ -695,12 +712,12 @@
   function valideer() {
     let ok = true;
 
-    // Datum — verwacht DD-MM-JJJJ (10 tekens)
-    if (!datumEl.value || datumEl.value.length < 10) {
-      datumEl.classList.add('invalid');
+    // Datum
+    if (!datumInput.value) {
+      datumBtn.classList.add('invalid');
       ok = false;
     } else {
-      datumEl.classList.remove('invalid');
+      datumBtn.classList.remove('invalid');
     }
 
     // Spelers
@@ -731,7 +748,7 @@
     sluitAllePf(null);
     if (!valideer()) return;
 
-    const datum   = datumNaarISO(datumEl.value);  // DD-MM-JJJJ → YYYY-MM-DD voor API
+    const datum   = datumInput.value;  // native input geeft al YYYY-MM-DD
     const tijd    = tijdEl.value;
     const speler2 = document.getElementById('speler2').value;
     const speler3 = document.getElementById('speler3').value;
@@ -744,7 +761,8 @@
     btn.disabled = true;
     document.getElementById('btnTekst').innerHTML = '<div class="spinner"></div>';
 
-    const datumNL = datumEl.value;  // al in DD-MM-JJJJ formaat
+    const [_dy, _dm, _dd] = datum.split('-');
+    const datumNL = `${_dd}-${_dm}-${_dy}`;  // YYYY-MM-DD → DD-MM-JJJJ voor display
 
     try {
       const resp = await fetch(
