@@ -592,70 +592,64 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     tijden = genereer_tijden(voorkeur_tijd)
     log.info(f"Tijden om te proberen: {tijden}")
 
-    # Log paginatekst voor diagnose
+    # Log paginatekst voor diagnose (eerste 800 tekens)
     try:
         pagina = driver.find_element(By.TAG_NAME, "body").text
-        log.info(f"Baan-pagina tekst (500): {pagina[:500]}")
+        log.info(f"Baan-pagina tekst (800): {pagina[:800]}")
     except Exception:
         pass
 
+    # Baankeuze = tijdslot klikken. Het systeem koppelt daarna een baan.
+    # Klik het eerste beschikbare tijdslot dat overeenkomt met gewenste tijd.
     for tijd in tijden:
-        for baan in PADEL_BANEN:
-            log.info(f"Probeer {baan} om {tijd}...")
+        log.info(f"Zoek tijdslot '{tijd}'...")
 
-            # JavaScript DOM-traversal — zelfde aanpak als kies_dag.
-            # contains(text(),'X') mist child-tekst; JS innerText werkt wel.
-            resultaat = driver.execute_script("""
-                var baan = arguments[0];
-                var tijd = arguments[1];
+        resultaat = driver.execute_script("""
+            var tijd = arguments[0];
+            var alle = Array.from(document.querySelectorAll('*'));
 
-                // Vind alle zichtbare elementen waarvan de innerText = baan-naam
-                var alle = Array.from(document.querySelectorAll('*'));
-                var baanEls = alle.filter(function(el) {
-                    if (!el.offsetParent) return false;
-                    var txt = (el.innerText || '').trim();
-                    return txt === baan ||
-                           txt.startsWith(baan + '\\n') ||
-                           txt.endsWith('\\n' + baan);
-                });
+            for (var el of alle) {
+                if (!el.offsetParent) continue;  // niet zichtbaar
+                var txt = (el.innerText || '').trim();
 
-                for (var baanEl of baanEls) {
-                    // Zoek omhoog naar container die ook de gewenste tijd bevat
-                    var container = baanEl;
-                    for (var stap = 0; stap < 8; stap++) {
-                        container = container.parentElement;
-                        if (!container) break;
-                        var ctxt = (container.innerText || '');
-                        if (!ctxt.includes(tijd)) continue;
+                // Exacte match of "15:00 - 16:00", "15:00 tot 16:00", "15:00\n..."
+                if (txt !== tijd &&
+                    !txt.startsWith(tijd + ' ') &&
+                    !txt.startsWith(tijd + '-') &&
+                    !txt.startsWith(tijd + '\\n')) continue;
 
-                        // Zoek de exacte tijdcel in de container
-                        var cellen = Array.from(container.querySelectorAll('*'));
-                        for (var cel of cellen) {
-                            if (!cel.offsetParent) continue;
-                            var t = (cel.innerText || '').trim();
-                            // Match "15:00" of "15:00 - 16:00" of "15:00 tot 16:00"
-                            if (t === tijd || t.startsWith(tijd + ' ') ||
-                                t.startsWith(tijd + '-') || t.startsWith(tijd + '\\n')) {
-                                if (cel.classList.contains('disabled') ||
-                                    cel.hasAttribute('disabled')) continue;
-                                cel.click();
-                                return 'OK baan=' + baan + ' tijd=' + tijd;
-                            }
-                        }
-                    }
-                }
-                return 'NIET_GEVONDEN baan=' + baan + ' tijd=' + tijd +
-                       ' baanEls=' + baanEls.length;
-            """, baan, tijd)
+                // Geen disabled-vinkje
+                if (el.classList.contains('disabled') ||
+                    el.hasAttribute('disabled') ||
+                    el.getAttribute('aria-disabled') === 'true') continue;
 
-            log.info(f"  JS: {resultaat}")
-            if resultaat and resultaat.startswith("OK"):
-                log.info(f"✅ {baan} om {tijd} geselecteerd!")
-                time.sleep(2)
-                screenshot(driver, "10_baan_geselecteerd")
-                return baan, tijd
+                el.click();
+                return 'OK tijd=' + tijd + ' tag=' + el.tagName +
+                       ' class=' + (el.className || '');
+            }
+            return 'NIET_GEVONDEN tijd=' + tijd;
+        """, tijd)
 
-    log.error("❌ Geen beschikbare padelbaan/tijd gevonden!")
+        log.info(f"  JS: {resultaat}")
+        if resultaat and resultaat.startswith("OK"):
+            time.sleep(2)
+            screenshot(driver, "10_baan_geselecteerd")
+
+            # Bepaal welke baan geselecteerd is vanuit de paginatekst
+            baan = ""
+            try:
+                tekst = driver.find_element(By.TAG_NAME, "body").text
+                for b in PADEL_BANEN:
+                    if b in tekst:
+                        baan = b
+                        break
+            except Exception:
+                pass
+
+            log.info(f"✅ Tijdslot {tijd} geselecteerd, baan={baan or '(onbekend)'}")
+            return baan, tijd
+
+    log.error("❌ Geen beschikbaar tijdslot gevonden!")
     screenshot(driver, "baan_fout")
     return "", ""
 
