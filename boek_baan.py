@@ -207,6 +207,17 @@ def login(driver: uc.Chrome) -> bool:
         except Exception:
             pass
 
+    # Log alle input-velden voor diagnose
+    try:
+        alle_inputs = driver.find_elements(By.TAG_NAME, "input")
+        log.info(f"Gevonden input-velden ({len(alle_inputs)}):")
+        for inp in alle_inputs:
+            log.info(f"  type={inp.get_attribute('type')} name={inp.get_attribute('name')} "
+                     f"id={inp.get_attribute('id')} placeholder={inp.get_attribute('placeholder')} "
+                     f"visible={inp.is_displayed()}")
+    except Exception as e:
+        log.warning(f"Input-veld scan mislukt: {e}")
+
     try:
         gebruiker_veld = wacht_op(driver, By.XPATH,
             "//input[@type='text' or @type='email' "
@@ -214,19 +225,76 @@ def login(driver: uc.Chrome) -> bool:
             "or @id='username' or @id='Username' or @id='UserName' "
             "or contains(@placeholder,'bondsnummer') or contains(@placeholder,'gebruikersnaam') "
             "or contains(@placeholder,'e-mail') or contains(@placeholder,'email')]")
-        gebruiker_veld.clear()
-        gebruiker_veld.send_keys(BONDSNUMMER)
-        log.info("Bondsnummer ingevuld")
+        log.info(f"Gebruikersveld: name='{gebruiker_veld.get_attribute('name')}' "
+                 f"id='{gebruiker_veld.get_attribute('id')}'")
+
+        # Vul in via JS — triggert ook React/Vue native input events
+        driver.execute_script("""
+            var el = arguments[0], val = arguments[1];
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(el, val);
+            el.dispatchEvent(new Event('input',  {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+        """, gebruiker_veld, BONDSNUMMER)
+        log.info(f"Bondsnummer ingevuld via JS ({len(BONDSNUMMER)} tekens)")
 
         ww_veld = wacht_op(driver, By.XPATH, "//input[@type='password']")
-        ww_veld.clear()
-        ww_veld.send_keys(WACHTWOORD)
-        log.info("Wachtwoord ingevuld — Enter indrukken")
-        # Gebruik Enter ipv button-click: voorkomt dat de cookie-banner button wordt geklikt
-        ww_veld.send_keys(Keys.RETURN)
-        time.sleep(5)
+        log.info(f"Wachtwoordveld: name='{ww_veld.get_attribute('name')}' "
+                 f"id='{ww_veld.get_attribute('id')}'")
+
+        driver.execute_script("""
+            var el = arguments[0], val = arguments[1];
+            var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+            setter.call(el, val);
+            el.dispatchEvent(new Event('input',  {bubbles: true}));
+            el.dispatchEvent(new Event('change', {bubbles: true}));
+        """, ww_veld, WACHTWOORD)
+        log.info(f"Wachtwoord ingevuld via JS ({len(WACHTWOORD)} tekens)")
+
+        time.sleep(1)
+
+        # Zoek de zichtbare submit-knop (niet de cookie-banner)
+        submit_knop = None
+        for sel in [
+            "//button[@type='submit']",
+            "//input[@type='submit']",
+            "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'inloggen')]",
+            "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'login')]",
+            "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'aanmelden')]",
+        ]:
+            try:
+                for knop in driver.find_elements(By.XPATH, sel):
+                    if knop.is_displayed():
+                        log.info(f"Submit-knop gevonden: '{knop.text.strip()}' via {sel}")
+                        submit_knop = knop
+                        break
+                if submit_knop:
+                    break
+            except Exception:
+                pass
+
+        if submit_knop:
+            driver.execute_script("arguments[0].click();", submit_knop)
+            log.info("Submit-knop geklikt via JS")
+        else:
+            log.warning("Geen submit-knop gevonden — gebruik Keys.RETURN als fallback")
+            ww_veld.send_keys(Keys.RETURN)
+
+        time.sleep(6)
         screenshot(driver, "02_na_login")
         log.info(f"URL na login: {driver.current_url}")
+
+        # Log paginatekst voor foutmeldingen
+        try:
+            body_tekst = driver.find_element(By.TAG_NAME, "body").text
+            for zoekterm in ["onjuist", "ongeldig", "fout", "incorrect", "error",
+                             "geblokkeerd", "locked", "account", "blocked", "te veel"]:
+                if zoekterm in body_tekst.lower():
+                    log.warning(f"⚠️ '{zoekterm}' gevonden in paginatekst")
+            log.info(f"Paginatitel na login: {driver.title}")
+            log.info(f"Paginatekst (eerste 500): {body_tekst[:500]}")
+        except Exception:
+            pass
 
         # Controleer of wachtwoordveld nog zichtbaar is (= login mislukt)
         try:
