@@ -1,14 +1,17 @@
 """
 Haal alle leden op van etv-volley.nl en sla op in leden.json
 
+Bekende API-endpoint (gevonden via XHR-interceptie run 22):
+  GET /Ajax/Profile/SearchPlayers?term={prefix}
+  Response: HTML met Bootstrap <div class="card mb-3"> per speler
+
 Strategie:
-1. Login via Selenium (UC + Xvfb, geen headless, bypass Cloudflare)
+1. Login via Selenium (UC + Xvfb, bypass Cloudflare)
 2. Navigeer naar de spelerszoek-pagina
-3. Injecteer XHR/fetch-interceptor in de pagina
-4. Typ 'van' (3 letters) → vang de API-aanroep + JSON-response op
-5. Extraheer de API-URL-template
-6. Gebruik requests-library met sessie-cookies om alle 3-letter-prefixen
-   systematisch te bevragen (parallel, snel)
+3. Extraheer sessie-cookies uit de browser
+4. Gebruik requests-library + cookies om de API direct te bevragen
+5. Test prefix-lengte 1→2→3 en scan parallel (12 workers)
+6. Parseer spelernamen uit HTML-response via regex
 7. Sla unieke namen op in leden.json
 """
 
@@ -38,6 +41,9 @@ WACHTWOORD    = os.environ.get("KNLTB_WACHTWOORD", "")
 TIMEOUT       = 20
 
 LETTERS = list("abcdefghijklmnopqrstuvwxyz")
+
+# Bekende API-endpoint (HTML-response, Bootstrap cards)
+SEARCH_API = "https://www.etv-volley.nl/Ajax/Profile/SearchPlayers?term={q}"
 
 # UI-labels die geen spelernamen zijn
 _GEEN_NAAM = {
@@ -301,8 +307,44 @@ def injecteer_interceptor(driver):
     log.info("API-interceptor geïnjecteerd")
 
 
+def extraheer_namen_uit_html(html: str) -> set:
+    """
+    Parseer spelernamen uit de HTML-response van SearchPlayers.
+    De response bevat Bootstrap <div class="card mb-3"> per speler.
+    Probeert meerdere patronen om de naam te vinden.
+    """
+    namen = set()
+    if not html:
+        return namen
+
+    # Probeer patronen van meest specifiek naar meest breed
+    patronen = [
+        r'card-title[^>]*>\s*([A-Z][^\n<]{2,58}?)\s*<',       # class="card-title">Naam<
+        r'<h[1-6][^>]*>\s*([A-Z][^\n<]{2,58}?)\s*</h[1-6]>',  # <h5>Naam</h5>
+        r'<strong[^>]*>\s*([A-Z][^\n<]{2,58}?)\s*</strong>',   # <strong>Naam</strong>
+        r'player-name[^>]*>\s*([A-Z][^\n<]{2,58}?)\s*<',       # class="player-name">
+        r'full[_-]?name[^>]*>\s*([A-Z][^\n<]{2,58}?)\s*<',     # class="full-name">
+        r'data-(?:name|fullname)="([^"]{4,60})"',               # data-name="..."
+        r'alt="([A-Z][a-zàáâäèéêëìíîïòóôöùúûü]+(?:\s+(?:van\s+|de\s+|den\s+)?[A-Z][a-zàáâäèéêëìíîïòóôöùúûü]+){1,3})"',  # alt="Voor Achternaam"
+    ]
+
+    for patroon in patronen:
+        gevonden = re.findall(patroon, html)
+        for naam in gevonden:
+            naam = naam.strip()
+            if naam and len(naam) > 3 and " " in naam and naam.lower() not in _GEEN_NAAM:
+                namen.add(naam)
+        if namen:
+            log.debug(f"HTML-parser: {len(namen)} namen via patroon '{patroon[:40]}'")
+            return namen
+
+    # Geen patroon werkte — log de eerste 500 tekens voor diagnose
+    log.warning(f"HTML-parser: geen namen gevonden. HTML snippet: {html[:500]}")
+    return namen
+
+
 def extraheer_namen_uit_data(data) -> set:
-    """Flexibel JSON-schema → set van spelernamen."""
+    """Flexibel JSON-schema → set van spelernamen (fallback als API JSON retourneert)."""
     namen = set()
     if isinstance(data, list):
         items = data
@@ -412,16 +454,18 @@ def bouw_url_template(api_url: str, zoekterm: str = "van") -> str:
 def haal_alle_leden_via_api(template: str, cookies: dict, user_agent: str) -> set:
     """
     Systematisch alle leden ophalen via directe HTTP-aanroepen.
-    Test prefix-lengte 1→2→3 en gebruikt parallelle requests.
+    Response is HTML (Bootstrap cards) — parseer namen via regex.
+    Test prefix-lengte 1→2→3 en scant parallel (12 workers).
     """
     if not REQUESTS_OK:
-        log.error("requests library niet beschikbaar — kan API niet direct bevragen")
+        log.error("requests library niet beschikbaar")
         return set()
 
     headers = {
-        "Accept":           "application/json, */*",
+        "Accept":           "text/html, */*",
         "User-Agent":       user_agent,
         "X-Requested-With": "XMLHttpRequest",
+        "Referer":          "https://www.etv-volley.nl/me/ReservationsPlayers",
     }
 
     def maak_sessie():
@@ -433,52 +477,57 @@ def haal_alle_leden_via_api(template: str, cookies: dict, user_agent: str) -> se
     def zoek(prefix: str) -> set:
         url = template.replace("{q}", prefix)
         try:
-            resp = maak_sessie().get(url, timeout=10)
+            resp = maak_sessie().get(url, timeout=12)
             if resp.status_code == 200:
-                data = resp.json()
-                namen = extraheer_namen_uit_data(data)
-                if namen:
-                    log.debug(f"  '{prefix}' → {len(namen)} namen")
-                return namen
+                tekst = resp.text
+                # Probeer JSON (voor het geval de API ooit verandert)
+                if tekst.strip().startswith(("[", "{")):
+                    try:
+                        return extraheer_namen_uit_data(json.loads(tekst))
+                    except Exception:
+                        pass
+                # HTML-response
+                return extraheer_namen_uit_html(tekst)
         except Exception as e:
             log.debug(f"  '{prefix}' fout: {e}")
         return set()
 
-    def parallel_zoek(prefixen: list, workers: int = 8) -> set:
+    def parallel_zoek(prefixen: list, workers: int = 12) -> set:
         namen = set()
         with ThreadPoolExecutor(max_workers=workers) as ex:
             futures = {ex.submit(zoek, p): p for p in prefixen}
             for i, fut in enumerate(as_completed(futures)):
                 namen.update(fut.result())
-                if (i + 1) % 200 == 0:
+                if (i + 1) % 500 == 0:
                     log.info(f"  {i+1}/{len(prefixen)} klaar — {len(namen)} namen tot nu toe")
         return namen
 
     log.info(f"API template: {template}")
 
-    # Test lengte 0 (alles in één keer?)
+    # Test prefix-lengte 0 (geeft alles terug?)
     leeg = zoek("")
     if len(leeg) > 5:
-        log.info(f"Lege query retourneert {len(leeg)} namen — klaar!")
+        log.info(f"Lege query geeft {len(leeg)} namen — klaar!")
         return leeg
 
     # Test lengte 1
     test1 = zoek("j")
     if test1:
-        log.info(f"1-letter queries werken ('j'→{len(test1)}). Scan 26 letters...")
+        log.info(f"1-letter werkt ('j'→{len(test1)}). Scan 26 letters...")
         return parallel_zoek(LETTERS, workers=8)
 
     # Test lengte 2
     test2 = zoek("jo")
     if test2:
-        log.info(f"2-letter queries werken ('jo'→{len(test2)}). Scan 676 combinaties...")
-        prefixen = [a + b for a, b in itertools.product(LETTERS, repeat=2)]
-        return parallel_zoek(prefixen, workers=8)
+        log.info(f"2-letter werkt ('jo'→{len(test2)}). Scan 676 combinaties...")
+        prefixen2 = [a + b for a, b in itertools.product(LETTERS, repeat=2)]
+        return parallel_zoek(prefixen2, workers=10)
 
-    # 3-letter scan (frontend-minimum)
-    log.info("3-letter queries nodig. Scan 17 576 combinaties (parallel, ~3 min)...")
-    prefixen = [a + b + c for a, b, c in itertools.product(LETTERS, repeat=3)]
-    return parallel_zoek(prefixen, workers=12)
+    # 3-letter scan — nodig omdat frontend-minimum 3 is
+    # 17 576 combinaties × ~150ms / 12 workers ≈ 3-4 minuten
+    log.info("3-letter nodig. Scan 17 576 combinaties (12 workers, ~3-4 min)...")
+    prefixen3 = [a + b + c for a, b, c in itertools.product(LETTERS, repeat=3)]
+    return parallel_zoek(prefixen3, workers=12)
 
 
 # ── Fallback: Selenium autocomplete ──────────────────────────────────────────
@@ -562,38 +611,35 @@ def main():
             log.error("Zoekveld niet gevonden")
             sys.exit(1)
 
-        # --- Stap 1: injecteer interceptor en vind de API ---
+        # --- Stap 1: extraheer sessie-cookies en user-agent ---
+        cookies    = {c["name"]: c["value"] for c in driver.get_cookies()}
+        user_agent = driver.execute_script("return navigator.userAgent;")
+        log.info(f"Sessie-cookies: {list(cookies.keys())}")
+
+        # Optioneel: probeer via interceptor de URL te bevestigen / te verfijnen
         injecteer_interceptor(driver)
         api_info = vind_speler_api(driver, zoek)
 
         if api_info:
-            # Namen uit de eerste 'van'-query direct toevoegen
             alle_namen.update(api_info["namen"])
-            log.info(f"Eerste API-query al {len(alle_namen)} namen")
-
+            log.info(f"Interceptor bevestigde API: {api_info['url']}")
             template = bouw_url_template(api_info["url"], "van")
-            log.info(f"API-template: {template}")
-
-            # Extraheer cookies en user-agent
-            cookies    = {c["name"]: c["value"] for c in driver.get_cookies()}
-            user_agent = driver.execute_script("return navigator.userAgent;")
-
-            # Sluit browser zo vroeg mogelijk (sessie-cookies blijven geldig)
-            screenshot(driver, "05_voor_api_scan")
-            driver.quit()
-            driver = None
-
-            # --- Stap 2: haal alle leden op via directe API ---
-            api_namen = haal_alle_leden_via_api(template, cookies, user_agent)
-            alle_namen.update(api_namen)
-            log.info(f"Na API-scan: {len(alle_namen)} unieke namen")
-
         else:
-            # --- Fallback: Selenium autocomplete met 3-letter prefixen ---
-            log.warning("API niet gevonden — gebruik Selenium autocomplete fallback")
-            zoek = zoek_veld_ophalen(driver)
-            if zoek:
-                alle_namen.update(haal_leden_via_selenium(driver, zoek))
+            # Gebruik de bekende endpoint uit eerdere analyse
+            log.info(f"Gebruik bekende API-endpoint: {SEARCH_API}")
+            template = SEARCH_API
+
+        log.info(f"API template: {template}")
+
+        # Sluit browser (cookies zijn uitgelezen)
+        screenshot(driver, "05_voor_api_scan")
+        driver.quit()
+        driver = None
+
+        # --- Stap 2: haal alle leden op via directe API ---
+        api_namen = haal_alle_leden_via_api(template, cookies, user_agent)
+        alle_namen.update(api_namen)
+        log.info(f"Na API-scan: {len(alle_namen)} unieke namen")
 
     finally:
         if driver:
