@@ -639,7 +639,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
                 if (txt !== tijd &&
                     !txt.startsWith(tijd + ' ') &&
                     !txt.startsWith(tijd + '-') &&
-                    txt.split(/[\s\n]/)[0] !== tijd) continue;
+                    txt.split(/\s/)[0] !== tijd) continue;
 
                 // Geen disabled-vinkje
                 if (el.classList.contains('disabled') ||
