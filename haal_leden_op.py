@@ -116,6 +116,7 @@ def login(driver) -> bool:
             except Exception:
                 pass
 
+    log.info(f"BONDSNUMMER: {len(BONDSNUMMER)} tekens | WACHTWOORD: {len(WACHTWOORD)} tekens")
     log.info(f"URL vóór inlogvelden: {driver.current_url}")
     screenshot(driver, "01d_voor_inlogvelden")
 
@@ -125,37 +126,38 @@ def login(driver) -> bool:
             "or @id='username' or @id='Username' "
             "or contains(@placeholder,'bondsnummer') or contains(@placeholder,'gebruikersnaam') "
             "or contains(@placeholder,'e-mail') or contains(@placeholder,'email')]")))
+        log.info(f"Gebruikersveld: name='{veld.get_attribute('name')}' id='{veld.get_attribute('id')}' type='{veld.get_attribute('type')}'")
         veld.clear()
         veld.send_keys(BONDSNUMMER)
-        log.info("Bondsnummer ingevuld")
+        log.info(f"Bondsnummer ingevuld ({len(BONDSNUMMER)} tekens)")
 
         ww = WebDriverWait(driver, TIMEOUT).until(EC.element_to_be_clickable((By.XPATH,
             "//input[@type='password']")))
+        log.info(f"Wachtwoordveld: name='{ww.get_attribute('name')}' id='{ww.get_attribute('id')}'")
         ww.clear()
         ww.send_keys(WACHTWOORD)
-        log.info("Wachtwoord ingevuld — Enter indrukken")
+        log.info(f"Wachtwoord ingevuld ({len(WACHTWOORD)} tekens) — Enter indrukken")
         # Enter gebruiken ipv button-click: voorkomt dat de cookie-banner button wordt geklikt
         ww.send_keys(Keys.RETURN)
         time.sleep(5)
         screenshot(driver, "02_na_login")
         log.info(f"URL na login-klik: {driver.current_url}")
 
+        # Log paginatekst om foutmeldingen te zien
+        try:
+            body_tekst = driver.find_element(By.TAG_NAME, "body").text
+            for zoekterm in ["onjuist", "ongeldig", "fout", "incorrect", "error", "geblokkeerd", "locked"]:
+                if zoekterm in body_tekst.lower():
+                    log.warning(f"⚠️ '{zoekterm}' gevonden in paginatekst")
+            log.info(f"Paginatitel na login: {driver.title}")
+        except Exception:
+            pass
+
         # Controleer of wachtwoordveld nog zichtbaar is = login mislukt
         try:
             pw_veld = driver.find_element(By.XPATH, "//input[@type='password']")
             if pw_veld.is_displayed():
                 log.error("❌ Inloggen mislukt — wachtwoordveld nog zichtbaar na klik")
-                # Log eventuele foutmeldingen op de pagina
-                for sel in [
-                    "//*[contains(@class,'error') or contains(@class,'alert') or contains(@class,'warning')]",
-                    "//*[contains(text(),'onjuist') or contains(text(),'ongeldig') or contains(text(),'fout')]",
-                ]:
-                    try:
-                        el = driver.find_element(By.XPATH, sel)
-                        if el.text.strip():
-                            log.error(f"   Foutmelding op pagina: {el.text.strip()[:200]}")
-                    except Exception:
-                        pass
                 screenshot(driver, "02b_login_mislukt")
                 return False
         except Exception:
