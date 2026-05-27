@@ -257,31 +257,82 @@ def naar_spelersselectie(driver) -> bool:
 
 
 def zoek_veld_ophalen(driver):
+    """Zoek het speler-zoekveld — first probeer type=text (breed), dan placeholder-hints."""
     try:
+        # Probeer eerst elk zichtbaar text-input op de pagina
+        alle = driver.find_elements(By.XPATH, "//input[@type='text' or @type='search']")
+        zichtbaar = [v for v in alle if v.is_displayed()]
+        log.info(f"Zichtbare text-inputs op pagina: {len(zichtbaar)}")
+        for v in zichtbaar:
+            log.info(f"  placeholder='{v.get_attribute('placeholder')}' id='{v.get_attribute('id')}' name='{v.get_attribute('name')}'")
+        if len(zichtbaar) == 1:
+            log.info(f"✅ Enige zichtbare text-input gebruikt: placeholder='{zichtbaar[0].get_attribute('placeholder')}'")
+            return zichtbaar[0]
+
+        # Meerdere: zoek op hints
         veld = WebDriverWait(driver, 12).until(EC.element_to_be_clickable((By.XPATH,
             "//input[contains(@placeholder,'zoek') or contains(@placeholder,'naam') "
-            "or contains(@placeholder,'speler') or contains(@class,'search') "
-            "or contains(@id,'search') or contains(@id,'player')]")))
-        log.info(f"✅ Zoekveld gevonden: placeholder='{veld.get_attribute('placeholder')}'")
+            "or contains(@placeholder,'speler') or contains(@placeholder,'Zoek') "
+            "or contains(@class,'search') or contains(@id,'search') or contains(@id,'player')]")))
+        log.info(f"✅ Zoekveld gevonden op hint: placeholder='{veld.get_attribute('placeholder')}'")
         return veld
-    except TimeoutException:
+    except Exception:
         log.error("❌ Zoekveld niet gevonden op pagina")
         screenshot(driver, "04b_zoekveld_fout")
         return None
 
 
+def dump_dom_diagnose(driver, zoekterm: str):
+    """Dump relevante DOM-structuur na typen in zoekveld — helpt selectors te bepalen."""
+    try:
+        elementen = driver.execute_script("""
+            var results = [];
+            var all = document.querySelectorAll('*');
+            for (var i = 0; i < all.length; i++) {
+                var el = all[i];
+                var role = el.getAttribute('role') || '';
+                var cls  = el.className || '';
+                // Zoek naar suggestie-achtige containers
+                if (role === 'option' || role === 'listbox' ||
+                    (typeof cls === 'string' && (
+                        cls.indexOf('suggest') > -1 || cls.indexOf('autocomplete') > -1 ||
+                        cls.indexOf('dropdown') > -1 || cls.indexOf('result') > -1 ||
+                        cls.indexOf('player') > -1 || cls.indexOf('speler') > -1 ||
+                        cls.indexOf('list') > -1 || cls.indexOf('item') > -1
+                    ))) {
+                    var text = (el.innerText || el.textContent || '').trim().slice(0, 80);
+                    if (text.length > 2) {
+                        results.push(el.tagName + ' role=' + role + ' cls=' + cls.slice(0,60) + ' visible=' + (el.offsetParent !== null) + ' | ' + text);
+                    }
+                }
+            }
+            return results.slice(0, 40);
+        """)
+        log.info(f"=== DOM diagnose na '{zoekterm}' ({len(elementen)} kandidaat-elementen) ===")
+        for r in elementen:
+            log.info(f"  {r}")
+    except Exception as e:
+        log.warning(f"DOM diagnose mislukt: {e}")
+
+    # Log ook de volledige paginatekst na typen
+    try:
+        body = driver.find_element(By.TAG_NAME, "body").text
+        log.info(f"Paginatekst na '{zoekterm}' (eerste 800):\n{body[:800]}")
+    except Exception:
+        pass
+
+
 def verzamel_suggesties(driver) -> set:
-    """Haal alle zichtbare autocomplete-namen op."""
+    """Haal alle zichtbare autocomplete-suggesties op via ARIA + klasse + JavaScript."""
     namen = set()
-    selectors = [
-        "//ul[contains(@class,'suggestion') or contains(@class,'autocomplete') "
-        "or contains(@class,'dropdown') or contains(@class,'result')]//li",
-        "//div[contains(@class,'suggestion') or contains(@class,'autocomplete') "
-        "or contains(@class,'dropdown') or contains(@class,'result')]"
-        "//div[string-length(normalize-space(text()))>3]",
-        "//li[contains(@class,'suggestion') or contains(@class,'autocomplete')]",
+
+    # 1. ARIA-gebaseerd (React/Vue/Angular apps)
+    aria_selectors = [
+        "//*[@role='option']",
+        "//*[@role='listbox']//*",
+        "//*[@role='combobox']//following-sibling::*//*",
     ]
-    for sel in selectors:
+    for sel in aria_selectors:
         try:
             for el in driver.find_elements(By.XPATH, sel):
                 tekst = el.text.strip()
@@ -289,7 +340,60 @@ def verzamel_suggesties(driver) -> set:
                     namen.add(tekst)
         except Exception:
             pass
+
+    # 2. CSS-klasse-gebaseerd (klassiek)
+    css_selectors = [
+        "//ul[contains(@class,'suggestion') or contains(@class,'autocomplete') "
+        "or contains(@class,'dropdown') or contains(@class,'result') "
+        "or contains(@class,'player') or contains(@class,'speler')]//li",
+        "//div[contains(@class,'suggestion') or contains(@class,'autocomplete') "
+        "or contains(@class,'dropdown') or contains(@class,'result') "
+        "or contains(@class,'player') or contains(@class,'speler')]"
+        "//div[string-length(normalize-space(text()))>3]",
+        "//li[contains(@class,'suggestion') or contains(@class,'autocomplete') "
+        "or contains(@class,'player') or contains(@class,'speler')]",
+    ]
+    for sel in css_selectors:
+        try:
+            for el in driver.find_elements(By.XPATH, sel):
+                tekst = el.text.strip()
+                if tekst and len(tekst) > 3 and " " in tekst:
+                    namen.add(tekst)
+        except Exception:
+            pass
+
+    # 3. JavaScript-scan: alle zichtbare leaf-nodes met naam-achtige tekst
+    try:
+        js_namen = driver.execute_script("""
+            var results = [];
+            var all = document.querySelectorAll(
+                '[role="option"], [role="listbox"] *, ' +
+                'li[data-value], li[data-id], li[data-player], ' +
+                '.player-item, .player-name, .search-result, ' +
+                '.suggestion-item, .autocomplete-item, .dropdown-item'
+            );
+            all.forEach(function(el) {
+                var text = (el.innerText || el.textContent || '').trim();
+                if (text.length > 3 && text.indexOf(' ') > -1 && text.length < 80
+                    && el.offsetParent !== null) {
+                    results.push(text);
+                }
+            });
+            return results;
+        """)
+        for naam in js_namen:
+            if naam and len(naam) > 3 and " " in naam:
+                namen.add(naam)
+    except Exception as e:
+        log.warning(f"JS suggestie-scan mislukt: {e}")
+
     return namen
+
+
+# Bekende UI-labels die geen spelernamen zijn
+_GEEN_NAAM = {"recent mee gespeeld", "recent played", "spelers", "players",
+               "zoekresultaten", "search results", "geen resultaten", "no results",
+               "recent", "zoeken", "search"}
 
 
 def verzamel_recente_spelers(driver) -> set:
@@ -298,7 +402,7 @@ def verzamel_recente_spelers(driver) -> set:
         for el in driver.find_elements(By.XPATH,
                 "//*[contains(@class,'recent')]//*[string-length(normalize-space(text()))>3]"):
             tekst = el.text.strip()
-            if tekst and " " in tekst:
+            if tekst and " " in tekst and tekst.lower() not in _GEEN_NAAM:
                 namen.add(tekst)
     except Exception:
         pass
@@ -339,11 +443,21 @@ def main():
             try:
                 zoek.clear()
                 zoek.send_keys(term)
-                time.sleep(2.0)
+                time.sleep(2.5)
+
+                # Eerste zoekterm: altijd DOM-diagnose uitvoeren zodat we de structuur zien
+                if i == 0:
+                    screenshot(driver, "05a_eerste_zoekterm")
+                    dump_dom_diagnose(driver, term)
+
                 gevonden = verzamel_suggesties(driver)
                 if gevonden:
-                    log.info(f"  '{term}' → {len(gevonden)} namen")
+                    log.info(f"  '{term}' → {len(gevonden)} namen: {sorted(gevonden)[:3]}")
                     alle_namen.update(gevonden)
+                else:
+                    if i < 3:
+                        log.info(f"  '{term}' → geen suggesties")
+
                 zoek.clear()
                 time.sleep(0.4)
 
@@ -364,6 +478,9 @@ def main():
     finally:
         screenshot(driver, "99_einde")
         driver.quit()
+
+    # Filter bekende UI-labels eruit
+    alle_namen = {n for n in alle_namen if n.lower() not in _GEEN_NAAM}
 
     if not alle_namen:
         log.warning("⚠️ Geen leden gevonden — leden.json wordt NIET overschreven")
