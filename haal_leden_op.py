@@ -68,14 +68,55 @@ def maak_driver():
 def login(driver) -> bool:
     log.info("Navigeer naar loginpagina...")
     driver.get(LOGIN_URL)
-    time.sleep(4)
+    time.sleep(5)
     screenshot(driver, "01_login")
+    log.info(f"URL na navigatie: {driver.current_url}")
 
-    # Controleer of Cloudflare ons blokkeert
-    if "cloudflare" in driver.page_source.lower() or "checking your browser" in driver.page_source.lower():
-        log.error("❌ Cloudflare beveiligingscheck gedetecteerd!")
+    # Controleer op ECHTE Cloudflare challenge (niet CDN-scripts die ook 'cloudflare' bevatten)
+    page = driver.page_source.lower()
+    if ("just a moment" in page or "checking your browser" in page
+            or "cf-browser-verification" in page or "sorry, you have been blocked" in page):
+        log.error("❌ Echte Cloudflare-blokkade gedetecteerd!")
         screenshot(driver, "01b_cloudflare")
         return False
+
+    # Accepteer cookie-banner als die er is
+    for sel in [
+        "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accepteren')]",
+        "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accept')]",
+        "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accepteren')]",
+    ]:
+        try:
+            knop = driver.find_element(By.XPATH, sel)
+            knop.click()
+            log.info("🍪 Cookie-banner geaccepteerd")
+            time.sleep(2)
+            break
+        except Exception:
+            pass
+
+    # Als we op de homepage belandden (redirect van /mijn), zoek de login-link
+    if "/mijn" not in driver.current_url:
+        log.info(f"Geen /mijn in URL ({driver.current_url}), zoek login-link...")
+        for sel in [
+            "//a[contains(@href,'/mijn')]",
+            "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'mijn club')]",
+            "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'inloggen')]",
+            "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'login')]",
+        ]:
+            try:
+                link = driver.find_element(By.XPATH, sel)
+                href = link.get_attribute('href') or ''
+                log.info(f"Login-link gevonden: {href}")
+                link.click()
+                time.sleep(4)
+                screenshot(driver, "01c_na_loginlink")
+                break
+            except Exception:
+                pass
+
+    log.info(f"URL vóór inlogvelden: {driver.current_url}")
+    screenshot(driver, "01d_voor_inlogvelden")
 
     try:
         veld = WebDriverWait(driver, TIMEOUT).until(EC.element_to_be_clickable((By.XPATH,
@@ -109,6 +150,8 @@ def login(driver) -> bool:
 
     except TimeoutException as e:
         log.error(f"❌ Login timeout: {e}")
+        log.error(f"   Huidige URL: {driver.current_url}")
+        log.error(f"   Paginatitel: {driver.title}")
         screenshot(driver, "02_login_fout")
         return False
 
