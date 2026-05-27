@@ -579,8 +579,20 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
 # ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
 def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
-    log.info("Baankeuze pagina...")
-    time.sleep(2)
+    log.info("Baankeuze pagina laden...")
+
+    # De courtpagina laadt via AJAX op hetzelfde URL als dagkeuze.
+    # Wacht tot minstens één padelbaan-naam zichtbaar is.
+    try:
+        WebDriverWait(driver, 20).until(
+            lambda d: any(b in d.find_element(By.TAG_NAME, "body").text
+                          for b in PADEL_BANEN)
+        )
+        log.info("✅ Padelbanen zichtbaar in pagina")
+    except TimeoutException:
+        log.warning("⚠️ Padelbanen niet geladen na 20s — toch proberen")
+
+    time.sleep(1)
     screenshot(driver, "09_baan_pagina")
 
     tijden = genereer_tijden(voorkeur_tijd)
