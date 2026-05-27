@@ -30,7 +30,6 @@
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
-    /* Samsung S10+ CSS viewport ~412px breed, 3.5× DPR */
     html { font-size: 19px; }
 
     body {
@@ -150,25 +149,119 @@
       cursor: pointer;
       min-height: 52px;
     }
-    .time-select:focus  { border-color: var(--border-focus); }
+    .time-select:focus   { border-color: var(--border-focus); }
     .time-select.invalid { border-color: var(--fout); }
 
-    /* ── Vrij tekstveld medespelers ─────────────────────── */
-    .text-input {
-      flex: 1;
+    /* ── PrimeFaces-stijl selectie ───────────────────────── */
+    .pf-wrap { position: relative; flex: 1; }
+
+    .pf-trigger {
+      display: flex; align-items: center; justify-content: space-between;
       padding: 13px 14px;
       border: 1.5px solid var(--border);
       border-radius: 10px;
       font-size: 1.1rem;
-      font-family: inherit;
-      color: #2d3748;
+      color: #a0aec0;
       background: white;
-      outline: none;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
       min-height: 52px;
+      transition: border-color 0.15s;
     }
-    .text-input:focus       { border-color: var(--border-focus); }
-    .text-input.invalid     { border-color: var(--fout); }
-    .text-input::placeholder { color: #a0aec0; }
+    .pf-trigger.has-value { color: #2d3748; }
+    .pf-trigger.open {
+      border-color: var(--border-focus);
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      border-bottom-color: transparent;
+    }
+    .pf-trigger.invalid { border-color: var(--fout); }
+
+    .pf-arrow {
+      color: var(--grijs);
+      font-size: 0.85rem;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+      margin-left: 8px;
+    }
+    .pf-trigger.open .pf-arrow { transform: rotate(180deg); }
+
+    .pf-panel {
+      display: none;
+      position: absolute;
+      left: 0; right: 0; top: 100%;
+      background: white;
+      border: 1.5px solid var(--border-focus);
+      border-top: none;
+      border-radius: 0 0 10px 10px;
+      z-index: 200;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+      overflow: hidden;
+    }
+    .pf-panel.open { display: block; }
+
+    .pf-search-wrap {
+      padding: 10px 12px;
+      background: #f7fafc;
+      border-bottom: 1px solid var(--border);
+    }
+    .pf-search {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      background: white;
+    }
+    .pf-search::placeholder { color: #b0bec5; }
+    .pf-search:focus { border-color: var(--border-focus); }
+
+    .pf-list {
+      max-height: 230px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .pf-list-header {
+      padding: 12px 16px;
+      background: var(--groen-panel);
+      color: white;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: default;
+    }
+    .pf-item {
+      padding: 16px 18px;
+      font-size: 1.05rem;
+      color: #2d3748;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      line-height: 1.3;
+    }
+    .pf-item:last-child  { border-bottom: none; }
+    .pf-item:active      { background: var(--groen-light); color: var(--groen); }
+    .pf-item.selected    { background: var(--groen-light); }
+    .pf-item.empty-item  { color: var(--grijs); font-style: italic; }
+
+    /* ── Leden info ──────────────────────────────────────── */
+    .leden-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 20px 16px;
+    }
+    #ledenInfo { font-size: 0.85rem; color: var(--grijs); }
+    .btn-verversen {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 20px;
+      padding: 7px 14px;
+      font-size: 0.85rem;
+      color: var(--grijs);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-verversen:active   { border-color: var(--groen-btn); color: var(--groen-btn); }
+    .btn-verversen:disabled { opacity: 0.5; cursor: default; }
 
     /* ── Boek-knop (vast onderaan) ────────────────────────── */
     .btn-wrap {
@@ -325,24 +418,67 @@
   <div class="card-header">Medespelers</div>
 
   <div class="field-group">
-    <label class="field-label" for="speler2">Speler 2 <span class="req">*</span></label>
-    <input type="text" id="speler2" class="text-input"
-           placeholder="Voornaam Achternaam"
-           autocomplete="off" autocorrect="off" spellcheck="false">
+    <label class="field-label">Speler 2 <span class="req">*</span></label>
+    <div class="pf-wrap" id="pw2">
+      <div class="pf-trigger" id="pt2" onclick="togglePf(2)">
+        <span id="pv2">Selecteer speler 2</span>
+        <span class="pf-arrow">▼</span>
+      </div>
+      <div class="pf-panel" id="pp2">
+        <div class="pf-search-wrap">
+          <input type="text" class="pf-search" id="ps2"
+                 placeholder="🔍  Begin te typen…"
+                 oninput="filterPf(2)" autocomplete="off" autocorrect="off">
+        </div>
+        <div class="pf-list" id="pl2"></div>
+      </div>
+    </div>
   </div>
 
   <div class="field-group">
-    <label class="field-label" for="speler3">Speler 3 <span class="req">*</span></label>
-    <input type="text" id="speler3" class="text-input"
-           placeholder="Voornaam Achternaam"
-           autocomplete="off" autocorrect="off" spellcheck="false">
+    <label class="field-label">Speler 3 <span class="req">*</span></label>
+    <div class="pf-wrap" id="pw3">
+      <div class="pf-trigger" id="pt3" onclick="togglePf(3)">
+        <span id="pv3">Selecteer speler 3</span>
+        <span class="pf-arrow">▼</span>
+      </div>
+      <div class="pf-panel" id="pp3">
+        <div class="pf-search-wrap">
+          <input type="text" class="pf-search" id="ps3"
+                 placeholder="🔍  Begin te typen…"
+                 oninput="filterPf(3)" autocomplete="off" autocorrect="off">
+        </div>
+        <div class="pf-list" id="pl3"></div>
+      </div>
+    </div>
   </div>
 
   <div class="field-group">
-    <label class="field-label" for="speler4">Speler 4 <span class="req">*</span></label>
-    <input type="text" id="speler4" class="text-input"
-           placeholder="Voornaam Achternaam"
-           autocomplete="off" autocorrect="off" spellcheck="false">
+    <label class="field-label">Speler 4 <span class="req">*</span></label>
+    <div class="pf-wrap" id="pw4">
+      <div class="pf-trigger" id="pt4" onclick="togglePf(4)">
+        <span id="pv4">Selecteer speler 4</span>
+        <span class="pf-arrow">▼</span>
+      </div>
+      <div class="pf-panel" id="pp4">
+        <div class="pf-search-wrap">
+          <input type="text" class="pf-search" id="ps4"
+                 placeholder="🔍  Begin te typen…"
+                 oninput="filterPf(4)" autocomplete="off" autocorrect="off">
+        </div>
+        <div class="pf-list" id="pl4"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- verborgen waarden -->
+  <input type="hidden" id="speler2">
+  <input type="hidden" id="speler3">
+  <input type="hidden" id="speler4">
+
+  <div class="leden-row">
+    <span id="ledenInfo">Ledenlijst laden…</span>
+    <button class="btn-verversen" id="verversBtn" onclick="verversLeden()">🔄&nbsp;Verversen</button>
   </div>
 </div>
 
@@ -359,8 +495,11 @@
   /* ─── Config ───────────────────────────────────────────── */
   const REPO        = 'joris-vandenBroek/knltb-autoboek';
   const WORKFLOW    = 'boek.yml';
+  const LEDEN_URL   = `https://raw.githubusercontent.com/${REPO}/main/leden.json`;
   const PAT_KEY     = 'knltb_pat';
   const SPELERS_KEY = 'knltb_spelers';
+
+  let alleLedenLijst = [];
 
   /* ─── PAT ──────────────────────────────────────────────── */
   const getPat = () => localStorage.getItem(PAT_KEY) || '';
@@ -394,22 +533,15 @@
     datumBtn.classList.remove('invalid');
   }
 
-  // Standaard morgen
   const morgen = new Date();
   morgen.setDate(morgen.getDate() + 1);
   datumInput.value = morgen.toISOString().slice(0, 10);
   toonDatum(datumInput.value);
 
-  // Update display als gebruiker een datum kiest
   datumInput.addEventListener('change', () => toonDatum(datumInput.value));
 
-  // Desktop: klik op de zichtbare knop → open de native datepicker
   datumBtn.addEventListener('click', function() {
-    try {
-      datumInput.showPicker();   // Chrome 99+, Firefox 101+
-    } catch (e) {
-      datumInput.click();        // fallback voor oudere browsers
-    }
+    try { datumInput.showPicker(); } catch (e) { datumInput.click(); }
   });
 
   /* ─── Tijden ───────────────────────────────────────────── */
@@ -423,25 +555,154 @@
   }
   tijdEl.value = '15:00';
 
-  /* ─── Herstel spelers ──────────────────────────────────── */
+  /* ─── Ledenlijst laden ─────────────────────────────────── */
+  async function laadLeden() {
+    try {
+      const r = await fetch(LEDEN_URL + '?t=' + Date.now());
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data) && data.length > 0) {
+          alleLedenLijst = data;
+          document.getElementById('ledenInfo').textContent = `${data.length} leden`;
+          return;
+        }
+      }
+    } catch (_) {}
+    document.getElementById('ledenInfo').textContent = 'Ledenlijst niet beschikbaar';
+  }
+
+  async function verversLeden() {
+    const btn = document.getElementById('verversBtn');
+    const pat = getPat();
+    if (!pat) {
+      toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = '⏳…';
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/workflows/haal_leden_op.yml/dispatches`,
+        { method: 'POST',
+          headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
+                     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref: 'main' }) }
+      );
+      if (r.status === 204)
+        toonToast('success', '✅ Ledenlijst wordt bijgewerkt (~3 min)\nOpen de app daarna opnieuw.');
+      else
+        toonToast('error', `❌ Mislukt (${r.status})`);
+    } catch (e) {
+      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+    }
+    btn.disabled = false;
+    btn.textContent = '🔄 Verversen';
+  }
+
+  laadLeden();
+
+  /* ─── Herstel opgeslagen spelers ───────────────────────── */
   const opgeslagen = JSON.parse(localStorage.getItem(SPELERS_KEY) || '[]');
   [2, 3, 4].forEach((nr, i) => {
-    if (opgeslagen[i]) document.getElementById(`speler${nr}`).value = opgeslagen[i];
+    if (opgeslagen[i]) zetSpeler(nr, opgeslagen[i]);
   });
 
-  // Sla namen op zodra de gebruiker het veld verlaat
-  [2, 3, 4].forEach(nr => {
-    document.getElementById(`speler${nr}`).addEventListener('change', () => {
-      const vals = [2, 3, 4].map(n => document.getElementById(`speler${n}`).value.trim());
-      localStorage.setItem(SPELERS_KEY, JSON.stringify(vals));
+  function zetSpeler(nr, naam) {
+    document.getElementById(`speler${nr}`).value = naam;
+    const pv = document.getElementById(`pv${nr}`);
+    pv.textContent = naam;
+    const pt = document.getElementById(`pt${nr}`);
+    pt.classList.add('has-value');
+    pt.classList.remove('invalid');
+  }
+
+  function slaSpelersOp() {
+    const vals = [2, 3, 4].map(n => document.getElementById(`speler${n}`).value);
+    localStorage.setItem(SPELERS_KEY, JSON.stringify(vals));
+  }
+
+  /* ─── PrimeFaces-stijl dropdown ────────────────────────── */
+  function sluitAlles(uitgezonderd) {
+    [2, 3, 4].forEach(n => {
+      if (n === uitgezonderd) return;
+      document.getElementById(`pt${n}`).classList.remove('open');
+      document.getElementById(`pp${n}`).classList.remove('open');
     });
+  }
+
+  function togglePf(nr) {
+    const trigger = document.getElementById(`pt${nr}`);
+    const panel   = document.getElementById(`pp${nr}`);
+    const wasOpen = panel.classList.contains('open');
+    sluitAlles(nr);
+    if (!wasOpen) {
+      trigger.classList.add('open');
+      panel.classList.add('open');
+      const zoek = document.getElementById(`ps${nr}`);
+      zoek.value = '';
+      renderLijst(nr, '');
+      setTimeout(() => zoek.focus(), 100);
+    } else {
+      trigger.classList.remove('open');
+      panel.classList.remove('open');
+    }
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.pf-wrap')) sluitAlles(null);
   });
+
+  function filterPf(nr) {
+    renderLijst(nr, document.getElementById(`ps${nr}`).value);
+  }
+
+  function renderLijst(nr, query) {
+    const q      = query.trim().toLowerCase();
+    const lijst  = document.getElementById(`pl${nr}`);
+    const huidig = document.getElementById(`speler${nr}`).value;
+    lijst.innerHTML = '';
+
+    const header = document.createElement('div');
+    header.className = 'pf-list-header';
+    header.textContent = huidig || `Speler ${nr} selecteren`;
+    lijst.appendChild(header);
+
+    const gefilterd = q
+      ? alleLedenLijst.filter(n => n.toLowerCase().includes(q))
+      : alleLedenLijst;
+
+    if (gefilterd.length === 0) {
+      const el = document.createElement('div');
+      el.className = 'pf-item empty-item';
+      el.textContent = alleLedenLijst.length === 0
+        ? 'Geen ledenlijst — tik 🔄 Verversen'
+        : 'Geen resultaten';
+      lijst.appendChild(el);
+    } else {
+      gefilterd.forEach(naam => {
+        const el = document.createElement('div');
+        el.className = 'pf-item' + (naam === huidig ? ' selected' : '');
+        el.textContent = naam;
+        el.addEventListener('click', () => selecteer(nr, naam));
+        lijst.appendChild(el);
+      });
+    }
+  }
+
+  function selecteer(nr, naam) {
+    zetSpeler(nr, naam);
+    document.getElementById(`pt${nr}`).classList.remove('open');
+    document.getElementById(`pp${nr}`).classList.remove('open');
+    slaSpelersOp();
+    // Spring automatisch naar volgend leeg veld
+    const volgend = [2, 3, 4].find(n => n > nr && !document.getElementById(`speler${n}`).value);
+    if (volgend) setTimeout(() => togglePf(volgend), 180);
+  }
 
   /* ─── Validatie ────────────────────────────────────────── */
   function valideer() {
     let ok = true;
 
-    // Datum
     if (!datumInput.value) {
       datumBtn.classList.add('invalid');
       ok = false;
@@ -449,14 +710,13 @@
       datumBtn.classList.remove('invalid');
     }
 
-    // Spelers
     [2, 3, 4].forEach(nr => {
-      const el = document.getElementById(`speler${nr}`);
-      if (!el.value.trim()) {
-        el.classList.add('invalid');
+      const trigger = document.getElementById(`pt${nr}`);
+      if (!document.getElementById(`speler${nr}`).value) {
+        trigger.classList.add('invalid');
         ok = false;
       } else {
-        el.classList.remove('invalid');
+        trigger.classList.remove('invalid');
       }
     });
 
@@ -476,13 +736,14 @@
 
   /* ─── Baan boeken ──────────────────────────────────────── */
   async function boekBaan() {
+    sluitAlles(null);
     if (!valideer()) return;
 
-    const datum   = datumInput.value;  // native input geeft al YYYY-MM-DD
+    const datum   = datumInput.value;
     const tijd    = tijdEl.value;
-    const speler2 = document.getElementById('speler2').value.trim();
-    const speler3 = document.getElementById('speler3').value.trim();
-    const speler4 = document.getElementById('speler4').value.trim();
+    const speler2 = document.getElementById('speler2').value;
+    const speler3 = document.getElementById('speler3').value;
+    const speler4 = document.getElementById('speler4').value;
     const pat     = getPat();
 
     if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
@@ -491,8 +752,8 @@
     btn.disabled = true;
     document.getElementById('btnTekst').innerHTML = '<div class="spinner"></div>';
 
-    const [_dy, _dm, _dd] = datum.split('-');
-    const datumNL = `${_dd}-${_dm}-${_dy}`;  // YYYY-MM-DD → DD-MM-JJJJ voor display
+    const [_y, _m, _d] = datum.split('-');
+    const datumNL = `${_d}-${_m}-${_y}`;
 
     try {
       const resp = await fetch(
@@ -512,7 +773,7 @@
     }
 
     btn.disabled = false;
-    document.getElementById('btnTekst').textContent = '🎾  Baan boeken';
+    document.getElementById('btnTekst').textContent = '🎾  Baan boeken';
   }
 
   /* ─── Service worker ───────────────────────────────────── */
