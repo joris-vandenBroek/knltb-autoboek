@@ -541,33 +541,39 @@ def haal_alle_leden_via_browser(driver, template: str) -> set:
     except Exception as e:
         log.warning(f"Diagnose mislukt: {e}")
 
-    # Lege query
+    # Testje: lege query (sommige API's geven alles terug)
     leeg = browser_zoek("")
-    if len(leeg) > 5:
-        log.info(f"Lege query geeft {len(leeg)} namen — klaar!")
-        return set(leeg)
+    log.info(f"Lege query: {len(leeg)} resultaten")
 
-    # 1 letter
+    # Test 1-letter: bepaal of de API een minimum prefix vereist
     test1 = browser_zoek("j")
-    if test1:
-        log.info(f"1-letter werkt ('j'→{len(test1)}). Scan 26 letters...")
-        namen = set()
-        for l in LETTERS:
-            namen.update(browser_zoek(l))
-        return namen
+    log.info(f"1-letter test ('j'): {len(test1)} resultaten")
 
-    # 2 letters
-    test2 = browser_zoek("jo")
-    if test2:
-        log.info(f"2-letter werkt ('jo'→{len(test2)}). Scan 676 combinaties...")
-        namen  = set()
-        prefixen2 = [a + b for a, b in itertools.product(LETTERS, repeat=2)]
-        for i, p in enumerate(prefixen2):
-            namen.update(browser_zoek(p))
-            if (i + 1) % 100 == 0:
-                log.info(f"  {i+1}/676 — {len(namen)} namen")
-        return namen
+    if not test1:
+        # Zelfs 1 letter werkt niet → waarschijnlijk 3-letter minimum
+        # Ga direct naar 3-letter scan
+        test2 = browser_zoek("jo")
+        if test2:
+            log.info(f"2-letter werkt ('jo'→{len(test2)}). Scan 676 combinaties...")
+            namen = set(leeg)
+            prefixen2 = [a + b for a, b in itertools.product(LETTERS, repeat=2)]
+            for i, p in enumerate(prefixen2):
+                namen.update(browser_zoek(p))
+                if (i + 1) % 100 == 0:
+                    log.info(f"  {i+1}/676 — {len(namen)} namen")
+            return namen
 
+    # Voeg vroege resultaten toe zodat ze niet verloren gaan
+    for n in leeg:
+        if n and len(n) > 3 and " " in n and n.lower() not in _GEEN_NAAM:
+            alle_namen.add(n.strip())
+    for n in (test1 or []):
+        if n and len(n) > 3 and " " in n and n.lower() not in _GEEN_NAAM:
+            alle_namen.add(n.strip())
+
+    # Altijd 3-letter scan uitvoeren voor volledigheid.
+    # De API limiteert responses tot ~20 per query, dus kortere prefixen
+    # missen leden. 17576 × ~3 = volledige dekking.
     # 3-letter scan in batches van 50 parallelle fetches
     BATCH = 50
     total = len(prefixen3)
