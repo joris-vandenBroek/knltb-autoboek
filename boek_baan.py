@@ -398,48 +398,69 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
         log.error(f"  ❌ Zoekveld niet gevonden voor '{speler}'")
         return False
 
-    # Typ de VOLLEDIGE naam via JS zodat React/Vue events correct worden getriggerd
-    driver.execute_script("""
-        var el = arguments[0], val = arguments[1];
-        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-        setter.call(el, val);
-        el.dispatchEvent(new Event('input',  {bubbles: true}));
-        el.dispatchEvent(new Event('change', {bubbles: true}));
-    """, zoek_veld, speler)
-    log.info(f"  Zoekterm ingevuld: '{speler}'")
-    time.sleep(2.5)
-    screenshot(driver, f"05b_zoek_{index}_{achternaam}")
+    # 2b. Typ de naam via send_keys (simuleert echte toetsaanslagen, triggert typeahead)
+    #     Probeer meerdere zoektermen tot er een suggestie verschijnt
+    woorden     = speler.split()
+    # Probeer: volledige naam → achternaam → voornaam+achternaam (zonder tussenvoegsel)
+    zoektermen  = [speler, achternaam]
+    if len(woorden) >= 3:
+        zoektermen.insert(1, woorden[0] + " " + woorden[-1])   # "Chris Waardenburg"
 
-    # 3. Zoek de suggestie — gebruik contains(.,X) om descendant-tekst te vinden
-    selectors = [
-        # ARIA
-        f"//*[@role='option'][contains(.,'{achternaam}')]",
-        # li / div met descendant-tekst (de . in contains zoekt óók in child-nodes)
-        f"//li[contains(.,'{achternaam}')]",
-        f"//div[contains(@class,'player') or contains(@class,'suggestion')"
-        f"      or contains(@class,'result') or contains(@class,'item')]"
-        f"[contains(.,'{achternaam}')]",
-        # Breed: elk zichtbaar element met de achternaam
-        f"//*[contains(.,'{achternaam}') and not(self::html) and not(self::body)"
-        f"    and not(self::div[@id]) and not(self::input)]",
-    ]
+    geselecteerd = False
+    for zoekterm in zoektermen:
+        # Wis het veld en typ de zoekterm karakter voor karakter
+        zoek_veld.click()
+        zoek_veld.send_keys(Keys.CONTROL + "a")
+        zoek_veld.send_keys(Keys.DELETE)
+        time.sleep(0.3)
+        zoek_veld.send_keys(zoekterm)
+        log.info(f"  Zoekterm ingevuld: '{zoekterm}'")
+        screenshot(driver, f"05b_zoek_{index}_{achternaam}")
 
-    for sel in selectors:
+        # Wacht tot er een suggestie met de achternaam verschijnt (max 8s)
         try:
-            elementen = driver.find_elements(By.XPATH, sel)
-            for el in elementen:
-                tekst = el.text.strip()
-                if el.is_displayed() and achternaam.lower() in tekst.lower():
-                    log.info(f"  Suggestie via '{sel[:60]}': '{tekst[:60]}'")
-                    driver.execute_script("arguments[0].click();", el)
-                    time.sleep(1.2)
-                    log.info(f"  ✅ {speler} geselecteerd")
-                    return True
-        except Exception as e:
-            log.debug(f"  Selector overgeslagen: {e}")
+            WebDriverWait(driver, 8).until(
+                lambda d: any(
+                    el.is_displayed() and achternaam.lower() in el.text.lower()
+                    for el in d.find_elements(By.XPATH,
+                        f"//*[contains(.,'{achternaam}') and not(self::input)"
+                        f"    and not(self::html) and not(self::body)]")
+                )
+            )
+        except TimeoutException:
+            log.info(f"  Geen suggestie na 8s voor zoekterm '{zoekterm}', volgende proberen...")
+            continue
 
-    # Geen match — log wat er wél zichtbaar is voor diagnose
-    log.error(f"  ❌ Geen suggestie voor '{speler}' (achternaam='{achternaam}')")
+        # 3. Klik de suggestie — zoek het kleinste zichtbare element met de achternaam
+        selectors = [
+            f"//*[@role='option'][contains(.,'{achternaam}')]",
+            f"//li[contains(.,'{achternaam}')]",
+            f"//div[contains(@class,'player') or contains(@class,'suggestion')"
+            f"      or contains(@class,'result') or contains(@class,'item')]"
+            f"[contains(.,'{achternaam}')]",
+            f"//*[contains(.,'{achternaam}') and not(self::html) and not(self::body)"
+            f"    and not(self::div[@id]) and not(self::input)]",
+        ]
+        for sel in selectors:
+            try:
+                for el in driver.find_elements(By.XPATH, sel):
+                    tekst = el.text.strip()
+                    if el.is_displayed() and achternaam.lower() in tekst.lower():
+                        log.info(f"  Suggestie via '{sel[:60]}': '{tekst[:60]}'")
+                        driver.execute_script("arguments[0].click();", el)
+                        time.sleep(1.2)
+                        log.info(f"  ✅ {speler} geselecteerd via zoekterm '{zoekterm}'")
+                        geselecteerd = True
+                        break
+            except Exception as e:
+                log.debug(f"  Selector overgeslagen: {e}")
+            if geselecteerd:
+                break
+        if geselecteerd:
+            return True
+
+    # Geen enkele zoekterm leverde resultaat op
+    log.error(f"  ❌ Geen suggestie voor '{speler}' (geprobeerd: {zoektermen})")
     try:
         zichtbaar_tekst = driver.find_element(By.TAG_NAME, "body").text
         log.error(f"  Paginatekst (500 tekens): {zichtbaar_tekst[:500]}")
