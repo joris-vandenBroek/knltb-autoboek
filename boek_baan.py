@@ -15,8 +15,11 @@ import time
 import argparse
 import logging
 import smtplib
+import uuid
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime, timedelta
 
 import undetected_chromedriver as uc
@@ -87,8 +90,38 @@ def dagdeel(tijd: str) -> str:
         return "Avond"
 
 
-def stuur_email(onderwerp: str, inhoud: str):
-    """Stuur een e-mail via Gmail SMTP."""
+def maak_ics(baan: str, datum: str, tijd: str, spelers: list) -> bytes:
+    """Genereer een ICS agenda-bestand voor de boeking."""
+    start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M")
+    eind_dt  = start_dt + timedelta(hours=1)
+    now_utc  = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    start_s  = start_dt.strftime("%Y%m%dT%H%M%S")
+    eind_s   = eind_dt.strftime("%Y%m%dT%H%M%S")
+    uid      = str(uuid.uuid4())
+    deelnemers = "\r\n".join(f"ATTENDEE:mailto:{s.replace(' ', '.')}@etv-volley.nl" for s in spelers)
+    ics = (
+        "BEGIN:VCALENDAR\r\n"
+        "VERSION:2.0\r\n"
+        "PRODID:-//ETV Volley Padel Boeker//NL\r\n"
+        "CALSCALE:GREGORIAN\r\n"
+        "METHOD:PUBLISH\r\n"
+        "BEGIN:VEVENT\r\n"
+        f"UID:{uid}\r\n"
+        f"DTSTAMP:{now_utc}\r\n"
+        f"DTSTART;TZID=Europe/Amsterdam:{start_s}\r\n"
+        f"DTEND;TZID=Europe/Amsterdam:{eind_s}\r\n"
+        f"SUMMARY:🎾 Padel – {baan} – ETV Volley\r\n"
+        f"LOCATION:ETV Volley – Padelbaan {baan}\r\n"
+        f"DESCRIPTION:Spelers: {', '.join(spelers)}\r\n"
+        f"{deelnemers}\r\n"
+        "END:VEVENT\r\n"
+        "END:VCALENDAR\r\n"
+    )
+    return ics.encode("utf-8")
+
+
+def stuur_email(onderwerp: str, inhoud: str, ics_data: bytes = None, ics_naam: str = "boeking.ics"):
+    """Stuur een e-mail via Gmail SMTP, optioneel met ICS agenda-bijlage."""
     if not GMAIL_ADRES or not GMAIL_APP_WACHTWOORD:
         log.warning("Gmail niet ingesteld — e-mail overgeslagen.")
         return
@@ -98,6 +131,14 @@ def stuur_email(onderwerp: str, inhoud: str):
         bericht["To"]      = GMAIL_ADRES
         bericht["Subject"] = onderwerp
         bericht.attach(MIMEText(inhoud, "plain", "utf-8"))
+
+        if ics_data:
+            deel = MIMEBase("text", "calendar", method="PUBLISH", name=ics_naam)
+            deel.set_payload(ics_data)
+            encoders.encode_base64(deel)
+            deel.add_header("Content-Disposition", "attachment", filename=ics_naam)
+            bericht.attach(deel)
+
         with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
             server.login(GMAIL_ADRES, GMAIL_APP_WACHTWOORD)
             server.send_message(bericht)
@@ -537,8 +578,12 @@ def main():
     finally:
         driver.quit()
 
-    datum_nl = datetime.strptime(args.datum, "%Y-%m-%d").strftime("%d-%m-%Y")
+    datum_nl     = datetime.strptime(args.datum, "%Y-%m-%d").strftime("%d-%m-%Y")
     tijdsverschil = f" (voorkeur was {args.tijd})" if geboekte_tijd != args.tijd else ""
+    spelers      = [SPELER1, args.speler2, args.speler3, args.speler4]
+    ics          = maak_ics(baan, args.datum, geboekte_tijd, spelers)
+    ics_naam     = f"padel_{args.datum}_{geboekte_tijd.replace(':','')}.ics"
+
     stuur_email(
         f"KNLTB GEBOEKT: {baan} – {datum_nl} om {geboekte_tijd}",
         f"✅ Padelbaan succesvol gereserveerd!\n\n"
@@ -550,7 +595,9 @@ def main():
         f"   2. {args.speler2}\n"
         f"   3. {args.speler3}\n"
         f"   4. {args.speler4}\n\n"
-        f"Zeg tegen Claude: '{baan} om {geboekte_tijd} is geboekt' om je agenda bij te werken."
+        f"📆 Agenda: open de bijlage ({ics_naam}) om de afspraak direct aan je agenda toe te voegen.",
+        ics_data=ics,
+        ics_naam=ics_naam,
     )
     log.info("✅ Klaar!")
 
