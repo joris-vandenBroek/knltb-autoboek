@@ -336,6 +336,29 @@ def klik_baan_afhangen(driver: uc.Chrome) -> bool:
         return False
 
 
+# ── Navigatie-hulpfunctie ─────────────────────────────────────────────────────
+
+def _zoek_knop(driver: uc.Chrome, labels: list) -> object:
+    """
+    Zoek een zichtbare knop/link die een van de gegeven labels bevat.
+    Gebruikt contains(.,label) zodat child-elementen (zoals pijl-iconen) geen probleem zijn.
+    """
+    for label in labels:
+        for sel in [
+            f"//button[contains(.,'{label}')]",
+            f"//a[contains(.,'{label}')]",
+            f"//*[@role='button'][contains(.,'{label}')]",
+        ]:
+            try:
+                for el in driver.find_elements(By.XPATH, sel):
+                    if el.is_displayed():
+                        log.info(f"Knop '{label}' gevonden: '{el.text.strip()[:40]}'")
+                        return el
+            except Exception:
+                pass
+    return None
+
+
 # ── STAP 3: Spelers toevoegen ─────────────────────────────────────────────────
 
 def _zoek_veld_spelers(driver: uc.Chrome):
@@ -438,18 +461,19 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
 
     screenshot(driver, "06_spelers_toegevoegd")
 
-    try:
-        volgende = wacht_op(driver, By.XPATH,
-            "//button[contains(text(),'Volgende') or contains(text(),'Next')] "
-            "| //a[contains(text(),'Volgende')]")
-        volgende.click()
+    volgende = _zoek_knop(driver, ["Volgende", "Next"])
+    if volgende:
+        driver.execute_script("arguments[0].click();", volgende)
         time.sleep(2)
         log.info("✅ Spelers toegevoegd, naar dagkeuze")
         return True
-    except TimeoutException:
-        log.error("❌ 'Volgende' knop niet gevonden na spelers")
-        screenshot(driver, "volgende_fout_spelers")
-        return False
+    log.error("❌ 'Volgende' knop niet gevonden na spelers")
+    try:
+        log.error(f"Paginatekst: {driver.find_element(By.TAG_NAME,'body').text[:400]}")
+    except Exception:
+        pass
+    screenshot(driver, "volgende_fout_spelers")
+    return False
 
 
 # ── STAP 4: Dag en dagdeel kiezen ────────────────────────────────────────────
@@ -488,18 +512,15 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
     screenshot(driver, "08_dag_geselecteerd")
 
-    try:
-        volgende = wacht_op(driver, By.XPATH,
-            "//button[contains(text(),'Volgende') or contains(text(),'Next')] "
-            "| //a[contains(text(),'Volgende')]")
-        volgende.click()
+    volgende = _zoek_knop(driver, ["Volgende", "Next"])
+    if volgende:
+        driver.execute_script("arguments[0].click();", volgende)
         time.sleep(2)
         log.info("✅ Naar baankeuze")
         return True
-    except TimeoutException:
-        log.error("❌ 'Volgende' knop niet gevonden na dag")
-        screenshot(driver, "volgende_fout_dag")
-        return False
+    log.error("❌ 'Volgende' knop niet gevonden na dag")
+    screenshot(driver, "volgende_fout_dag")
+    return False
 
 
 # ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
@@ -539,16 +560,15 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
 def bevestig(driver: uc.Chrome) -> bool:
     log.info("Bevestigen...")
     try:
-        volgende = wacht_op(driver, By.XPATH,
-            "//button[contains(text(),'Volgende') or contains(text(),'Next')] "
-            "| //a[contains(text(),'Volgende')]")
-        volgende.click()
-        time.sleep(2)
-        screenshot(driver, "11_bevestig_pagina")
+        volgende = _zoek_knop(driver, ["Volgende", "Next"])
+        if volgende:
+            driver.execute_script("arguments[0].click();", volgende)
+            time.sleep(2)
+            screenshot(driver, "11_bevestig_pagina")
 
-        bevestig_knop = wacht_op(driver, By.XPATH,
-            "//button[contains(text(),'Bevestig') or contains(text(),'Confirm') or contains(text(),'Boek')] "
-            "| //a[contains(text(),'Bevestig')]")
+        bevestig_knop = _zoek_knop(driver, ["Bevestig", "Confirm", "Boek", "Reserveer"])
+        if not bevestig_knop:
+            raise TimeoutException("Bevestig-knop niet gevonden")
         bevestig_knop.click()
         time.sleep(3)
         screenshot(driver, "12_na_bevestiging")
