@@ -519,46 +519,60 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         else:
             break
 
-    # JavaScript: gebruik elementFromPoint om het SNIJPUNT te vinden van
-    # de dag-kolom en de dagdeel-rij — betrouwbaarder dan DOM-traversal.
+    # Stap A: klik de dag-header om de Bootstrap-accordion open te klappen.
+    # (elementFromPoint pikt anders de collapse-wrapper op, niet de cel zelf.)
+    dag_klik = driver.execute_script("""
+        var dagNr = arguments[0];
+        var alle  = Array.from(document.querySelectorAll('*'));
+        var dagEls = alle.filter(function(el) {
+            if (!el.offsetParent) return false;
+            var tokens = (el.innerText || '').trim().split(/\s+/);
+            return tokens.indexOf(dagNr) >= 0 && el.children.length <= 1;
+        });
+        if (!dagEls.length) return 'GEEN_DAG: ' + dagNr;
+        var r = dagEls[0].getBoundingClientRect();
+        dagEls[0].click();
+        return 'DAG_GEKLIKT x=' + Math.round(r.left + r.width / 2);
+    """, dag_nr)
+    log.info(f"Dag accordion klik: {dag_klik}")
+    time.sleep(0.7)
+
+    # Stap B: vind alle zichtbare dagdeel-cellen en klik de cel wiens
+    # X-middelpunt het dichtst bij het X-middelpunt van de dag-header ligt.
     resultaat = driver.execute_script("""
         var dagNr   = arguments[0];
         var dagdeel = arguments[1];
-
         var alle = Array.from(document.querySelectorAll('*'));
 
-        // Vind het kleinste zichtbare element dat de dag-tekst bevat
-        // Dag-cel tekst: "vr 29 mei" of "29 mei" of "29" (whitespace gesplit)
         var dagEls = alle.filter(function(el) {
             if (!el.offsetParent) return false;
-            var txt = (el.innerText || '').trim();
-            var tokens = txt.split(/\s+/);
+            var tokens = (el.innerText || '').trim().split(/\s+/);
             return tokens.indexOf(dagNr) >= 0 && el.children.length <= 1;
         });
+        if (!dagEls.length) return 'NIET_GEVONDEN: geen dag-element voor ' + dagNr;
 
-        // Vind het kleinste zichtbare element met ALLEEN de dagdeel-tekst
         var dagdeelEls = alle.filter(function(el) {
             if (!el.offsetParent) return false;
             var txt = (el.innerText || '').trim();
             return txt === dagdeel && el.children.length === 0;
         });
-
-        if (!dagEls.length)    return 'NIET_GEVONDEN: geen dag-element voor ' + dagNr;
         if (!dagdeelEls.length) return 'NIET_GEVONDEN: geen dagdeel-element voor ' + dagdeel;
 
-        // Bereken het snijpunt: X uit de dag-kolom, Y uit de dagdeel-rij
-        var dagRect     = dagEls[0].getBoundingClientRect();
-        var dagdeelRect = dagdeelEls[0].getBoundingClientRect();
-        var x = dagRect.left + dagRect.width  / 2;
-        var y = dagdeelRect.top  + dagdeelRect.height / 2;
+        var dagR = dagEls[0].getBoundingClientRect();
+        var dagX = dagR.left + dagR.width / 2;
 
-        // Klik het element op het snijpunt
-        var cel = document.elementFromPoint(x, y);
-        if (!cel) return 'NIET_GEVONDEN: elementFromPoint leeg op x=' + x + ' y=' + y;
-        cel.click();
-        return 'OK dag=' + dagNr + ' dagdeel=' + dagdeel +
-               ' cel=' + (cel.className || cel.tagName) +
-               ' x=' + Math.round(x) + ' y=' + Math.round(y);
+        dagdeelEls.sort(function(a, b) {
+            var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+            return Math.abs((ra.left + ra.width / 2) - dagX)
+                 - Math.abs((rb.left + rb.width / 2) - dagX);
+        });
+
+        var target = dagdeelEls[0];
+        var tr = target.getBoundingClientRect();
+        target.click();
+        return 'OK dag=' + dagNr + ' dagdeel=' + dagdeel
+             + ' target_x=' + Math.round(tr.left + tr.width / 2)
+             + ' dag_x='    + Math.round(dagX);
     """, dag_nr, gewenst_dagdeel)
 
     log.info(f"JS dag-selectie: {resultaat}")
@@ -598,16 +612,17 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     log.info("Baankeuze pagina laden...")
 
-    # De courtpagina laadt via AJAX op hetzelfde URL als dagkeuze.
-    # Wacht tot minstens één padelbaan-naam zichtbaar is.
+    # Wacht tot de tijdslot-pagina geladen is: er verschijnen elementen zoals
+    # "08:00", "09:30" etc. Padelbaan-namen staan pas zichtbaar NADAT een
+    # tijdslot geselecteerd is, dus die zijn geen bruikbaar laadsignaal.
     try:
         WebDriverWait(driver, 20).until(
-            lambda d: any(b in d.find_element(By.TAG_NAME, "body").text
-                          for b in PADEL_BANEN)
+            lambda d: ":00" in d.find_element(By.TAG_NAME, "body").text
+                      or ":30" in d.find_element(By.TAG_NAME, "body").text
         )
-        log.info("✅ Padelbanen zichtbaar in pagina")
+        log.info("✅ Tijdslot-pagina geladen (tijden zichtbaar)")
     except TimeoutException:
-        log.warning("⚠️ Padelbanen niet geladen na 20s — toch proberen")
+        log.warning("⚠️ Tijdslot-pagina niet geladen na 20s — toch proberen")
 
     time.sleep(1)
     screenshot(driver, "09_baan_pagina")
@@ -615,10 +630,10 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     tijden = genereer_tijden(voorkeur_tijd)
     log.info(f"Tijden om te proberen: {tijden}")
 
-    # Log paginatekst voor diagnose (eerste 800 tekens)
+    # Log paginatekst voor diagnose (eerste 3000 tekens)
     try:
         pagina = driver.find_element(By.TAG_NAME, "body").text
-        log.info(f"Baan-pagina tekst (800): {pagina[:800]}")
+        log.info(f"Baan-pagina tekst (3000): {pagina[:3000]}")
     except Exception:
         pass
 
