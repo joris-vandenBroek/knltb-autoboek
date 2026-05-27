@@ -6,6 +6,7 @@ Werkt door A-Z te zoeken in het spelerszoekvenster en alle autocomplete-suggesti
 import os, sys, json, time, logging
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
@@ -80,17 +81,17 @@ def login(driver) -> bool:
         screenshot(driver, "01b_cloudflare")
         return False
 
-    # Accepteer cookie-banner als die er is
+    # Accepteer cookie-banner (met expliciete wacht zodat de banner geladen is)
     for sel in [
         "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accepteren')]",
         "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accept')]",
         "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accepteren')]",
     ]:
         try:
-            knop = driver.find_element(By.XPATH, sel)
+            knop = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, sel)))
             knop.click()
             log.info("🍪 Cookie-banner geaccepteerd")
-            time.sleep(2)
+            time.sleep(1)
             break
         except Exception:
             pass
@@ -132,12 +133,9 @@ def login(driver) -> bool:
             "//input[@type='password']")))
         ww.clear()
         ww.send_keys(WACHTWOORD)
-
-        knop = WebDriverWait(driver, TIMEOUT).until(EC.element_to_be_clickable((By.XPATH,
-            "//button[@type='submit'] | //input[@type='submit'] "
-            "| //button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'login')] "
-            "| //button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'inloggen')]")))
-        knop.click()
+        log.info("Wachtwoord ingevuld — Enter indrukken")
+        # Enter gebruiken ipv button-click: voorkomt dat de cookie-banner button wordt geklikt
+        ww.send_keys(Keys.RETURN)
         time.sleep(5)
         screenshot(driver, "02_na_login")
         log.info(f"URL na login-klik: {driver.current_url}")

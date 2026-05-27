@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
@@ -32,8 +33,8 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── Instellingen ──────────────────────────────────────────────────────────────
-LOGIN_URL    = "https://etv-volley.nl/mijn"
-RESERVEER_URL = "https://etv-volley.nl/mijn/Reservations"
+LOGIN_URL    = "https://www.etv-volley.nl/mijn"
+RESERVEER_URL = "https://www.etv-volley.nl/mijn/Reservations"
 
 BONDSNUMMER  = os.environ.get("KNLTB_BONDSNUMMER", "")
 WACHTWOORD   = os.environ.get("KNLTB_WACHTWOORD", "")
@@ -188,8 +189,23 @@ def screenshot(driver, naam):
 def login(driver: uc.Chrome) -> bool:
     log.info(f"Navigeer naar {LOGIN_URL}")
     driver.get(LOGIN_URL)
-    time.sleep(3)
+    time.sleep(4)
     screenshot(driver, "01_login_pagina")
+
+    # Accepteer cookie-banner (met expliciete wacht)
+    for sel in [
+        "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accepteren')]",
+        "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accept')]",
+        "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accepteren')]",
+    ]:
+        try:
+            knop = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, sel)))
+            knop.click()
+            log.info("🍪 Cookie-banner geaccepteerd")
+            time.sleep(1)
+            break
+        except Exception:
+            pass
 
     try:
         gebruiker_veld = wacht_op(driver, By.XPATH,
@@ -200,22 +216,27 @@ def login(driver: uc.Chrome) -> bool:
             "or contains(@placeholder,'e-mail') or contains(@placeholder,'email')]")
         gebruiker_veld.clear()
         gebruiker_veld.send_keys(BONDSNUMMER)
+        log.info("Bondsnummer ingevuld")
 
         ww_veld = wacht_op(driver, By.XPATH, "//input[@type='password']")
         ww_veld.clear()
         ww_veld.send_keys(WACHTWOORD)
-
-        inlog_knop = wacht_op(driver, By.XPATH,
-            "//button[@type='submit'] | //input[@type='submit'] "
-            "| //button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'login')] "
-            "| //button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'inloggen')]")
-        inlog_knop.click()
-        time.sleep(4)
+        log.info("Wachtwoord ingevuld — Enter indrukken")
+        # Gebruik Enter ipv button-click: voorkomt dat de cookie-banner button wordt geklikt
+        ww_veld.send_keys(Keys.RETURN)
+        time.sleep(5)
         screenshot(driver, "02_na_login")
+        log.info(f"URL na login: {driver.current_url}")
 
-        if "login" in driver.current_url.lower() or "signin" in driver.current_url.lower():
-            log.error("❌ Inloggen mislukt — nog steeds op loginpagina")
-            return False
+        # Controleer of wachtwoordveld nog zichtbaar is (= login mislukt)
+        try:
+            pw = driver.find_element(By.XPATH, "//input[@type='password']")
+            if pw.is_displayed():
+                log.error("❌ Inloggen mislukt — wachtwoordveld nog zichtbaar")
+                screenshot(driver, "02b_login_mislukt")
+                return False
+        except Exception:
+            pass  # Veld weg = inloggen gelukt
 
         log.info("✅ Ingelogd!")
         return True
