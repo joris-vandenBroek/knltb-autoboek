@@ -35,15 +35,16 @@ jobs:
       - name: Installeer dependencies
         run: |
           sudo apt-get install -y xvfb
-          pip install undetected-chromedriver selenium
+          pip install undetected-chromedriver selenium \
+                      google-api-python-client google-auth
 
       - name: Reserveer baan
         env:
-          DISPLAY: :99
-          KNLTB_BONDSNUMMER:    ${{ secrets.KNLTB_BONDSNUMMER }}
-          KNLTB_WACHTWOORD:     ${{ secrets.KNLTB_WACHTWOORD }}
-          GMAIL_ADRES:          ${{ secrets.GMAIL_ADRES }}
-          GMAIL_APP_WACHTWOORD: ${{ secrets.GMAIL_APP_WACHTWOORD }}
+          DISPLAY:                      :99
+          KNLTB_BONDSNUMMER:            ${{ secrets.KNLTB_BONDSNUMMER }}
+          KNLTB_WACHTWOORD:             ${{ secrets.KNLTB_WACHTWOORD }}
+          GOOGLE_CALENDAR_CREDENTIALS:  ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
+          GOOGLE_CALENDAR_ID:           ${{ secrets.GOOGLE_CALENDAR_ID }}
         run: |
           Xvfb :99 -screen 0 1280x900x24 &
           sleep 2

@@ -1,7 +1,7 @@
 # 🎾 ETV Volley Padelbaan Auto-Reservering
 
 Automatisch een padelbaan reserveren via [etv-volley.nl/mijn](https://etv-volley.nl/mijn).
-Bedien de reservering vanuit een mobiele app — GitHub voert het uit.
+Na een succesvolle boeking verschijnt de afspraak direct in je **Google Agenda**.
 
 ---
 
@@ -12,7 +12,7 @@ De app is een Progressive Web App (PWA) gehost op GitHub Pages.
 **URL:** `https://joris-vandenbroek.github.io/knltb-autoboek/`
 
 **Installeren op je telefoon:**
-- **Android (Chrome):** drie puntjes → "Toevoegen aan beginscherm"
+- **Android (Chrome/Samsung Internet):** drie puntjes → "Toevoegen aan beginscherm"
 - **iPhone (Safari):** deel-icoon → "Zet op beginscherm"
 
 **Eerste keer openen:** voer je GitHub Personal Access Token in via ⚙️ — dit wordt alleen lokaal op je telefoon opgeslagen.
@@ -23,7 +23,7 @@ De app is een Progressive Web App (PWA) gehost op GitHub Pages.
 
 | Bestand | Wat doet het? |
 |---------|---------------|
-| `boek_baan.py` | Hoofdscript — logt in op etv-volley.nl, selecteert baan en tijd, bevestigt boeking |
+| `boek_baan.py` | Hoofdscript — logt in op etv-volley.nl, selecteert baan en tijd, bevestigt boeking, zet afspraak in Google Agenda |
 | `haal_leden_op.py` | Haalt alle ledenlijst op uit het reserveringssysteem |
 | `.github/workflows/boek.yml` | Voert een boeking uit (gestart vanuit de app) |
 | `.github/workflows/haal_leden_op.yml` | Ververst de ledenlijst wekelijks (elke maandag 07:00) |
@@ -36,18 +36,37 @@ De app is een Progressive Web App (PWA) gehost op GitHub Pages.
 
 Ga naar: **Settings → Secrets and variables → Actions → New repository secret**
 
+### KNLTB inloggegevens
+
 | Secret | Waarde |
 |--------|--------|
 | `KNLTB_BONDSNUMMER` | Jouw KNLTB bondsnummer / gebruikersnaam |
 | `KNLTB_WACHTWOORD` | Jouw KNLTB wachtwoord |
-| `GMAIL_ADRES` | `Joris.vandenbroek@gmail.com` |
-| `GMAIL_APP_WACHTWOORD` | Gmail App-wachtwoord (zie hieronder) |
 
-### Gmail App-wachtwoord aanmaken
-1. Ga naar `myaccount.google.com`
-2. Beveiliging → zoek **"App-wachtwoorden"**
-3. Maak nieuw wachtwoord aan (naam: "KNLTB script")
-4. Kopieer de 16-letterige code → plak als `GMAIL_APP_WACHTWOORD`
+### Google Agenda koppeling
+
+| Secret | Waarde |
+|--------|--------|
+| `GOOGLE_CALENDAR_CREDENTIALS` | Inhoud van het service-account JSON-bestand (zie hieronder) |
+| `GOOGLE_CALENDAR_ID` | Je agenda-ID, bijv. `joris.vandenbroek@gmail.com` of `primary` |
+
+#### Google Calendar Service Account aanmaken (eenmalig, ~10 min)
+
+1. Ga naar [console.cloud.google.com](https://console.cloud.google.com)
+2. Maak een nieuw project aan (bijv. "Padel Boeker")
+3. Zoek **"Google Calendar API"** → klik **Inschakelen**
+4. Ga naar **IAM & Beheer → Serviceaccounts → Serviceaccount aanmaken**
+   - Naam: `padel-boeker`
+   - Klik **Gereed**
+5. Klik op het nieuwe serviceaccount → tabblad **Sleutels** → **Sleutel toevoegen → JSON**
+   - Download het JSON-bestand
+6. Open **Google Agenda** op je computer
+   - Klik naast jouw agenda op ⋮ → **Instellingen en delen**
+   - Scroll naar **Personen met toegang** → **Personen uitnodigen**
+   - Plak het e-mailadres van het serviceaccount (staat in het JSON-bestand bij `"client_email"`)
+   - Geef de rol **"Afspraken beheren"** (editor)
+7. Kopieer de volledige inhoud van het JSON-bestand → plak als `GOOGLE_CALENDAR_CREDENTIALS`
+8. Stel `GOOGLE_CALENDAR_ID` in op je Gmail-adres of `primary`
 
 ---
 
@@ -55,7 +74,7 @@ Ga naar: **Settings → Secrets and variables → Actions → New repository sec
 
 ```
 1. Open de app op je telefoon
-2. Kies datum, tijd en 3 medespelers
+2. Kies datum (DD-MM-JJJJ), tijd en 3 medespelers
 3. Tik op "Baan boeken"
 
 GitHub Actions doet de rest:
@@ -65,7 +84,8 @@ GitHub Actions doet de rest:
 Script probeert Padelbaan 1 t/m 6 op voorkeurstijd.
 Bij bezette baan probeert het automatisch alternatieve tijden.
 
-4. ✅ E-mail: "KNLTB GEBOEKT: Padelbaan 3 – 07-06-2026 om 10:00"
+4. ✅ Afspraak verschijnt automatisch in Google Agenda:
+   "🎾 Padel – Padel 3 – ETV Volley"
 ```
 
 ---
@@ -85,6 +105,6 @@ Handmatig verversen kan op twee manieren:
 | Probleem | Oplossing |
 |----------|-----------|
 | Boeking mislukt | Actions → rode run → download "screenshots" voor foutdiagnose |
-| Geen e-mail ontvangen | Controleer `GMAIL_APP_WACHTWOORD` in Secrets |
+| Afspraak niet in agenda | Controleer `GOOGLE_CALENDAR_CREDENTIALS` en of agenda gedeeld is met serviceaccount |
 | Naam niet gevonden in autocomplete | Tik op 🔄 Verversen om de ledenlijst bij te werken |
 | App vraagt token | Voer GitHub PAT in via ⚙️ (eenmalig per apparaat) |

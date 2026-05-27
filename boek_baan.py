@@ -1,30 +1,25 @@
 """
 ETV Volley Padelbaan Auto-Reservering
 Automatisch een padelbaan reserveren via etv-volley.nl/mijn
+Na een succesvolle boeking wordt de afspraak direct in Google Agenda gezet.
 
 Omgevingsvariabelen (GitHub Secrets):
-  KNLTB_BONDSNUMMER      - Jouw bondsnummer / gebruikersnaam
-  KNLTB_WACHTWOORD       - Jouw wachtwoord
-  GMAIL_ADRES            - Joris.vandenbroek@gmail.com
-  GMAIL_APP_WACHTWOORD   - Gmail App-wachtwoord
+  KNLTB_BONDSNUMMER              - Jouw bondsnummer / gebruikersnaam
+  KNLTB_WACHTWOORD               - Jouw wachtwoord
+  GOOGLE_CALENDAR_CREDENTIALS    - Inhoud van het service-account JSON-bestand
+  GOOGLE_CALENDAR_ID             - Agenda-ID (bijv. 'primary' of je e-mailadres)
 """
 
 import os
 import sys
+import json
 import time
 import argparse
 import logging
-import smtplib
-import uuid
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
 from datetime import datetime, timedelta
 
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
@@ -37,22 +32,18 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ── Instellingen ──────────────────────────────────────────────────────────────
-BASE_URL             = "https://etv-volley.nl/mijn"
-LOGIN_URL            = "https://etv-volley.nl/mijn"
-RESERVEER_URL        = "https://etv-volley.nl/mijn/Reservations"
-SPELERS_URL          = "https://etv-volley.nl/mijn/ReservationsPlayers"
-DAG_URL              = "https://etv-volley.nl/mijn/ReservationsDay"
-BAAN_URL             = "https://etv-volley.nl/mijn/ReservationsCourt"
+LOGIN_URL    = "https://etv-volley.nl/mijn"
+RESERVEER_URL = "https://etv-volley.nl/mijn/Reservations"
 
-BONDSNUMMER          = os.environ.get("KNLTB_BONDSNUMMER", "")
-WACHTWOORD           = os.environ.get("KNLTB_WACHTWOORD", "")
-GMAIL_ADRES          = os.environ.get("GMAIL_ADRES", "Joris.vandenbroek@gmail.com")
-GMAIL_APP_WACHTWOORD = os.environ.get("GMAIL_APP_WACHTWOORD", "")
-SPELER1              = "Joris van den Broek"
+BONDSNUMMER  = os.environ.get("KNLTB_BONDSNUMMER", "")
+WACHTWOORD   = os.environ.get("KNLTB_WACHTWOORD", "")
+SPELER1      = "Joris van den Broek"
 
-# Padelbanen op etv-volley.nl (rijnummers 9-14 = Padel 1-6)
-PADEL_BANEN          = ["Padel 1", "Padel 2", "Padel 3", "Padel 4", "Padel 5", "Padel 6"]
-WACHT_TIMEOUT        = 15
+GOOGLE_CREDENTIALS = os.environ.get("GOOGLE_CALENDAR_CREDENTIALS", "")
+GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
+
+PADEL_BANEN   = ["Padel 1", "Padel 2", "Padel 3", "Padel 4", "Padel 5", "Padel 6"]
+WACHT_TIMEOUT = 15
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -80,73 +71,76 @@ def genereer_tijden(voorkeur_tijd: str) -> list:
 
 
 def dagdeel(tijd: str) -> str:
-    """Bepaal dagdeel op basis van tijd."""
     uur = int(tijd.split(":")[0])
-    if uur < 12:
-        return "Ochtend"
-    elif uur < 17:
-        return "Middag"
-    else:
-        return "Avond"
+    if uur < 12:  return "Ochtend"
+    elif uur < 17: return "Middag"
+    else:          return "Avond"
 
 
-def maak_ics(baan: str, datum: str, tijd: str, spelers: list) -> bytes:
-    """Genereer een ICS agenda-bestand voor de boeking."""
-    start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M")
-    eind_dt  = start_dt + timedelta(hours=1)
-    now_utc  = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-    start_s  = start_dt.strftime("%Y%m%dT%H%M%S")
-    eind_s   = eind_dt.strftime("%Y%m%dT%H%M%S")
-    uid      = str(uuid.uuid4())
-    deelnemers = "\r\n".join(f"ATTENDEE:mailto:{s.replace(' ', '.')}@etv-volley.nl" for s in spelers)
-    ics = (
-        "BEGIN:VCALENDAR\r\n"
-        "VERSION:2.0\r\n"
-        "PRODID:-//ETV Volley Padel Boeker//NL\r\n"
-        "CALSCALE:GREGORIAN\r\n"
-        "METHOD:PUBLISH\r\n"
-        "BEGIN:VEVENT\r\n"
-        f"UID:{uid}\r\n"
-        f"DTSTAMP:{now_utc}\r\n"
-        f"DTSTART;TZID=Europe/Amsterdam:{start_s}\r\n"
-        f"DTEND;TZID=Europe/Amsterdam:{eind_s}\r\n"
-        f"SUMMARY:🎾 Padel – {baan} – ETV Volley\r\n"
-        f"LOCATION:ETV Volley – Padelbaan {baan}\r\n"
-        f"DESCRIPTION:Spelers: {', '.join(spelers)}\r\n"
-        f"{deelnemers}\r\n"
-        "END:VEVENT\r\n"
-        "END:VCALENDAR\r\n"
-    )
-    return ics.encode("utf-8")
-
-
-def stuur_email(onderwerp: str, inhoud: str, ics_data: bytes = None, ics_naam: str = "boeking.ics"):
-    """Stuur een e-mail via Gmail SMTP, optioneel met ICS agenda-bijlage."""
-    if not GMAIL_ADRES or not GMAIL_APP_WACHTWOORD:
-        log.warning("Gmail niet ingesteld — e-mail overgeslagen.")
+# ── Google Agenda ─────────────────────────────────────────────────────────────
+def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
+    """Maak een afspraak aan in Google Agenda via Service Account."""
+    if not GOOGLE_CREDENTIALS:
+        log.warning("⚠️  GOOGLE_CALENDAR_CREDENTIALS niet ingesteld — agenda overgeslagen.")
         return
+
     try:
-        bericht = MIMEMultipart()
-        bericht["From"]    = GMAIL_ADRES
-        bericht["To"]      = GMAIL_ADRES
-        bericht["Subject"] = onderwerp
-        bericht.attach(MIMEText(inhoud, "plain", "utf-8"))
+        from google.oauth2.service_account import Credentials
+        from googleapiclient.discovery import build
 
-        if ics_data:
-            deel = MIMEBase("text", "calendar", method="PUBLISH", name=ics_naam)
-            deel.set_payload(ics_data)
-            encoders.encode_base64(deel)
-            deel.add_header("Content-Disposition", "attachment", filename=ics_naam)
-            bericht.attach(deel)
+        creds_info = json.loads(GOOGLE_CREDENTIALS)
+        creds = Credentials.from_service_account_info(
+            creds_info,
+            scopes=["https://www.googleapis.com/auth/calendar"]
+        )
+        service = build("calendar", "v3", credentials=creds, cache_discovery=False)
 
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(GMAIL_ADRES, GMAIL_APP_WACHTWOORD)
-            server.send_message(bericht)
-        log.info(f"📧 E-mail verstuurd: {onderwerp}")
+        start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M")
+        eind_dt  = start_dt + timedelta(hours=1)
+        datum_nl = start_dt.strftime("%d-%m-%Y")
+
+        event = {
+            "summary": f"🎾 Padel – {baan} – ETV Volley",
+            "location": "ETV Volley, Swaardvenstraat 10, 5048 AV Tilburg",
+            "description": (
+                f"Padelbaan automatisch gereserveerd.\n\n"
+                f"Baan:    {baan}\n"
+                f"Datum:   {datum_nl}\n"
+                f"Tijd:    {tijd} – {eind_dt.strftime('%H:%M')}\n\n"
+                f"Spelers:\n" +
+                "\n".join(f"  {i+1}. {s}" for i, s in enumerate(spelers))
+            ),
+            "start": {
+                "dateTime": start_dt.isoformat(),
+                "timeZone": "Europe/Amsterdam",
+            },
+            "end": {
+                "dateTime": eind_dt.isoformat(),
+                "timeZone": "Europe/Amsterdam",
+            },
+            "colorId": "10",   # Groen (Sage) — passend bij padel
+            "reminders": {
+                "useDefault": False,
+                "overrides": [
+                    {"method": "popup", "minutes": 60},
+                ],
+            },
+        }
+
+        result = service.events().insert(
+            calendarId=GOOGLE_CALENDAR_ID, body=event
+        ).execute()
+        log.info(f"✅ Google Agenda bijgewerkt: {result.get('htmlLink')}")
+
+    except ImportError:
+        log.error("❌ google-api-python-client niet geïnstalleerd.")
+    except json.JSONDecodeError:
+        log.error("❌ GOOGLE_CALENDAR_CREDENTIALS is geen geldig JSON-bestand.")
     except Exception as e:
-        log.error(f"❌ E-mail versturen mislukt: {e}")
+        log.error(f"❌ Google Agenda bijwerken mislukt: {e}")
 
 
+# ── Selenium driver ───────────────────────────────────────────────────────────
 def maak_driver() -> uc.Chrome:
     opties = uc.ChromeOptions()
     opties.add_argument("--no-sandbox")
@@ -242,17 +236,14 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
 
     for speler in [speler2, speler3, speler4]:
         log.info(f"Speler toevoegen: {speler}")
-
-        # Altijd via zoekbalk
         try:
             zoek_veld = wacht_op(driver, By.XPATH,
                 "//input[contains(@placeholder,'zoek') or contains(@placeholder,'naam') "
                 "or contains(@placeholder,'speler') or contains(@class,'search')]")
             zoek_veld.clear()
-            zoek_veld.send_keys(speler.split()[0])  # Voornaam
+            zoek_veld.send_keys(speler.split()[0])
             time.sleep(2)
 
-            # Klik suggestie die achternaam bevat
             suggestie = wacht_op(driver, By.XPATH,
                 f"//li[contains(text(),'{speler.split()[-1]}')]"
                 f" | //div[contains(@class,'suggestion') or contains(@class,'autocomplete')"
@@ -267,7 +258,6 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
 
     screenshot(driver, "06_spelers_toegevoegd")
 
-    # Klik Volgende
     try:
         volgende = wacht_op(driver, By.XPATH,
             "//button[contains(text(),'Volgende') or contains(text(),'Next')] "
@@ -290,11 +280,9 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
     doel_datum = datetime.strptime(datum, "%Y-%m-%d")
     dag_nr     = str(doel_datum.day)
-    maand_kort = doel_datum.strftime("%b").lower()  # bijv. "mei"
     gewenst_dagdeel = dagdeel(tijd)
 
     try:
-        # Klik op de juiste dag
         dag_cel = wacht_op(driver, By.XPATH,
             f"//td[contains(text(),'{dag_nr}')] "
             f"| //*[contains(@class,'day') and contains(text(),'{dag_nr}')] "
@@ -308,7 +296,6 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         return False
 
     try:
-        # Klik op het juiste dagdeel
         dagdeel_knop = wacht_op(driver, By.XPATH,
             f"//*[contains(text(),'{gewenst_dagdeel}') and not(contains(@class,'disabled'))]")
         dagdeel_knop.click()
@@ -321,7 +308,6 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
     screenshot(driver, "08_dag_geselecteerd")
 
-    # Klik Volgende
     try:
         volgende = wacht_op(driver, By.XPATH,
             "//button[contains(text(),'Volgende') or contains(text(),'Next')] "
@@ -338,10 +324,6 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
 # ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
 def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
-    """
-    Kies een beschikbare padelbaan op de voorkeurstijd (of alternatief).
-    Geeft (baannaam, geboekte_tijd) terug bij succes, anders ("", "").
-    """
     log.info("Baankeuze pagina...")
     time.sleep(2)
     screenshot(driver, "09_baan_pagina")
@@ -353,7 +335,6 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
         for baan in PADEL_BANEN:
             log.info(f"Probeer {baan} om {tijd}...")
             try:
-                # Zoek tijdknop in de rij van de gewenste padelbaan
                 tijdknop = driver.find_element(By.XPATH,
                     f"//*[contains(text(),'{baan}')]"
                     f"/ancestor::tr"
@@ -364,7 +345,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
                 tijdknop.click()
                 time.sleep(2)
                 log.info(f"✅ {baan} om {tijd} geselecteerd!")
-                screenshot(driver, f"10_baan_geselecteerd")
+                screenshot(driver, "10_baan_geselecteerd")
                 return baan, tijd
             except NoSuchElementException:
                 continue
@@ -378,7 +359,6 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
 def bevestig(driver: uc.Chrome) -> bool:
     log.info("Bevestigen...")
     try:
-        # Eerst Volgende
         volgende = wacht_op(driver, By.XPATH,
             "//button[contains(text(),'Volgende') or contains(text(),'Next')] "
             "| //a[contains(text(),'Volgende')]")
@@ -386,7 +366,6 @@ def bevestig(driver: uc.Chrome) -> bool:
         time.sleep(2)
         screenshot(driver, "11_bevestig_pagina")
 
-        # Dan Bevestigen
         bevestig_knop = wacht_op(driver, By.XPATH,
             "//button[contains(text(),'Bevestig') or contains(text(),'Confirm') or contains(text(),'Boek')] "
             "| //a[contains(text(),'Bevestig')]")
@@ -401,105 +380,15 @@ def bevestig(driver: uc.Chrome) -> bool:
         return False
 
 
-# ── Naamcheck ─────────────────────────────────────────────────────────────────
-def zoek_speler(driver: uc.Chrome, naam: str) -> bool:
-    """Controleer of een speler gevonden kan worden op de spelersselectiepagina."""
-    try:
-        zoek_veld = wacht_op(driver, By.XPATH,
-            "//input[contains(@placeholder,'zoek') or contains(@placeholder,'naam') "
-            "or contains(@placeholder,'speler') or contains(@class,'search')]",
-            timeout=8)
-        zoek_veld.clear()
-        zoek_veld.send_keys(naam.split()[0])
-        time.sleep(2)
-
-        resultaten = driver.find_elements(By.XPATH,
-            f"//*[contains(text(),'{naam.split()[-1]}')]"
-            f"[ancestor::*[contains(@class,'suggestion') or contains(@class,'autocomplete') "
-            f"or contains(@class,'dropdown') or contains(@class,'result')]]")
-
-        # Ook checken in recent gespeeld
-        recent = driver.find_elements(By.XPATH,
-            f"//*[contains(@class,'recent')]//*[contains(text(),'{naam.split()[0]}')]"
-            f"[contains(text(),'{naam.split()[-1]}') or "
-            f"following::*[contains(text(),'{naam.split()[-1]}')]]")
-
-        gevonden = len(resultaten) > 0 or len(recent) > 0
-
-        # Reset zoekveld
-        zoek_veld.clear()
-        return gevonden
-    except TimeoutException:
-        return False
-
-
-def main_check_namen(args):
-    """Controleer of alle spelersnamen gevonden worden."""
-    log.info("=" * 50)
-    log.info("🔍 NAAMCHECK")
-    log.info("=" * 50)
-
-    driver = maak_driver()
-    resultaten = {}
-
-    try:
-        if not login(driver):
-            for naam in [args.speler2, args.speler3, args.speler4]:
-                resultaten[naam] = None
-        else:
-            # Ga naar spelersselectie
-            if klik_baan_afhangen(driver):
-                time.sleep(2)
-                for naam in [args.speler2, args.speler3, args.speler4]:
-                    gevonden = zoek_speler(driver, naam)
-                    resultaten[naam] = gevonden
-                    log.info(f"  {'✅' if gevonden else '❌'} {naam}")
-            else:
-                for naam in [args.speler2, args.speler3, args.speler4]:
-                    resultaten[naam] = None
-    finally:
-        driver.quit()
-
-    niet_gevonden = [n for n, ok in resultaten.items() if not ok]
-    gevonden      = [n for n, ok in resultaten.items() if ok]
-
-    print("\n── NAAMCHECK RESULTAAT ──")
-    for naam in gevonden:      print(f"✅ {naam}")
-    for naam in niet_gevonden: print(f"❌ {naam}")
-
-    if niet_gevonden:
-        with open("namen_niet_gevonden.txt", "w") as f:
-            f.write("\n".join(niet_gevonden))
-        stuur_email(
-            "⚠️ KNLTB: Spelernaam niet gevonden",
-            f"Niet gevonden:\n" + "\n".join(f"  ❌ {n}" for n in niet_gevonden)
-            + f"\n\nWel gevonden:\n" + "\n".join(f"  ✅ {n}" for n in gevonden)
-            + f"\n\nCorrigeer de naam(en) en geef de opdracht opnieuw aan Claude."
-        )
-        sys.exit(1)
-    else:
-        print("\n✅ Alle spelers gevonden!")
-        sys.exit(0)
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--check-namen", action="store_true")
-    parser.add_argument("--datum",   required=False)
-    parser.add_argument("--tijd",    required=False)
+    parser.add_argument("--datum",   required=True)
+    parser.add_argument("--tijd",    required=True)
     parser.add_argument("--speler2", required=True)
     parser.add_argument("--speler3", required=True)
     parser.add_argument("--speler4", required=True)
     args = parser.parse_args()
-
-    if args.check_namen:
-        main_check_namen(args)
-        return
-
-    if not args.datum or not args.tijd:
-        log.error("❌ --datum en --tijd zijn verplicht")
-        sys.exit(1)
 
     if not BONDSNUMMER or not WACHTWOORD:
         log.error("❌ Stel KNLTB_BONDSNUMMER en KNLTB_WACHTWOORD in als GitHub Secrets!")
@@ -543,63 +432,44 @@ def main():
 
     try:
         if not login(driver):
-            stuur_email("❌ ETV Volley: Inloggen mislukt",
-                f"Automatisch reserveren op {args.datum} mislukt — kon niet inloggen.")
+            log.error("🚫 Inloggen mislukt — controleer KNLTB_BONDSNUMMER en KNLTB_WACHTWOORD")
             sys.exit(1)
 
         if not klik_baan_afhangen(driver):
-            stuur_email("❌ ETV Volley: Navigatie mislukt",
-                f"Kon 'Baan afhangen' niet vinden op {args.datum}.")
+            log.error("🚫 'Baan afhangen' knop niet gevonden")
             sys.exit(1)
 
         if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4):
-            stuur_email("❌ ETV Volley: Speler niet gevonden",
-                f"Een speler kon niet worden toegevoegd op {args.datum}.")
+            log.error("🚫 Speler niet gevonden — controleer spelernamen")
             sys.exit(1)
 
         if not kies_dag(driver, args.datum, args.tijd):
-            stuur_email("❌ ETV Volley: Dag kiezen mislukt",
-                f"Kon dag {args.datum} niet selecteren.")
+            log.error(f"🚫 Dag {args.datum} kon niet worden geselecteerd")
             sys.exit(1)
 
         baan, geboekte_tijd = kies_baan_en_tijd(driver, args.tijd)
         if not baan:
-            stuur_email(
-                f"❌ ETV Volley: Geen baan beschikbaar op {args.datum}",
-                f"Geen padelbaan beschikbaar op {args.datum} rondom {args.tijd}.\n"
-                f"Reserveer zelf via etv-volley.nl/mijn")
+            log.error(f"🚫 Geen padelbaan beschikbaar op {args.datum} rondom {args.tijd}")
             sys.exit(1)
 
         if not bevestig(driver):
-            stuur_email("❌ ETV Volley: Bevestigen mislukt",
-                f"Baan geselecteerd maar bevestigen mislukt op {args.datum}.")
+            log.error("🚫 Bevestigen mislukt")
             sys.exit(1)
 
     finally:
         driver.quit()
 
-    datum_nl     = datetime.strptime(args.datum, "%Y-%m-%d").strftime("%d-%m-%Y")
+    # ── Succes: Google Agenda bijwerken ───────────────────────────────────────
+    spelers = [SPELER1, args.speler2, args.speler3, args.speler4]
+    datum_nl = speeldatum.strftime("%d-%m-%Y")
     tijdsverschil = f" (voorkeur was {args.tijd})" if geboekte_tijd != args.tijd else ""
-    spelers      = [SPELER1, args.speler2, args.speler3, args.speler4]
-    ics          = maak_ics(baan, args.datum, geboekte_tijd, spelers)
-    ics_naam     = f"padel_{args.datum}_{geboekte_tijd.replace(':','')}.ics"
 
-    stuur_email(
-        f"KNLTB GEBOEKT: {baan} – {datum_nl} om {geboekte_tijd}",
-        f"✅ Padelbaan succesvol gereserveerd!\n\n"
-        f"🎾 Baan:    {baan}\n"
-        f"📅 Datum:   {datum_nl}\n"
-        f"🕐 Tijd:    {geboekte_tijd} – 60 min{tijdsverschil}\n"
-        f"👥 Spelers:\n"
-        f"   1. {SPELER1}\n"
-        f"   2. {args.speler2}\n"
-        f"   3. {args.speler3}\n"
-        f"   4. {args.speler4}\n\n"
-        f"📆 Agenda: open de bijlage ({ics_naam}) om de afspraak direct aan je agenda toe te voegen.",
-        ics_data=ics,
-        ics_naam=ics_naam,
-    )
-    log.info("✅ Klaar!")
+    log.info("=" * 50)
+    log.info(f"✅ GEBOEKT: {baan} op {datum_nl} om {geboekte_tijd}{tijdsverschil}")
+    log.info(f"   Spelers: {', '.join(spelers)}")
+    log.info("=" * 50)
+
+    voeg_toe_aan_agenda(baan, args.datum, geboekte_tijd, spelers)
 
 
 if __name__ == "__main__":
