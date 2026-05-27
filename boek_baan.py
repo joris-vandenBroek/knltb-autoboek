@@ -141,6 +141,24 @@ def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
 
 
 # ── Selenium driver ───────────────────────────────────────────────────────────
+def chrome_major_versie() -> int | None:
+    """Detecteer de geïnstalleerde Chrome major versie zodat UC de juiste driver downloadt."""
+    import subprocess, re
+    for cmd in [["google-chrome", "--version"], ["google-chrome-stable", "--version"],
+                ["chromium-browser", "--version"], ["chromium", "--version"]]:
+        try:
+            out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode()
+            m = re.search(r"(\d+)\.", out)
+            if m:
+                v = int(m.group(1))
+                log.info(f"Chrome major versie gedetecteerd: {v}")
+                return v
+        except Exception:
+            pass
+    log.warning("Chrome versie niet detecteerbaar — UC bepaalt zelf de driver versie")
+    return None
+
+
 def maak_driver() -> uc.Chrome:
     opties = uc.ChromeOptions()
     opties.add_argument("--no-sandbox")
@@ -149,7 +167,8 @@ def maak_driver() -> uc.Chrome:
     opties.add_argument("--window-size=1280,900")
     opties.add_argument("--lang=nl-NL")
     # Geen --headless: draait via Xvfb virtual display zodat Cloudflare ons niet detecteert
-    driver = uc.Chrome(options=opties)
+    versie = chrome_major_versie()
+    driver = uc.Chrome(options=opties, version_main=versie)
     driver.implicitly_wait(5)
     return driver
 

@@ -33,6 +33,24 @@ def screenshot(driver, naam):
         log.warning(f"Screenshot mislukt ({naam}): {e}")
 
 
+def chrome_major_versie() -> int | None:
+    """Detecteer de geïnstalleerde Chrome major versie zodat UC de juiste driver downloadt."""
+    import subprocess, re
+    for cmd in [["google-chrome", "--version"], ["google-chrome-stable", "--version"],
+                ["chromium-browser", "--version"], ["chromium", "--version"]]:
+        try:
+            out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode()
+            m = re.search(r"(\d+)\.", out)
+            if m:
+                v = int(m.group(1))
+                log.info(f"Chrome major versie gedetecteerd: {v}")
+                return v
+        except Exception:
+            pass
+    log.warning("Chrome versie niet detecteerbaar — UC bepaalt zelf de driver versie")
+    return None
+
+
 def maak_driver():
     opties = uc.ChromeOptions()
     opties.add_argument("--no-sandbox")
@@ -41,7 +59,8 @@ def maak_driver():
     opties.add_argument("--window-size=1280,900")
     opties.add_argument("--lang=nl-NL")
     # Geen --headless: draait via Xvfb zodat Cloudflare ons niet detecteert
-    driver = uc.Chrome(options=opties)
+    versie = chrome_major_versie()
+    driver = uc.Chrome(options=opties, version_main=versie)
     driver.implicitly_wait(3)
     return driver
 
