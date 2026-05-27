@@ -451,140 +451,195 @@ def bouw_url_template(api_url: str, zoekterm: str = "van") -> str:
 
 # ── Directe API-scan ──────────────────────────────────────────────────────────
 
-def haal_alle_leden_via_api(template: str, cookies: dict, user_agent: str) -> set:
+def haal_alle_leden_via_browser(driver, template: str) -> set:
     """
-    Systematisch alle leden ophalen via directe HTTP-aanroepen.
-    Response is HTML (Bootstrap cards) — parseer namen via regex.
-    Test prefix-lengte 1→2→3 en scant parallel (12 workers).
+    Gebruik de browser zelf voor alle API-aanroepen.
+    De browser heeft geldige Cloudflare-cookies (requests-library werkt niet).
+
+    Strategie:
+    - Genereer alle 3-letter prefixen (17 576)
+    - Verstuur in batches van 50 parallelle fetch()-aanroepen via JS
+    - Parseer HTML-response met browser's eigen DOMParser
+    - Extraheer spelernamen uit .addPlayer cards
     """
-    if not REQUESTS_OK:
-        log.error("requests library niet beschikbaar")
-        return set()
+    alle_namen = set()
+    prefixen3  = [a + b + c for a, b, c in itertools.product(LETTERS, repeat=3)]
 
-    headers = {
-        "Accept":           "text/html, */*",
-        "User-Agent":       user_agent,
-        "X-Requested-With": "XMLHttpRequest",
-        "Referer":          "https://www.etv-volley.nl/me/ReservationsPlayers",
-    }
-
-    def maak_sessie():
-        s = req_lib.Session()
-        s.cookies.update(cookies)
-        s.headers.update(headers)
-        return s
-
-    def zoek(prefix: str) -> set:
+    # Test eerst kortere prefixen
+    def browser_zoek(prefix: str) -> list:
         url = template.replace("{q}", prefix)
+        driver.set_script_timeout(30)
         try:
-            resp = maak_sessie().get(url, timeout=12)
-            if resp.status_code == 200:
-                tekst = resp.text
-                # Probeer JSON (voor het geval de API ooit verandert)
-                if tekst.strip().startswith(("[", "{")):
-                    try:
-                        return extraheer_namen_uit_data(json.loads(tekst))
-                    except Exception:
-                        pass
-                # HTML-response
-                return extraheer_namen_uit_html(tekst)
+            return driver.execute_async_script("""
+                var url      = arguments[0];
+                var callback = arguments[arguments.length - 1];
+                fetch(url, {
+                    credentials: 'include',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'text/html, */*'
+                    }
+                }).then(function(r) { return r.text(); })
+                  .then(function(html) {
+                      var parser = new DOMParser();
+                      var doc    = parser.parseFromString(html, 'text/html');
+                      var namen  = [];
+                      // Kaarten met spelergegevens
+                      doc.querySelectorAll('.addPlayer').forEach(function(card) {
+                          var naam = card.getAttribute('data-name')
+                                  || card.getAttribute('data-fullname')
+                                  || card.getAttribute('data-player-name');
+                          if (!naam) {
+                              var el = card.querySelector(
+                                  'h1,h2,h3,h4,h5,h6,.card-title,strong');
+                              if (el) naam = el.textContent.trim();
+                          }
+                          if (!naam) {
+                              // Clone, verwijder afbeeldingen/badges, pak tekst
+                              var clone = card.cloneNode(true);
+                              clone.querySelectorAll('img,button,.badge,small')
+                                   .forEach(function(e) { e.remove(); });
+                              naam = clone.textContent.replace(/\\s+/g,' ').trim()
+                                         .split('\\n')[0].trim();
+                          }
+                          if (naam && naam.length > 3 && naam.indexOf(' ') >= 0)
+                              namen.push(naam);
+                      });
+                      // Fallback: card-title buiten .addPlayer
+                      if (!namen.length) {
+                          doc.querySelectorAll('.card-title').forEach(function(el) {
+                              var t = el.textContent.trim();
+                              if (t && t.length > 3 && t.indexOf(' ') >= 0) namen.push(t);
+                          });
+                      }
+                      callback(namen);
+                  }).catch(function() { callback([]); });
+            """, url) or []
         except Exception as e:
-            log.debug(f"  '{prefix}' fout: {e}")
-        return set()
+            log.debug(f"browser_zoek '{prefix}' fout: {e}")
+            return []
 
-    def parallel_zoek(prefixen: list, workers: int = 12) -> set:
-        namen = set()
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            futures = {ex.submit(zoek, p): p for p in prefixen}
-            for i, fut in enumerate(as_completed(futures)):
-                namen.update(fut.result())
-                if (i + 1) % 500 == 0:
-                    log.info(f"  {i+1}/{len(prefixen)} klaar — {len(namen)} namen tot nu toe")
-        return namen
+    # ── Diagnose: log kaart-HTML zodat we de structuur kunnen zien ──────────
+    driver.set_script_timeout(30)
+    try:
+        diag = driver.execute_async_script("""
+            var url = arguments[0], cb = arguments[arguments.length - 1];
+            fetch(url, {credentials:'include',
+                headers:{'X-Requested-With':'XMLHttpRequest','Accept':'text/html,*/*'}})
+            .then(function(r){return r.text();})
+            .then(function(html){
+                var doc   = new DOMParser().parseFromString(html,'text/html');
+                var cards = doc.querySelectorAll('.addPlayer');
+                cb({raw: html.slice(0,1500),
+                    cards: cards.length,
+                    first: cards.length ? cards[0].outerHTML.slice(0,800) : ''});
+            }).catch(function(e){cb({err:String(e)});});
+        """, template.replace("{q}", "van"))
+        log.info(f"Diagnose 'van': cards={diag.get('cards', 0)}")
+        log.info(f"  Eerste kaart HTML: {diag.get('first', '(geen)')}")
+        log.info(f"  Raw HTML start: {diag.get('raw', '')[:400]}")
+    except Exception as e:
+        log.warning(f"Diagnose mislukt: {e}")
 
-    log.info(f"API template: {template}")
-
-    # Test prefix-lengte 0 (geeft alles terug?)
-    leeg = zoek("")
+    # Lege query
+    leeg = browser_zoek("")
     if len(leeg) > 5:
         log.info(f"Lege query geeft {len(leeg)} namen — klaar!")
-        return leeg
+        return set(leeg)
 
-    # Test lengte 1
-    test1 = zoek("j")
+    # 1 letter
+    test1 = browser_zoek("j")
     if test1:
         log.info(f"1-letter werkt ('j'→{len(test1)}). Scan 26 letters...")
-        return parallel_zoek(LETTERS, workers=8)
+        namen = set()
+        for l in LETTERS:
+            namen.update(browser_zoek(l))
+        return namen
 
-    # Test lengte 2
-    test2 = zoek("jo")
+    # 2 letters
+    test2 = browser_zoek("jo")
     if test2:
         log.info(f"2-letter werkt ('jo'→{len(test2)}). Scan 676 combinaties...")
+        namen  = set()
         prefixen2 = [a + b for a, b in itertools.product(LETTERS, repeat=2)]
-        return parallel_zoek(prefixen2, workers=10)
+        for i, p in enumerate(prefixen2):
+            namen.update(browser_zoek(p))
+            if (i + 1) % 100 == 0:
+                log.info(f"  {i+1}/676 — {len(namen)} namen")
+        return namen
 
-    # 3-letter scan — nodig omdat frontend-minimum 3 is
-    # 17 576 combinaties × ~150ms / 12 workers ≈ 3-4 minuten
-    log.info("3-letter nodig. Scan 17 576 combinaties (12 workers, ~3-4 min)...")
-    prefixen3 = [a + b + c for a, b, c in itertools.product(LETTERS, repeat=3)]
-    return parallel_zoek(prefixen3, workers=12)
+    # 3-letter scan in batches van 50 parallelle fetches
+    BATCH = 50
+    total = len(prefixen3)
+    total_batches = (total + BATCH - 1) // BATCH
+    log.info(f"3-letter scan: {total} prefixen, batches van {BATCH} ({total_batches} batches)")
 
+    driver.set_script_timeout(60)  # 60s per batch
 
-# ── Fallback: Selenium autocomplete ──────────────────────────────────────────
-
-def haal_leden_via_selenium(driver, zoek_veld) -> set:
-    """
-    Fallback als API niet gevonden wordt: typ 3-letter-combinaties en
-    verzamel autocomplete-suggesties via Selenium.
-    Gebruikt veelvoorkomende Nederlandse 3-letter naam-starts.
-    """
-    namen = set()
-
-    # Genereer 3-letter combinaties voor veelvoorkomende Nederlandse namen
-    # Dekt voor/achternamen die starten met frequente patronen
-    prefixen_3 = []
-    # Alle combinaties van eerste 2 letters: 676 -> voeg derde letter toe
-    # Maar beperk: alleen letters die zinvol zijn voor Ned. namen
-    for a, b, c in itertools.product(LETTERS, repeat=3):
-        prefixen_3.append(a + b + c)
-
-    log.info(f"Selenium fallback: {len(prefixen_3)} 3-letter prefixen")
-
-    for i, term in enumerate(prefixen_3):
+    for batch_nr, start in enumerate(range(0, total, BATCH)):
+        batch_urls = [template.replace("{q}", p) for p in prefixen3[start:start + BATCH]]
         try:
-            zoek_veld.clear()
-            zoek_veld.send_keys(term)
-            time.sleep(1.5)
+            namen_batch = driver.execute_async_script("""
+                var urls     = arguments[0];
+                var callback = arguments[arguments.length - 1];
+                Promise.all(urls.map(function(url) {
+                    return fetch(url, {
+                        credentials: 'include',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'text/html, */*'
+                        }
+                    }).then(function(r) { return r.text(); })
+                      .catch(function() { return ''; });
+                })).then(function(htmlList) {
+                    var namen  = [];
+                    var parser = new DOMParser();
+                    htmlList.forEach(function(html) {
+                        if (!html) return;
+                        var doc = parser.parseFromString(html, 'text/html');
+                        doc.querySelectorAll('.addPlayer').forEach(function(card) {
+                            var naam = card.getAttribute('data-name')
+                                    || card.getAttribute('data-fullname')
+                                    || card.getAttribute('data-player-name');
+                            if (!naam) {
+                                var el = card.querySelector(
+                                    'h1,h2,h3,h4,h5,h6,.card-title,strong');
+                                if (el) naam = el.textContent.trim();
+                            }
+                            if (!naam) {
+                                var clone = card.cloneNode(true);
+                                clone.querySelectorAll('img,button,.badge,small')
+                                     .forEach(function(e) { e.remove(); });
+                                naam = clone.textContent.replace(/\\s+/g,' ').trim()
+                                            .split('\\n')[0].trim();
+                            }
+                            if (naam && naam.length > 3 && naam.indexOf(' ') >= 0)
+                                namen.push(naam);
+                        });
+                        // Fallback card-title
+                        if (!namen.length) {
+                            doc.querySelectorAll('.card-title').forEach(function(el) {
+                                var t = el.textContent.trim();
+                                if (t && t.length > 3 && t.indexOf(' ') >= 0) namen.push(t);
+                            });
+                        }
+                    });
+                    callback(namen);
+                }).catch(function(e) { callback([]); });
+            """, batch_urls) or []
 
-            # Verzamel suggesties via ARIA + CSS
-            for sel in [
-                "//*[@role='option']",
-                "//li[contains(@class,'player') or contains(@class,'suggestion') or contains(@class,'result') or contains(@class,'item')]",
-                "//div[contains(@class,'player') or contains(@class,'suggestion') or contains(@class,'result')]//span[string-length(normalize-space(text()))>3]",
-            ]:
-                try:
-                    for el in driver.find_elements(By.XPATH, sel):
-                        if el.is_displayed():
-                            tekst = el.text.strip()
-                            if tekst and len(tekst) > 3 and " " in tekst and tekst.lower() not in _GEEN_NAAM:
-                                namen.add(tekst)
-                except Exception:
-                    pass
-
-            zoek_veld.clear()
-            time.sleep(0.3)
-
-            if (i + 1) % 500 == 0:
-                log.info(f"  {i+1}/{len(prefixen_3)} — {len(namen)} namen tot nu toe")
-                screenshot(driver, f"05_zoeken_{i+1}")
+            for naam in namen_batch:
+                naam = naam.strip()
+                if naam and len(naam) > 3 and " " in naam and naam.lower() not in _GEEN_NAAM:
+                    alle_namen.add(naam)
 
         except Exception as e:
-            log.warning(f"Fout bij '{term}': {e}")
-            zoek_veld = zoek_veld_ophalen(driver)
-            if not zoek_veld:
-                break
+            log.warning(f"Batch {batch_nr + 1}/{total_batches} fout: {e}")
 
-    return namen
+        if (batch_nr + 1) % 20 == 0:
+            log.info(f"  Batch {batch_nr + 1}/{total_batches} — {len(alle_namen)} namen tot nu toe")
+
+    return alle_namen
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -606,44 +661,37 @@ def main():
             log.error("Navigatie mislukt")
             sys.exit(1)
 
-        zoek = zoek_veld_ophalen(driver)
-        if not zoek:
+        zoek_veld = zoek_veld_ophalen(driver)
+        if not zoek_veld:
             log.error("Zoekveld niet gevonden")
             sys.exit(1)
 
-        # --- Stap 1: extraheer sessie-cookies en user-agent ---
-        cookies    = {c["name"]: c["value"] for c in driver.get_cookies()}
-        user_agent = driver.execute_script("return navigator.userAgent;")
-        log.info(f"Sessie-cookies: {list(cookies.keys())}")
-
-        # Optioneel: probeer via interceptor de URL te bevestigen / te verfijnen
+        # Interceptor: bevestig/verfijn API-endpoint
         injecteer_interceptor(driver)
-        api_info = vind_speler_api(driver, zoek)
+        api_info = vind_speler_api(driver, zoek_veld)
 
         if api_info:
             alle_namen.update(api_info["namen"])
             log.info(f"Interceptor bevestigde API: {api_info['url']}")
             template = bouw_url_template(api_info["url"], "van")
         else:
-            # Gebruik de bekende endpoint uit eerdere analyse
             log.info(f"Gebruik bekende API-endpoint: {SEARCH_API}")
             template = SEARCH_API
 
         log.info(f"API template: {template}")
-
-        # Sluit browser (cookies zijn uitgelezen)
         screenshot(driver, "05_voor_api_scan")
-        driver.quit()
-        driver = None
 
-        # --- Stap 2: haal alle leden op via directe API ---
-        api_namen = haal_alle_leden_via_api(template, cookies, user_agent)
-        alle_namen.update(api_namen)
-        log.info(f"Na API-scan: {len(alle_namen)} unieke namen")
+        # --- Browser-gebaseerde scan (requests werkt niet: Cloudflare-fingerprinting) ---
+        browser_namen = haal_alle_leden_via_browser(driver, template)
+        alle_namen.update(browser_namen)
+        log.info(f"Na browser-scan: {len(alle_namen)} unieke namen")
 
     finally:
         if driver:
-            screenshot(driver, "99_einde")
+            try:
+                screenshot(driver, "99_einde")
+            except Exception:
+                pass
             driver.quit()
 
     alle_namen = {n for n in alle_namen if n.lower() not in _GEEN_NAAM}
