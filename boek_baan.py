@@ -482,36 +482,90 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     time.sleep(2)
     screenshot(driver, "07_dag_pagina")
 
-    doel_datum = datetime.strptime(datum, "%Y-%m-%d")
-    dag_nr     = str(doel_datum.day)
+    doel_datum      = datetime.strptime(datum, "%Y-%m-%d")
+    dag_nr          = str(doel_datum.day)
     gewenst_dagdeel = dagdeel(tijd)
+    log.info(f"Zoek dag={dag_nr}, dagdeel='{gewenst_dagdeel}'")
 
-    try:
-        dag_cel = wacht_op(driver, By.XPATH,
-            f"//td[contains(text(),'{dag_nr}')] "
-            f"| //*[contains(@class,'day') and contains(text(),'{dag_nr}')] "
-            f"| //*[contains(text(),'{dag_nr}') and contains(text(),'{doel_datum.strftime('%b')}')]")
-        dag_cel.click()
-        time.sleep(1)
-        log.info(f"✅ Dag {dag_nr} geklikt")
-    except TimeoutException:
-        log.error(f"❌ Dag {dag_nr} niet gevonden")
-        screenshot(driver, "dag_fout")
-        return False
+    # Navigeer naar de juiste week als de dag niet zichtbaar is
+    for _ in range(8):
+        if dag_nr in driver.find_element(By.TAG_NAME, "body").text:
+            break
+        volgende_week = _zoek_knop(driver, [">"])
+        if volgende_week:
+            driver.execute_script("arguments[0].click();", volgende_week)
+            time.sleep(1.5)
+        else:
+            break
 
-    try:
-        dagdeel_knop = wacht_op(driver, By.XPATH,
-            f"//*[contains(text(),'{gewenst_dagdeel}') and not(contains(@class,'disabled'))]")
-        dagdeel_knop.click()
+    # JavaScript: zoek de kolom met dag_nr en klik de dagdeel-cel erin.
+    # De UI is een 2D-grid: kolommen = dagen, rijen = Ochtend/Middag/Avond.
+    # contains(text(),'28') mist child-tekst, vandaar de JS-aanpak.
+    resultaat = driver.execute_script("""
+        var dagNr   = arguments[0];
+        var dagdeel = arguments[1];
+
+        // Vind alle ZICHTBARE elementen waarvan de directe tekstinhoud het dag-nr bevat
+        var alle = Array.from(document.querySelectorAll('*'));
+        var dagHeaders = alle.filter(function(el) {
+            if (!el.offsetParent) return false;
+            var directText = Array.from(el.childNodes)
+                .filter(function(n){ return n.nodeType === 3; })
+                .map(function(n){ return n.textContent.trim(); })
+                .join('');
+            var fullText = (el.innerText || '').trim();
+            return directText === dagNr ||
+                   fullText === dagNr ||
+                   fullText.startsWith(dagNr + '\\n') ||
+                   fullText.endsWith('\\n' + dagNr) ||
+                   (fullText.indexOf(dagNr) >= 0 && el.children.length <= 2);
+        });
+
+        for (var header of dagHeaders) {
+            // Zoek omhoog naar een container-element dat ook de dagdeel-tekst bevat
+            var container = header;
+            for (var stap = 0; stap < 7; stap++) {
+                container = container.parentElement;
+                if (!container) break;
+                if (!(container.innerText || '').includes(dagdeel)) continue;
+
+                // Zoek de exacte cel met de dagdeel-tekst in deze container
+                var cellen = Array.from(container.querySelectorAll('*'));
+                for (var cel of cellen) {
+                    if (!cel.offsetParent) continue;
+                    var t = (cel.innerText || '').trim();
+                    if (t === dagdeel) {
+                        cel.click();
+                        return 'OK dag=' + dagNr + ' dagdeel=' + dagdeel;
+                    }
+                }
+            }
+        }
+        return 'NIET_GEVONDEN dag=' + dagNr + ' headers=' + dagHeaders.length;
+    """, dag_nr, gewenst_dagdeel)
+
+    log.info(f"JS dag-selectie: {resultaat}")
+
+    if resultaat and resultaat.startswith("OK"):
+        log.info(f"✅ Dag {dag_nr} + dagdeel '{gewenst_dagdeel}' geselecteerd")
         time.sleep(1)
-        log.info(f"✅ Dagdeel '{gewenst_dagdeel}' geklikt")
-    except TimeoutException:
-        log.error(f"❌ Dagdeel '{gewenst_dagdeel}' niet gevonden")
-        screenshot(driver, "dagdeel_fout")
-        return False
+    else:
+        # Fallback: klik de eerste zichtbare niet-disabled dagdeel-cel
+        log.warning(f"JS mislukt ({resultaat}), probeer fallback...")
+        try:
+            for el in driver.find_elements(By.XPATH,
+                    f"//*[normalize-space(.)='{gewenst_dagdeel}']"):
+                if el.is_displayed():
+                    driver.execute_script("arguments[0].click();", el)
+                    log.info(f"Fallback: eerste zichtbare '{gewenst_dagdeel}' geklikt")
+                    time.sleep(1)
+                    break
+        except Exception as e:
+            log.error(f"❌ Dagdeel-fallback mislukt: {e}")
+            screenshot(driver, "dag_fout")
+            return False
 
     screenshot(driver, "08_dag_geselecteerd")
-
     volgende = _zoek_knop(driver, ["Volgende", "Next"])
     if volgende:
         driver.execute_script("arguments[0].click();", volgende)
