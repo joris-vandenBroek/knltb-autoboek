@@ -205,57 +205,67 @@ def scrape_ledenlijst(driver) -> set:
     log.info(f"Eerste batch: {len(namen)} namen")
     alle_namen.update(namen)
 
-    # Strategie 1: infinite scroll — scroll naar beneden tot er niets meer bijkomt
-    vorige_count = 0
-    scroll_pogingen = 0
-    while len(alle_namen) > vorige_count and scroll_pogingen < 50:
-        vorige_count = len(alle_namen)
-        scroll_pogingen += 1
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(1.5)
-        namen = haal_namen_van_pagina(driver)
-        alle_namen.update(namen)
-        if scroll_pogingen % 10 == 0:
-            log.info(f"Na {scroll_pogingen} scrolls: {len(alle_namen)} namen")
-
-    log.info(f"Na scrollen: {len(alle_namen)} namen")
-
-    # Strategie 2: paginering — zoek 'Volgende'-knop of paginanummers
+    # Strategie 1: paginering — klik door alle pagina's heen
+    # Aantal pagina's is variabel; stoppen zodra er geen volgende-knop meer is
+    # of een pagina geen nieuwe namen oplevert.
     pagina = 1
     while True:
         volgende = None
-        for sel in [
-            "//a[contains(.,'Volgende') or contains(.,'Next') or contains(.,'›')]",
-            "//button[contains(.,'Volgende') or contains(.,'Next')]",
-            f"//a[text()='{pagina + 1}']",
-        ]:
-            try:
-                kandidaten = driver.find_elements(By.XPATH, sel)
-                for el in kandidaten:
-                    if el.is_displayed() and el.is_enabled():
-                        volgende = el
-                        break
-            except Exception:
-                pass
-            if volgende:
-                break
+
+        # Voorkeur: klik op het paginanummer pagina+1 (betrouwbaarder dan »)
+        try:
+            kandidaten = driver.find_elements(By.XPATH,
+                f"//a[normalize-space(.)='{pagina + 1}']")
+            for el in kandidaten:
+                if el.is_displayed() and el.is_enabled():
+                    volgende = el
+                    break
+        except Exception:
+            pass
+
+        # Fallback: zoek een "volgende pagina"-knop
+        if not volgende:
+            for sel in [
+                "//a[normalize-space(.)='»' or normalize-space(.)='›'"
+                "    or contains(.,'Volgende') or contains(.,'Next')]",
+                "//button[normalize-space(.)='»' or normalize-space(.)='›'"
+                "        or contains(.,'Volgende')]",
+                "//li[contains(@class,'next') and not(contains(@class,'disabled'))]//a",
+            ]:
+                try:
+                    kandidaten = driver.find_elements(By.XPATH, sel)
+                    for el in kandidaten:
+                        if el.is_displayed() and el.is_enabled():
+                            volgende = el
+                            break
+                except Exception:
+                    pass
+                if volgende:
+                    break
 
         if not volgende:
+            log.info(f"Geen volgende pagina na pagina {pagina} — klaar")
             break
 
-        log.info(f"Pagina {pagina} → {pagina + 1}")
         driver.execute_script("arguments[0].click();", volgende)
         pagina += 1
         time.sleep(2)
 
+        # Scroll kort zodat lazy-content laadt
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(0.5)
+        driver.execute_script("window.scrollTo(0, 0);")
+
         namen = haal_namen_van_pagina(driver)
         nieuw = len(alle_namen)
         alle_namen.update(namen)
-        log.info(f"Pagina {pagina}: {len(namen)} namen, totaal: {len(alle_namen)} (+{len(alle_namen)-nieuw})")
+        log.info(f"Pagina {pagina}: {len(namen)} rijen, totaal uniek: {len(alle_namen)} (+{len(alle_namen)-nieuw})")
 
         if len(alle_namen) == nieuw:
             log.info("Geen nieuwe namen op deze pagina — stoppen")
             break
+
+    log.info(f"Paginering klaar: {pagina} pagina's, {len(alle_namen)} unieke namen")
 
     # Strategie 3: zoekfilter gebruiken om leden per letter op te halen
     # (fallback als tabel gefilterd is of maar een beperkt aantal toont)
