@@ -528,11 +528,11 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         var alle = Array.from(document.querySelectorAll('*'));
 
         // Vind het kleinste zichtbare element dat de dag-tekst bevat
-        // Paginatekst per dag-cel: "vr 29\nmei" of "29\nmei" of "29"
+        // Dag-cel tekst: "vr 29 mei" of "29 mei" of "29" (whitespace gesplit)
         var dagEls = alle.filter(function(el) {
             if (!el.offsetParent) return false;
             var txt = (el.innerText || '').trim();
-            var tokens = txt.split(/[\s\n]+/);
+            var tokens = txt.split(/\s+/);
             return tokens.indexOf(dagNr) >= 0 && el.children.length <= 1;
         });
 
