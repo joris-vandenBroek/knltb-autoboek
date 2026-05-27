@@ -116,7 +116,7 @@
       min-height: 52px;
       user-select: none;
       -webkit-user-select: none;
-      pointer-events: none; /* klikken gaat via de overlappende input */
+      cursor: pointer;
     }
     .date-picker-btn.invalid { border-color: var(--fout); }
     .date-native {
@@ -543,6 +543,15 @@
 
   // Update display als gebruiker een datum kiest
   datumInput.addEventListener('change', () => toonDatum(datumInput.value));
+
+  // Desktop: klik op de zichtbare knop → open de native datepicker
+  datumBtn.addEventListener('click', function() {
+    try {
+      datumInput.showPicker();   // Chrome 99+, Firefox 101+
+    } catch (e) {
+      datumInput.click();        // fallback voor oudere browsers
+    }
+  });
 
   /* ─── Tijden ───────────────────────────────────────────── */
   const tijdEl = document.getElementById('tijd');
