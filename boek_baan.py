@@ -498,50 +498,44 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         else:
             break
 
-    # JavaScript: zoek de kolom met dag_nr en klik de dagdeel-cel erin.
-    # De UI is een 2D-grid: kolommen = dagen, rijen = Ochtend/Middag/Avond.
-    # contains(text(),'28') mist child-tekst, vandaar de JS-aanpak.
+    # JavaScript: gebruik elementFromPoint om het SNIJPUNT te vinden van
+    # de dag-kolom en de dagdeel-rij — betrouwbaarder dan DOM-traversal.
     resultaat = driver.execute_script("""
         var dagNr   = arguments[0];
         var dagdeel = arguments[1];
 
-        // Vind alle ZICHTBARE elementen waarvan de directe tekstinhoud het dag-nr bevat
         var alle = Array.from(document.querySelectorAll('*'));
-        var dagHeaders = alle.filter(function(el) {
+
+        // Vind het kleinste zichtbare element met ALLEEN de dag-tekst (geen children)
+        var dagEls = alle.filter(function(el) {
             if (!el.offsetParent) return false;
-            var directText = Array.from(el.childNodes)
-                .filter(function(n){ return n.nodeType === 3; })
-                .map(function(n){ return n.textContent.trim(); })
-                .join('');
-            var fullText = (el.innerText || '').trim();
-            return directText === dagNr ||
-                   fullText === dagNr ||
-                   fullText.startsWith(dagNr + '\\n') ||
-                   fullText.endsWith('\\n' + dagNr) ||
-                   (fullText.indexOf(dagNr) >= 0 && el.children.length <= 2);
+            var txt = (el.innerText || '').trim();
+            return (txt === dagNr || txt.startsWith(dagNr + '\\n')) && el.children.length <= 1;
         });
 
-        for (var header of dagHeaders) {
-            // Zoek omhoog naar een container-element dat ook de dagdeel-tekst bevat
-            var container = header;
-            for (var stap = 0; stap < 7; stap++) {
-                container = container.parentElement;
-                if (!container) break;
-                if (!(container.innerText || '').includes(dagdeel)) continue;
+        // Vind het kleinste zichtbare element met ALLEEN de dagdeel-tekst
+        var dagdeelEls = alle.filter(function(el) {
+            if (!el.offsetParent) return false;
+            var txt = (el.innerText || '').trim();
+            return txt === dagdeel && el.children.length === 0;
+        });
 
-                // Zoek de exacte cel met de dagdeel-tekst in deze container
-                var cellen = Array.from(container.querySelectorAll('*'));
-                for (var cel of cellen) {
-                    if (!cel.offsetParent) continue;
-                    var t = (cel.innerText || '').trim();
-                    if (t === dagdeel) {
-                        cel.click();
-                        return 'OK dag=' + dagNr + ' dagdeel=' + dagdeel;
-                    }
-                }
-            }
-        }
-        return 'NIET_GEVONDEN dag=' + dagNr + ' headers=' + dagHeaders.length;
+        if (!dagEls.length)    return 'NIET_GEVONDEN: geen dag-element voor ' + dagNr;
+        if (!dagdeelEls.length) return 'NIET_GEVONDEN: geen dagdeel-element voor ' + dagdeel;
+
+        // Bereken het snijpunt: X uit de dag-kolom, Y uit de dagdeel-rij
+        var dagRect     = dagEls[0].getBoundingClientRect();
+        var dagdeelRect = dagdeelEls[0].getBoundingClientRect();
+        var x = dagRect.left + dagRect.width  / 2;
+        var y = dagdeelRect.top  + dagdeelRect.height / 2;
+
+        // Klik het element op het snijpunt
+        var cel = document.elementFromPoint(x, y);
+        if (!cel) return 'NIET_GEVONDEN: elementFromPoint leeg op x=' + x + ' y=' + y;
+        cel.click();
+        return 'OK dag=' + dagNr + ' dagdeel=' + dagdeel +
+               ' cel=' + (cel.className || cel.tagName) +
+               ' x=' + Math.round(x) + ' y=' + Math.round(y);
     """, dag_nr, gewenst_dagdeel)
 
     log.info(f"JS dag-selectie: {resultaat}")
