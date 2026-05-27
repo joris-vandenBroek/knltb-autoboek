@@ -1,15 +1,31 @@
 """
 Haal alle leden op van etv-volley.nl en sla op in leden.json
-Werkt door A-Z te zoeken in het spelerszoekvenster en alle autocomplete-suggesties te verzamelen.
+
+Strategie:
+1. Login via Selenium (UC + Xvfb, geen headless, bypass Cloudflare)
+2. Navigeer naar de spelerszoek-pagina
+3. Injecteer XHR/fetch-interceptor in de pagina
+4. Typ 'van' (3 letters) → vang de API-aanroep + JSON-response op
+5. Extraheer de API-URL-template
+6. Gebruik requests-library met sessie-cookies om alle 3-letter-prefixen
+   systematisch te bevragen (parallel, snel)
+7. Sla unieke namen op in leden.json
 """
 
-import os, sys, json, time, logging
+import os, sys, json, time, logging, re, itertools
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+try:
+    import requests as req_lib
+    REQUESTS_OK = True
+except ImportError:
+    REQUESTS_OK = False
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
                     handlers=[logging.StreamHandler(sys.stdout)])
@@ -21,9 +37,17 @@ BONDSNUMMER   = os.environ.get("KNLTB_BONDSNUMMER", "")
 WACHTWOORD    = os.environ.get("KNLTB_WACHTWOORD", "")
 TIMEOUT       = 20
 
-# Zoektermen: alle letters + veelvoorkomende tussenvoegsels
-ZOEKTERMEN = list("abcdefghijklmnopqrstuvwxyz") + ["van ", "de ", "den ", "van de ", "van den "]
+LETTERS = list("abcdefghijklmnopqrstuvwxyz")
 
+# UI-labels die geen spelernamen zijn
+_GEEN_NAAM = {
+    "recent mee gespeeld", "recent played", "spelers", "players",
+    "zoekresultaten", "search results", "geen resultaten", "no results",
+    "recent", "zoeken", "search",
+}
+
+
+# ── Hulpfuncties ──────────────────────────────────────────────────────────────
 
 def screenshot(driver, naam):
     pad = f"{naam}.png"
@@ -35,8 +59,7 @@ def screenshot(driver, naam):
 
 
 def chrome_major_versie() -> int | None:
-    """Detecteer de geïnstalleerde Chrome major versie zodat UC de juiste driver downloadt."""
-    import subprocess, re
+    import subprocess
     for cmd in [["google-chrome", "--version"], ["google-chrome-stable", "--version"],
                 ["chromium-browser", "--version"], ["chromium", "--version"]]:
         try:
@@ -48,7 +71,7 @@ def chrome_major_versie() -> int | None:
                 return v
         except Exception:
             pass
-    log.warning("Chrome versie niet detecteerbaar — UC bepaalt zelf de driver versie")
+    log.warning("Chrome versie niet detecteerbaar")
     return None
 
 
@@ -59,12 +82,13 @@ def maak_driver():
     opties.add_argument("--disable-gpu")
     opties.add_argument("--window-size=1280,900")
     opties.add_argument("--lang=nl-NL")
-    # Geen --headless: draait via Xvfb zodat Cloudflare ons niet detecteert
     versie = chrome_major_versie()
     driver = uc.Chrome(options=opties, version_main=versie)
     driver.implicitly_wait(3)
     return driver
 
+
+# ── Login ─────────────────────────────────────────────────────────────────────
 
 def login(driver) -> bool:
     log.info("Navigeer naar loginpagina...")
@@ -73,15 +97,14 @@ def login(driver) -> bool:
     screenshot(driver, "01_login")
     log.info(f"URL na navigatie: {driver.current_url}")
 
-    # Controleer op ECHTE Cloudflare challenge (niet CDN-scripts die ook 'cloudflare' bevatten)
     page = driver.page_source.lower()
     if ("just a moment" in page or "checking your browser" in page
             or "cf-browser-verification" in page or "sorry, you have been blocked" in page):
-        log.error("❌ Echte Cloudflare-blokkade gedetecteerd!")
+        log.error("❌ Cloudflare-blokkade gedetecteerd!")
         screenshot(driver, "01b_cloudflare")
         return False
 
-    # Accepteer cookie-banner (met expliciete wacht zodat de banner geladen is)
+    # Cookie-banner
     for sel in [
         "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accepteren')]",
         "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accept')]",
@@ -96,19 +119,15 @@ def login(driver) -> bool:
         except Exception:
             pass
 
-    # Als we op de homepage belandden (redirect van /mijn), zoek de login-link
     if "/mijn" not in driver.current_url:
         log.info(f"Geen /mijn in URL ({driver.current_url}), zoek login-link...")
         for sel in [
             "//a[contains(@href,'/mijn')]",
             "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'mijn club')]",
             "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'inloggen')]",
-            "//a[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'login')]",
         ]:
             try:
                 link = driver.find_element(By.XPATH, sel)
-                href = link.get_attribute('href') or ''
-                log.info(f"Login-link gevonden: {href}")
                 link.click()
                 time.sleep(4)
                 screenshot(driver, "01c_na_loginlink")
@@ -117,19 +136,7 @@ def login(driver) -> bool:
                 pass
 
     log.info(f"BONDSNUMMER: {len(BONDSNUMMER)} tekens | WACHTWOORD: {len(WACHTWOORD)} tekens")
-    log.info(f"URL vóór inlogvelden: {driver.current_url}")
     screenshot(driver, "01d_voor_inlogvelden")
-
-    # Log alle input-velden op de pagina voor diagnose
-    try:
-        alle_inputs = driver.find_elements(By.TAG_NAME, "input")
-        log.info(f"Gevonden input-velden ({len(alle_inputs)}):")
-        for inp in alle_inputs:
-            log.info(f"  type={inp.get_attribute('type')} name={inp.get_attribute('name')} "
-                     f"id={inp.get_attribute('id')} placeholder={inp.get_attribute('placeholder')} "
-                     f"visible={inp.is_displayed()}")
-    except Exception as e:
-        log.warning(f"Input-veld scan mislukt: {e}")
 
     try:
         veld = WebDriverWait(driver, TIMEOUT).until(EC.element_to_be_clickable((By.XPATH,
@@ -137,9 +144,8 @@ def login(driver) -> bool:
             "or @id='username' or @id='Username' "
             "or contains(@placeholder,'bondsnummer') or contains(@placeholder,'gebruikersnaam') "
             "or contains(@placeholder,'e-mail') or contains(@placeholder,'email')]")))
-        log.info(f"Gebruikersveld: name='{veld.get_attribute('name')}' id='{veld.get_attribute('id')}' type='{veld.get_attribute('type')}'")
+        log.info(f"Gebruikersveld: name='{veld.get_attribute('name')}' id='{veld.get_attribute('id')}'")
 
-        # Vul in via JavaScript — triggert ook React/Vue native input events
         driver.execute_script("""
             var el = arguments[0], val = arguments[1];
             var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -147,12 +153,10 @@ def login(driver) -> bool:
             el.dispatchEvent(new Event('input',  {bubbles: true}));
             el.dispatchEvent(new Event('change', {bubbles: true}));
         """, veld, BONDSNUMMER)
-        log.info(f"Bondsnummer ingevuld via JS ({len(BONDSNUMMER)} tekens)")
+        log.info(f"Bondsnummer ingevuld via JS")
 
         ww = WebDriverWait(driver, TIMEOUT).until(EC.element_to_be_clickable((By.XPATH,
             "//input[@type='password']")))
-        log.info(f"Wachtwoordveld: name='{ww.get_attribute('name')}' id='{ww.get_attribute('id')}'")
-
         driver.execute_script("""
             var el = arguments[0], val = arguments[1];
             var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -160,23 +164,19 @@ def login(driver) -> bool:
             el.dispatchEvent(new Event('input',  {bubbles: true}));
             el.dispatchEvent(new Event('change', {bubbles: true}));
         """, ww, WACHTWOORD)
-        log.info(f"Wachtwoord ingevuld via JS ({len(WACHTWOORD)} tekens)")
-
+        log.info(f"Wachtwoord ingevuld via JS")
         time.sleep(1)
 
-        # Zoek de submit-knop die zichtbaar is (niet de cookie-banner)
         submit_knop = None
         for sel in [
             "//button[@type='submit']",
             "//input[@type='submit']",
             "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'inloggen')]",
-            "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'login')]",
-            "//button[contains(translate(text(),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'aanmelden')]",
         ]:
             try:
                 for knop in driver.find_elements(By.XPATH, sel):
                     if knop.is_displayed():
-                        log.info(f"Submit-knop gevonden: '{knop.text.strip()}' via {sel}")
+                        log.info(f"Submit: '{knop.text.strip()}'")
                         submit_knop = knop
                         break
                 if submit_knop:
@@ -185,53 +185,41 @@ def login(driver) -> bool:
                 pass
 
         if submit_knop:
-            # Klik via JS zodat alle event-handlers zeker worden getriggerd
             driver.execute_script("arguments[0].click();", submit_knop)
-            log.info("Submit-knop geklikt via JS")
         else:
-            log.warning("Geen submit-knop gevonden — gebruik Keys.RETURN als fallback")
             ww.send_keys(Keys.RETURN)
 
         time.sleep(6)
         screenshot(driver, "02_na_login")
-        log.info(f"URL na login-klik: {driver.current_url}")
+        log.info(f"URL na login: {driver.current_url}")
 
-        # Log paginatekst om foutmeldingen te zien
         try:
             body_tekst = driver.find_element(By.TAG_NAME, "body").text
-            for zoekterm in ["onjuist", "ongeldig", "fout", "incorrect", "error", "geblokkeerd", "locked",
-                             "account", "blocked", "te veel"]:
-                if zoekterm in body_tekst.lower():
-                    log.warning(f"⚠️ '{zoekterm}' gevonden in paginatekst")
-            log.info(f"Paginatitel na login: {driver.title}")
-            # Log eerste 500 tekens van paginatekst voor diagnose
-            log.info(f"Paginatekst (eerste 500): {body_tekst[:500]}")
+            log.info(f"Paginatekst (eerste 300): {body_tekst[:300]}")
         except Exception:
             pass
 
-        # Controleer of wachtwoordveld nog zichtbaar is = login mislukt
         try:
             pw_veld = driver.find_element(By.XPATH, "//input[@type='password']")
             if pw_veld.is_displayed():
-                log.error("❌ Inloggen mislukt — wachtwoordveld nog zichtbaar na klik")
+                log.error("❌ Inloggen mislukt — wachtwoordveld nog zichtbaar")
                 screenshot(driver, "02b_login_mislukt")
                 return False
         except Exception:
-            pass  # Geen wachtwoordveld meer zichtbaar = login geslaagd
+            pass
 
         log.info(f"✅ Ingelogd — URL: {driver.current_url}")
         return True
 
     except TimeoutException as e:
         log.error(f"❌ Login timeout: {e}")
-        log.error(f"   Huidige URL: {driver.current_url}")
-        log.error(f"   Paginatitel: {driver.title}")
         screenshot(driver, "02_login_fout")
         return False
 
 
+# ── Navigatie ─────────────────────────────────────────────────────────────────
+
 def naar_spelersselectie(driver) -> bool:
-    """Navigeer naar de spelerszoek-stap via het boekingsproces."""
     log.info(f"Navigeer naar {RESERVEER_URL}...")
     driver.get(RESERVEER_URL)
     time.sleep(3)
@@ -248,166 +236,309 @@ def naar_spelersselectie(driver) -> bool:
         log.info(f"✅ Spelersselectiepagina — URL: {driver.current_url}")
         return True
     except TimeoutException:
-        log.error("❌ 'Baan afhangen' knop niet gevonden")
-        # Log de volledige paginatitel en URL voor diagnose
-        log.error(f"   Huidige URL: {driver.current_url}")
-        log.error(f"   Paginatitel: {driver.title}")
+        log.error(f"❌ 'Baan afhangen' niet gevonden — URL: {driver.current_url}")
         screenshot(driver, "03b_afhangen_fout")
         return False
 
 
 def zoek_veld_ophalen(driver):
-    """Zoek het speler-zoekveld — first probeer type=text (breed), dan placeholder-hints."""
     try:
-        # Probeer eerst elk zichtbaar text-input op de pagina
         alle = driver.find_elements(By.XPATH, "//input[@type='text' or @type='search']")
         zichtbaar = [v for v in alle if v.is_displayed()]
-        log.info(f"Zichtbare text-inputs op pagina: {len(zichtbaar)}")
+        log.info(f"Zichtbare text-inputs: {len(zichtbaar)}")
         for v in zichtbaar:
-            log.info(f"  placeholder='{v.get_attribute('placeholder')}' id='{v.get_attribute('id')}' name='{v.get_attribute('name')}'")
-        if len(zichtbaar) == 1:
-            log.info(f"✅ Enige zichtbare text-input gebruikt: placeholder='{zichtbaar[0].get_attribute('placeholder')}'")
+            log.info(f"  placeholder='{v.get_attribute('placeholder')}' id='{v.get_attribute('id')}'")
+        if zichtbaar:
             return zichtbaar[0]
-
-        # Meerdere: zoek op hints
-        veld = WebDriverWait(driver, 12).until(EC.element_to_be_clickable((By.XPATH,
-            "//input[contains(@placeholder,'zoek') or contains(@placeholder,'naam') "
-            "or contains(@placeholder,'speler') or contains(@placeholder,'Zoek') "
-            "or contains(@class,'search') or contains(@id,'search') or contains(@id,'player')]")))
-        log.info(f"✅ Zoekveld gevonden op hint: placeholder='{veld.get_attribute('placeholder')}'")
-        return veld
-    except Exception:
-        log.error("❌ Zoekveld niet gevonden op pagina")
-        screenshot(driver, "04b_zoekveld_fout")
-        return None
-
-
-def dump_dom_diagnose(driver, zoekterm: str):
-    """Dump relevante DOM-structuur na typen in zoekveld — helpt selectors te bepalen."""
-    try:
-        elementen = driver.execute_script("""
-            var results = [];
-            var all = document.querySelectorAll('*');
-            for (var i = 0; i < all.length; i++) {
-                var el = all[i];
-                var role = el.getAttribute('role') || '';
-                var cls  = el.className || '';
-                // Zoek naar suggestie-achtige containers
-                if (role === 'option' || role === 'listbox' ||
-                    (typeof cls === 'string' && (
-                        cls.indexOf('suggest') > -1 || cls.indexOf('autocomplete') > -1 ||
-                        cls.indexOf('dropdown') > -1 || cls.indexOf('result') > -1 ||
-                        cls.indexOf('player') > -1 || cls.indexOf('speler') > -1 ||
-                        cls.indexOf('list') > -1 || cls.indexOf('item') > -1
-                    ))) {
-                    var text = (el.innerText || el.textContent || '').trim().slice(0, 80);
-                    if (text.length > 2) {
-                        results.push(el.tagName + ' role=' + role + ' cls=' + cls.slice(0,60) + ' visible=' + (el.offsetParent !== null) + ' | ' + text);
-                    }
-                }
-            }
-            return results.slice(0, 40);
-        """)
-        log.info(f"=== DOM diagnose na '{zoekterm}' ({len(elementen)} kandidaat-elementen) ===")
-        for r in elementen:
-            log.info(f"  {r}")
     except Exception as e:
-        log.warning(f"DOM diagnose mislukt: {e}")
-
-    # Log ook de volledige paginatekst na typen
-    try:
-        body = driver.find_element(By.TAG_NAME, "body").text
-        log.info(f"Paginatekst na '{zoekterm}' (eerste 800):\n{body[:800]}")
-    except Exception:
-        pass
+        log.error(f"Zoekveld ophalen mislukt: {e}")
+    screenshot(driver, "04b_zoekveld_fout")
+    return None
 
 
-def verzamel_suggesties(driver) -> set:
-    """Haal alle zichtbare autocomplete-suggesties op via ARIA + klasse + JavaScript."""
+# ── API-interceptie ───────────────────────────────────────────────────────────
+
+_INTERCEPTOR_JS = """
+window.__apiLog = [];
+(function() {
+    // Fetch interceptor
+    var _origFetch = window.fetch.bind(window);
+    window.fetch = function(input, init) {
+        var url = (input instanceof Request) ? input.url : String(input || '');
+        var p = _origFetch(input, init);
+        p.then(function(resp) {
+            var clone = resp.clone();
+            clone.text().then(function(body) {
+                window.__apiLog.push({t:'fetch', url:url, s:resp.status, b:body.slice(0,5000)});
+            }).catch(function(){});
+        }).catch(function(e) {
+            window.__apiLog.push({t:'fetch', url:url, err:String(e)});
+        });
+        return p;
+    };
+    // XHR interceptor
+    var _origOpen = XMLHttpRequest.prototype.open;
+    var _origSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.open = function(m, url) {
+        this.__url = String(url || '');
+        return _origOpen.apply(this, arguments);
+    };
+    XMLHttpRequest.prototype.send = function() {
+        var self = this;
+        this.addEventListener('loadend', function() {
+            window.__apiLog.push({t:'xhr', url:self.__url, s:self.status,
+                                   b:(self.responseText||'').slice(0,5000)});
+        });
+        return _origSend.apply(this, arguments);
+    };
+})();
+console.log('API-interceptor actief');
+"""
+
+
+def injecteer_interceptor(driver):
+    driver.execute_script(_INTERCEPTOR_JS)
+    log.info("API-interceptor geïnjecteerd")
+
+
+def extraheer_namen_uit_data(data) -> set:
+    """Flexibel JSON-schema → set van spelernamen."""
+    namen = set()
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        items = None
+        for key in ["results", "players", "members", "data", "items", "users",
+                    "suggestions", "value", "Values"]:
+            if isinstance(data.get(key), list):
+                items = data[key]
+                break
+        if items is None:
+            items = []
+    else:
+        return namen
+
+    for item in items:
+        if isinstance(item, str):
+            naam = item.strip()
+        elif isinstance(item, dict):
+            naam = (item.get("name") or item.get("fullName") or item.get("full_name") or
+                    item.get("displayName") or item.get("display_name") or
+                    item.get("label") or item.get("text") or item.get("value") or "")
+            if not naam:
+                v = (item.get("firstName") or item.get("first_name") or "")
+                a = (item.get("lastName") or item.get("last_name") or item.get("surname") or "")
+                naam = f"{v} {a}".strip()
+        else:
+            naam = ""
+
+        naam = naam.strip()
+        if naam and len(naam) > 3 and " " in naam and naam.lower() not in _GEEN_NAAM:
+            namen.add(naam)
+    return namen
+
+
+def vind_speler_api(driver, zoek_veld) -> dict | None:
+    """
+    Typ 3 letters, vang XHR/fetch op, retourneer info over gevonden API.
+    """
+    driver.execute_script("window.__apiLog = [];")
+
+    zoek_veld.clear()
+    zoek_veld.send_keys("van")
+    time.sleep(4)
+
+    api_log = driver.execute_script("return window.__apiLog || [];")
+    log.info(f"=== API-log na 'van' ({len(api_log)} entries) ===")
+
+    kandidaten = []
+    for entry in api_log:
+        url    = entry.get("url", "")
+        body   = entry.get("b", "")
+        status = entry.get("s", 0)
+        log.info(f"  [{entry.get('t')}] {url} (HTTP {status}) body_len={len(body)}")
+        if body and len(body) > 5:
+            log.info(f"    body[:300]: {body[:300]}")
+        # Kandidaat: JSON-response met status 200
+        if status == 200 and body.strip().startswith(("[", "{")):
+            kandidaten.append(entry)
+
+    zoek_veld.clear()
+
+    # Zoek de entry die echte namen bevat
+    for entry in kandidaten:
+        body = entry.get("b", "")
+        try:
+            data  = json.loads(body)
+            namen = extraheer_namen_uit_data(data)
+            if namen:
+                log.info(f"✅ Speler-API bevestigd: {entry['url']}")
+                log.info(f"   Voorbeeldnamen: {sorted(namen)[:5]}")
+                return {
+                    "url":   entry["url"],
+                    "data":  data,
+                    "namen": namen,
+                }
+        except Exception:
+            pass
+
+    # Tweede kans: alle JSON-kandidaten loggen
+    if kandidaten:
+        log.warning("Geen speler-API met namen gevonden. Alle JSON-kandidaten:")
+        for e in kandidaten:
+            log.warning(f"  {e.get('url','')} — body: {e.get('b','')[:200]}")
+    else:
+        log.warning("Geen JSON-responses in api-log — interceptor werkt mogelijk niet")
+
+    return None
+
+
+def bouw_url_template(api_url: str, zoekterm: str = "van") -> str:
+    """Vervang de zoekterm in de URL door {q}."""
+    if zoekterm in api_url:
+        return api_url.replace(zoekterm, "{q}", 1)
+    # Probeer query-parameters
+    template = re.sub(
+        r"([?&][^=]+=)[^&]*",
+        lambda m: m.group(0) if "{q}" in m.group(0) else m.group(1) + "{q}",
+        api_url,
+        count=1,
+    )
+    return template
+
+
+# ── Directe API-scan ──────────────────────────────────────────────────────────
+
+def haal_alle_leden_via_api(template: str, cookies: dict, user_agent: str) -> set:
+    """
+    Systematisch alle leden ophalen via directe HTTP-aanroepen.
+    Test prefix-lengte 1→2→3 en gebruikt parallelle requests.
+    """
+    if not REQUESTS_OK:
+        log.error("requests library niet beschikbaar — kan API niet direct bevragen")
+        return set()
+
+    headers = {
+        "Accept":           "application/json, */*",
+        "User-Agent":       user_agent,
+        "X-Requested-With": "XMLHttpRequest",
+    }
+
+    def maak_sessie():
+        s = req_lib.Session()
+        s.cookies.update(cookies)
+        s.headers.update(headers)
+        return s
+
+    def zoek(prefix: str) -> set:
+        url = template.replace("{q}", prefix)
+        try:
+            resp = maak_sessie().get(url, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                namen = extraheer_namen_uit_data(data)
+                if namen:
+                    log.debug(f"  '{prefix}' → {len(namen)} namen")
+                return namen
+        except Exception as e:
+            log.debug(f"  '{prefix}' fout: {e}")
+        return set()
+
+    def parallel_zoek(prefixen: list, workers: int = 8) -> set:
+        namen = set()
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futures = {ex.submit(zoek, p): p for p in prefixen}
+            for i, fut in enumerate(as_completed(futures)):
+                namen.update(fut.result())
+                if (i + 1) % 200 == 0:
+                    log.info(f"  {i+1}/{len(prefixen)} klaar — {len(namen)} namen tot nu toe")
+        return namen
+
+    log.info(f"API template: {template}")
+
+    # Test lengte 0 (alles in één keer?)
+    leeg = zoek("")
+    if len(leeg) > 5:
+        log.info(f"Lege query retourneert {len(leeg)} namen — klaar!")
+        return leeg
+
+    # Test lengte 1
+    test1 = zoek("j")
+    if test1:
+        log.info(f"1-letter queries werken ('{' }'→{len(test1)}). Scan 26 letters...")
+        return parallel_zoek(LETTERS, workers=8)
+
+    # Test lengte 2
+    test2 = zoek("jo")
+    if test2:
+        log.info(f"2-letter queries werken ('jo'→{len(test2)}). Scan 676 combinaties...")
+        prefixen = [a + b for a, b in itertools.product(LETTERS, repeat=2)]
+        return parallel_zoek(prefixen, workers=8)
+
+    # 3-letter scan (frontend-minimum)
+    log.info("3-letter queries nodig. Scan 17 576 combinaties (parallel, ~3 min)...")
+    prefixen = [a + b + c for a, b, c in itertools.product(LETTERS, repeat=3)]
+    return parallel_zoek(prefixen, workers=12)
+
+
+# ── Fallback: Selenium autocomplete ──────────────────────────────────────────
+
+def haal_leden_via_selenium(driver, zoek_veld) -> set:
+    """
+    Fallback als API niet gevonden wordt: typ 3-letter-combinaties en
+    verzamel autocomplete-suggesties via Selenium.
+    Gebruikt veelvoorkomende Nederlandse 3-letter naam-starts.
+    """
     namen = set()
 
-    # 1. ARIA-gebaseerd (React/Vue/Angular apps)
-    aria_selectors = [
-        "//*[@role='option']",
-        "//*[@role='listbox']//*",
-        "//*[@role='combobox']//following-sibling::*//*",
-    ]
-    for sel in aria_selectors:
-        try:
-            for el in driver.find_elements(By.XPATH, sel):
-                tekst = el.text.strip()
-                if tekst and len(tekst) > 3 and " " in tekst:
-                    namen.add(tekst)
-        except Exception:
-            pass
+    # Genereer 3-letter combinaties voor veelvoorkomende Nederlandse namen
+    # Dekt voor/achternamen die starten met frequente patronen
+    prefixen_3 = []
+    # Alle combinaties van eerste 2 letters: 676 -> voeg derde letter toe
+    # Maar beperk: alleen letters die zinvol zijn voor Ned. namen
+    for a, b, c in itertools.product(LETTERS, repeat=3):
+        prefixen_3.append(a + b + c)
 
-    # 2. CSS-klasse-gebaseerd (klassiek)
-    css_selectors = [
-        "//ul[contains(@class,'suggestion') or contains(@class,'autocomplete') "
-        "or contains(@class,'dropdown') or contains(@class,'result') "
-        "or contains(@class,'player') or contains(@class,'speler')]//li",
-        "//div[contains(@class,'suggestion') or contains(@class,'autocomplete') "
-        "or contains(@class,'dropdown') or contains(@class,'result') "
-        "or contains(@class,'player') or contains(@class,'speler')]"
-        "//div[string-length(normalize-space(text()))>3]",
-        "//li[contains(@class,'suggestion') or contains(@class,'autocomplete') "
-        "or contains(@class,'player') or contains(@class,'speler')]",
-    ]
-    for sel in css_selectors:
-        try:
-            for el in driver.find_elements(By.XPATH, sel):
-                tekst = el.text.strip()
-                if tekst and len(tekst) > 3 and " " in tekst:
-                    namen.add(tekst)
-        except Exception:
-            pass
+    log.info(f"Selenium fallback: {len(prefixen_3)} 3-letter prefixen")
 
-    # 3. JavaScript-scan: alle zichtbare leaf-nodes met naam-achtige tekst
-    try:
-        js_namen = driver.execute_script("""
-            var results = [];
-            var all = document.querySelectorAll(
-                '[role="option"], [role="listbox"] *, ' +
-                'li[data-value], li[data-id], li[data-player], ' +
-                '.player-item, .player-name, .search-result, ' +
-                '.suggestion-item, .autocomplete-item, .dropdown-item'
-            );
-            all.forEach(function(el) {
-                var text = (el.innerText || el.textContent || '').trim();
-                if (text.length > 3 && text.indexOf(' ') > -1 && text.length < 80
-                    && el.offsetParent !== null) {
-                    results.push(text);
-                }
-            });
-            return results;
-        """)
-        for naam in js_namen:
-            if naam and len(naam) > 3 and " " in naam:
-                namen.add(naam)
-    except Exception as e:
-        log.warning(f"JS suggestie-scan mislukt: {e}")
+    for i, term in enumerate(prefixen_3):
+        try:
+            zoek_veld.clear()
+            zoek_veld.send_keys(term)
+            time.sleep(1.5)
+
+            # Verzamel suggesties via ARIA + CSS
+            for sel in [
+                "//*[@role='option']",
+                "//li[contains(@class,'player') or contains(@class,'suggestion') or contains(@class,'result') or contains(@class,'item')]",
+                "//div[contains(@class,'player') or contains(@class,'suggestion') or contains(@class,'result')]//span[string-length(normalize-space(text()))>3]",
+            ]:
+                try:
+                    for el in driver.find_elements(By.XPATH, sel):
+                        if el.is_displayed():
+                            tekst = el.text.strip()
+                            if tekst and len(tekst) > 3 and " " in tekst and tekst.lower() not in _GEEN_NAAM:
+                                namen.add(tekst)
+                except Exception:
+                    pass
+
+            zoek_veld.clear()
+            time.sleep(0.3)
+
+            if (i + 1) % 500 == 0:
+                log.info(f"  {i+1}/{len(prefixen_3)} — {len(namen)} namen tot nu toe")
+                screenshot(driver, f"05_zoeken_{i+1}")
+
+        except Exception as e:
+            log.warning(f"Fout bij '{term}': {e}")
+            zoek_veld = zoek_veld_ophalen(driver)
+            if not zoek_veld:
+                break
 
     return namen
 
 
-# Bekende UI-labels die geen spelernamen zijn
-_GEEN_NAAM = {"recent mee gespeeld", "recent played", "spelers", "players",
-               "zoekresultaten", "search results", "geen resultaten", "no results",
-               "recent", "zoeken", "search"}
-
-
-def verzamel_recente_spelers(driver) -> set:
-    namen = set()
-    try:
-        for el in driver.find_elements(By.XPATH,
-                "//*[contains(@class,'recent')]//*[string-length(normalize-space(text()))>3]"):
-            tekst = el.text.strip()
-            if tekst and " " in tekst and tekst.lower() not in _GEEN_NAAM:
-                namen.add(tekst)
-    except Exception:
-        pass
-    return namen
-
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     if not BONDSNUMMER or not WACHTWOORD:
@@ -416,70 +547,59 @@ def main():
 
     driver = maak_driver()
     alle_namen = set()
-    succes = False
 
     try:
         if not login(driver):
-            log.error("Login mislukt — controleer screenshots voor diagnose")
+            log.error("Login mislukt")
             sys.exit(1)
 
         if not naar_spelersselectie(driver):
-            log.error("Navigatie mislukt — controleer screenshots voor diagnose")
+            log.error("Navigatie mislukt")
             sys.exit(1)
-
-        # Recente spelers
-        recente = verzamel_recente_spelers(driver)
-        if recente:
-            log.info(f"Recente spelers ({len(recente)}): {sorted(recente)[:5]}...")
-            alle_namen.update(recente)
 
         zoek = zoek_veld_ophalen(driver)
         if not zoek:
-            log.error("Zoekveld niet gevonden — controleer screenshot 04b")
+            log.error("Zoekveld niet gevonden")
             sys.exit(1)
 
-        log.info(f"Start zoeken door {len(ZOEKTERMEN)} zoektermen...")
-        for i, term in enumerate(ZOEKTERMEN):
-            try:
-                zoek.clear()
-                zoek.send_keys(term)
-                time.sleep(2.5)
+        # --- Stap 1: injecteer interceptor en vind de API ---
+        injecteer_interceptor(driver)
+        api_info = vind_speler_api(driver, zoek)
 
-                # Eerste zoekterm: altijd DOM-diagnose uitvoeren zodat we de structuur zien
-                if i == 0:
-                    screenshot(driver, "05a_eerste_zoekterm")
-                    dump_dom_diagnose(driver, term)
+        if api_info:
+            # Namen uit de eerste 'van'-query direct toevoegen
+            alle_namen.update(api_info["namen"])
+            log.info(f"Eerste API-query al {len(alle_namen)} namen")
 
-                gevonden = verzamel_suggesties(driver)
-                if gevonden:
-                    log.info(f"  '{term}' → {len(gevonden)} namen: {sorted(gevonden)[:3]}")
-                    alle_namen.update(gevonden)
-                else:
-                    if i < 3:
-                        log.info(f"  '{term}' → geen suggesties")
+            template = bouw_url_template(api_info["url"], "van")
+            log.info(f"API-template: {template}")
 
-                zoek.clear()
-                time.sleep(0.4)
+            # Extraheer cookies en user-agent
+            cookies    = {c["name"]: c["value"] for c in driver.get_cookies()}
+            user_agent = driver.execute_script("return navigator.userAgent;")
 
-                # Tussentijdse screenshot elke 10 termen
-                if (i + 1) % 10 == 0:
-                    screenshot(driver, f"05_zoeken_{i+1}")
+            # Sluit browser zo vroeg mogelijk (sessie-cookies blijven geldig)
+            screenshot(driver, "05_voor_api_scan")
+            driver.quit()
+            driver = None
 
-            except Exception as e:
-                log.warning(f"Fout bij '{term}': {e}")
-                screenshot(driver, f"fout_zoekterm_{term.strip()}")
-                zoek = zoek_veld_ophalen(driver)
-                if not zoek:
-                    log.warning("Zoekveld kwijt — stoppen met zoeken")
-                    break
+            # --- Stap 2: haal alle leden op via directe API ---
+            api_namen = haal_alle_leden_via_api(template, cookies, user_agent)
+            alle_namen.update(api_namen)
+            log.info(f"Na API-scan: {len(alle_namen)} unieke namen")
 
-        succes = True
+        else:
+            # --- Fallback: Selenium autocomplete met 3-letter prefixen ---
+            log.warning("API niet gevonden — gebruik Selenium autocomplete fallback")
+            zoek = zoek_veld_ophalen(driver)
+            if zoek:
+                alle_namen.update(haal_leden_via_selenium(driver, zoek))
 
     finally:
-        screenshot(driver, "99_einde")
-        driver.quit()
+        if driver:
+            screenshot(driver, "99_einde")
+            driver.quit()
 
-    # Filter bekende UI-labels eruit
     alle_namen = {n for n in alle_namen if n.lower() not in _GEEN_NAAM}
 
     if not alle_namen:

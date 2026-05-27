@@ -22,7 +22,7 @@ jobs:
       - name: Installeer dependencies
         run: |
           sudo apt-get install -y xvfb
-          pip install undetected-chromedriver selenium
+          pip install undetected-chromedriver selenium requests
 
       - name: Leden ophalen
         env:
