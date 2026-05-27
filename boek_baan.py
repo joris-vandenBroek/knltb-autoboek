@@ -337,31 +337,103 @@ def klik_baan_afhangen(driver: uc.Chrome) -> bool:
 
 
 # ── STAP 3: Spelers toevoegen ─────────────────────────────────────────────────
+
+def _zoek_veld_spelers(driver: uc.Chrome):
+    """Geef het eerste zichtbare text/search-input terug op de spelerspagina."""
+    alle = driver.find_elements(By.XPATH, "//input[@type='text' or @type='search']")
+    for inp in alle:
+        if inp.is_displayed() and inp.is_enabled():
+            log.info(f"  Zoekveld: placeholder='{inp.get_attribute('placeholder')}' "
+                     f"id='{inp.get_attribute('id')}'")
+            return inp
+    return None
+
+
+def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
+    """Zoek en selecteer één speler; probeer ook 'Recent mee gespeeld'-kaartjes."""
+    achternaam = speler.split()[-1]
+
+    # 1. Probeer eerst via 'Recent mee gespeeld' – klik op het +-knopje
+    try:
+        recent_plus = driver.find_elements(By.XPATH,
+            f"//div[contains(@class,'recent') or contains(@class,'Recent')]"
+            f"//*[contains(.,'{achternaam}')]"
+            f"/ancestor::*[contains(@class,'player') or contains(@class,'card') or contains(@class,'item')]"
+            f"//*[contains(@class,'add') or contains(@class,'plus') or text()='+']")
+        for knop in recent_plus:
+            if knop.is_displayed():
+                driver.execute_script("arguments[0].click();", knop)
+                log.info(f"  ✅ {speler} via 'Recent mee gespeeld' toegevoegd")
+                time.sleep(1)
+                return True
+    except Exception:
+        pass
+
+    # 2. Zoek via het zoekveld
+    zoek_veld = _zoek_veld_spelers(driver)
+    if not zoek_veld:
+        log.error(f"  ❌ Zoekveld niet gevonden voor '{speler}'")
+        return False
+
+    # Typ de VOLLEDIGE naam via JS zodat React/Vue events correct worden getriggerd
+    driver.execute_script("""
+        var el = arguments[0], val = arguments[1];
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(el, val);
+        el.dispatchEvent(new Event('input',  {bubbles: true}));
+        el.dispatchEvent(new Event('change', {bubbles: true}));
+    """, zoek_veld, speler)
+    log.info(f"  Zoekterm ingevuld: '{speler}'")
+    time.sleep(2.5)
+    screenshot(driver, f"05b_zoek_{index}_{achternaam}")
+
+    # 3. Zoek de suggestie — gebruik contains(.,X) om descendant-tekst te vinden
+    selectors = [
+        # ARIA
+        f"//*[@role='option'][contains(.,'{achternaam}')]",
+        # li / div met descendant-tekst (de . in contains zoekt óók in child-nodes)
+        f"//li[contains(.,'{achternaam}')]",
+        f"//div[contains(@class,'player') or contains(@class,'suggestion')"
+        f"      or contains(@class,'result') or contains(@class,'item')]"
+        f"[contains(.,'{achternaam}')]",
+        # Breed: elk zichtbaar element met de achternaam
+        f"//*[contains(.,'{achternaam}') and not(self::html) and not(self::body)"
+        f"    and not(self::div[@id]) and not(self::input)]",
+    ]
+
+    for sel in selectors:
+        try:
+            elementen = driver.find_elements(By.XPATH, sel)
+            for el in elementen:
+                tekst = el.text.strip()
+                if el.is_displayed() and achternaam.lower() in tekst.lower():
+                    log.info(f"  Suggestie via '{sel[:60]}': '{tekst[:60]}'")
+                    driver.execute_script("arguments[0].click();", el)
+                    time.sleep(1.2)
+                    log.info(f"  ✅ {speler} geselecteerd")
+                    return True
+        except Exception as e:
+            log.debug(f"  Selector overgeslagen: {e}")
+
+    # Geen match — log wat er wél zichtbaar is voor diagnose
+    log.error(f"  ❌ Geen suggestie voor '{speler}' (achternaam='{achternaam}')")
+    try:
+        zichtbaar_tekst = driver.find_element(By.TAG_NAME, "body").text
+        log.error(f"  Paginatekst (500 tekens): {zichtbaar_tekst[:500]}")
+    except Exception:
+        pass
+    screenshot(driver, f"05c_niet_gevonden_{achternaam}")
+    return False
+
+
 def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str) -> bool:
     log.info("Spelers toevoegen...")
     time.sleep(2)
     screenshot(driver, "05_spelers_pagina")
 
-    for speler in [speler2, speler3, speler4]:
-        log.info(f"Speler toevoegen: {speler}")
-        try:
-            zoek_veld = wacht_op(driver, By.XPATH,
-                "//input[contains(@placeholder,'zoek') or contains(@placeholder,'naam') "
-                "or contains(@placeholder,'speler') or contains(@class,'search')]")
-            zoek_veld.clear()
-            zoek_veld.send_keys(speler.split()[0])
-            time.sleep(2)
-
-            suggestie = wacht_op(driver, By.XPATH,
-                f"//li[contains(text(),'{speler.split()[-1]}')]"
-                f" | //div[contains(@class,'suggestion') or contains(@class,'autocomplete')"
-                f" or contains(@class,'dropdown') or contains(@class,'result')]"
-                f"[contains(text(),'{speler.split()[-1]}')]")
-            suggestie.click()
-            time.sleep(1)
-            log.info(f"  ✅ {speler} toegevoegd")
-        except TimeoutException:
-            log.error(f"  ❌ {speler} niet gevonden!")
+    for i, speler in enumerate([speler2, speler3, speler4], start=2):
+        log.info(f"Speler {i} toevoegen: '{speler}'")
+        if not _voeg_speler_toe(driver, speler, i):
             return False
 
     screenshot(driver, "06_spelers_toegevoegd")
