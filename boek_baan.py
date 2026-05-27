@@ -666,13 +666,19 @@ def bevestig(driver: uc.Chrome) -> bool:
 
         bevestig_knop = _zoek_knop(driver, ["Bevestig", "Confirm", "Boek", "Reserveer"])
         if not bevestig_knop:
-            raise TimeoutException("Bevestig-knop niet gevonden")
-        bevestig_knop.click()
+            log.error("❌ Bevestig-knop niet gevonden")
+            try:
+                log.error(f"Paginatekst: {driver.find_element(By.TAG_NAME,'body').text[:400]}")
+            except Exception:
+                pass
+            screenshot(driver, "bevestig_fout")
+            return False
+        driver.execute_script("arguments[0].click();", bevestig_knop)
         time.sleep(3)
         screenshot(driver, "12_na_bevestiging")
         log.info("✅ Bevestigd!")
         return True
-    except TimeoutException as e:
+    except Exception as e:
         log.error(f"❌ Bevestigen mislukt: {e}")
         screenshot(driver, "bevestig_fout")
         return False
