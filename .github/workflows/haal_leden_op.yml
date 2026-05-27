@@ -19,8 +19,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - uses: browser-actions/setup-chrome@v1
-
       - name: Installeer dependencies
         run: |
           sudo apt-get install -y xvfb

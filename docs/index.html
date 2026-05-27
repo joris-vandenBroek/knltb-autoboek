@@ -98,8 +98,8 @@
     }
     .field-label .req { color: var(--fout); margin-left: 2px; }
 
-    /* ── Datum — native date picker ─────────────────────── */
-    input[type="date"].date-input {
+    /* ── Datum — tekstveld DD-MM-JJJJ ───────────────────── */
+    input.date-input {
       flex: 1;
       border: 1.5px solid var(--border);
       border-radius: 10px;
@@ -110,10 +110,9 @@
       background: white;
       outline: none;
       min-height: 52px;
-      cursor: pointer;
     }
-    input[type="date"].date-input:focus  { border-color: var(--border-focus); }
-    input[type="date"].date-input.invalid { border-color: var(--fout); }
+    input.date-input:focus  { border-color: var(--border-focus); }
+    input.date-input.invalid { border-color: var(--fout); }
 
     /* ── Tijd select ─────────────────────────────────────── */
     .time-select {
@@ -383,7 +382,7 @@
 
   <div class="field-group">
     <label class="field-label" for="datum">Datum <span class="req">*</span></label>
-    <input type="date" id="datum" class="date-input">
+    <input type="text" id="datum" class="date-input" placeholder="DD-MM-JJJJ" inputmode="numeric" maxlength="10" autocomplete="off">
   </div>
 
   <div class="field-group">
@@ -505,8 +504,23 @@
   const datumEl = document.getElementById('datum');
   const morgen  = new Date();
   morgen.setDate(morgen.getDate() + 1);
-  datumEl.min   = morgen.toISOString().slice(0, 10);
-  datumEl.value = morgen.toISOString().slice(0, 10);
+  // Toon standaard morgen in DD-MM-JJJJ formaat
+  const [_y, _m, _d] = morgen.toISOString().slice(0, 10).split('-');
+  datumEl.value = `${_d}-${_m}-${_y}`;
+
+  // Auto-format: voeg streepjes toe tijdens typen
+  datumEl.addEventListener('input', e => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 8);
+    if (v.length > 4)      v = v.slice(0, 2) + '-' + v.slice(2, 4) + '-' + v.slice(4);
+    else if (v.length > 2) v = v.slice(0, 2) + '-' + v.slice(2);
+    e.target.value = v;
+  });
+
+  // Converteer DD-MM-JJJJ → YYYY-MM-DD voor API
+  function datumNaarISO(nl) {
+    const [d, m, y] = nl.split('-');
+    return `${y}-${m}-${d}`;
+  }
 
   function formatDatumNL(iso) {
     const [y, m, d] = iso.split('-');
@@ -681,8 +695,8 @@
   function valideer() {
     let ok = true;
 
-    // Datum
-    if (!datumEl.value) {
+    // Datum — verwacht DD-MM-JJJJ (10 tekens)
+    if (!datumEl.value || datumEl.value.length < 10) {
       datumEl.classList.add('invalid');
       ok = false;
     } else {
@@ -717,7 +731,7 @@
     sluitAllePf(null);
     if (!valideer()) return;
 
-    const datum   = datumEl.value;
+    const datum   = datumNaarISO(datumEl.value);  // DD-MM-JJJJ → YYYY-MM-DD voor API
     const tijd    = tijdEl.value;
     const speler2 = document.getElementById('speler2').value;
     const speler3 = document.getElementById('speler3').value;
@@ -730,7 +744,7 @@
     btn.disabled = true;
     document.getElementById('btnTekst').innerHTML = '<div class="spinner"></div>';
 
-    const datumNL = formatDatumNL(datum);
+    const datumNL = datumEl.value;  // al in DD-MM-JJJJ formaat
 
     try {
       const resp = await fetch(
