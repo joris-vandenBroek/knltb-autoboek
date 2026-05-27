@@ -43,3 +43,11 @@ jobs:
           git add leden.json
           git diff --cached --quiet || git commit -m "Ledenlijst bijgewerkt"
           git push
+
+      - name: Screenshots bij fout
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leden-screenshots
+          path: '*.png'
+          retention-days: 3
