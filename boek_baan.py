@@ -506,11 +506,13 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
         var alle = Array.from(document.querySelectorAll('*'));
 
-        // Vind het kleinste zichtbare element met ALLEEN de dag-tekst (geen children)
+        // Vind het kleinste zichtbare element dat de dag-tekst bevat
+        // Paginatekst per dag-cel: "vr 29\nmei" of "29\nmei" of "29"
         var dagEls = alle.filter(function(el) {
             if (!el.offsetParent) return false;
             var txt = (el.innerText || '').trim();
-            return (txt === dagNr || txt.startsWith(dagNr + '\\n')) && el.children.length <= 1;
+            var tokens = txt.split(/[\s\n]+/);
+            return tokens.indexOf(dagNr) >= 0 && el.children.length <= 1;
         });
 
         // Vind het kleinste zichtbare element met ALLEEN de dagdeel-tekst
@@ -612,11 +614,11 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
                 if (!el.offsetParent) continue;  // niet zichtbaar
                 var txt = (el.innerText || '').trim();
 
-                // Exacte match of "15:00 - 16:00", "15:00 tot 16:00", "15:00\n..."
+                // Exacte match of "15:00 - 16:00" / "15:00 tot 16:00" / "15:00[newline]..."
                 if (txt !== tijd &&
                     !txt.startsWith(tijd + ' ') &&
                     !txt.startsWith(tijd + '-') &&
-                    !txt.startsWith(tijd + '\\n')) continue;
+                    txt.split(/[\s\n]/)[0] !== tijd) continue;
 
                 // Geen disabled-vinkje
                 if (el.classList.contains('disabled') ||
