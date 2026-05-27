@@ -586,24 +586,68 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     tijden = genereer_tijden(voorkeur_tijd)
     log.info(f"Tijden om te proberen: {tijden}")
 
+    # Log paginatekst voor diagnose
+    try:
+        pagina = driver.find_element(By.TAG_NAME, "body").text
+        log.info(f"Baan-pagina tekst (500): {pagina[:500]}")
+    except Exception:
+        pass
+
     for tijd in tijden:
         for baan in PADEL_BANEN:
             log.info(f"Probeer {baan} om {tijd}...")
-            try:
-                tijdknop = driver.find_element(By.XPATH,
-                    f"//*[contains(text(),'{baan}')]"
-                    f"/ancestor::tr"
-                    f"//td[normalize-space(text())='{tijd}'] "
-                    f"| //*[contains(text(),'{baan}')]"
-                    f"/ancestor::*[contains(@class,'row') or contains(@class,'baan')]"
-                    f"//*[normalize-space(text())='{tijd}']")
-                tijdknop.click()
-                time.sleep(2)
+
+            # JavaScript DOM-traversal — zelfde aanpak als kies_dag.
+            # contains(text(),'X') mist child-tekst; JS innerText werkt wel.
+            resultaat = driver.execute_script("""
+                var baan = arguments[0];
+                var tijd = arguments[1];
+
+                // Vind alle zichtbare elementen waarvan de innerText = baan-naam
+                var alle = Array.from(document.querySelectorAll('*'));
+                var baanEls = alle.filter(function(el) {
+                    if (!el.offsetParent) return false;
+                    var txt = (el.innerText || '').trim();
+                    return txt === baan ||
+                           txt.startsWith(baan + '\\n') ||
+                           txt.endsWith('\\n' + baan);
+                });
+
+                for (var baanEl of baanEls) {
+                    // Zoek omhoog naar container die ook de gewenste tijd bevat
+                    var container = baanEl;
+                    for (var stap = 0; stap < 8; stap++) {
+                        container = container.parentElement;
+                        if (!container) break;
+                        var ctxt = (container.innerText || '');
+                        if (!ctxt.includes(tijd)) continue;
+
+                        // Zoek de exacte tijdcel in de container
+                        var cellen = Array.from(container.querySelectorAll('*'));
+                        for (var cel of cellen) {
+                            if (!cel.offsetParent) continue;
+                            var t = (cel.innerText || '').trim();
+                            // Match "15:00" of "15:00 - 16:00" of "15:00 tot 16:00"
+                            if (t === tijd || t.startsWith(tijd + ' ') ||
+                                t.startsWith(tijd + '-') || t.startsWith(tijd + '\\n')) {
+                                if (cel.classList.contains('disabled') ||
+                                    cel.hasAttribute('disabled')) continue;
+                                cel.click();
+                                return 'OK baan=' + baan + ' tijd=' + tijd;
+                            }
+                        }
+                    }
+                }
+                return 'NIET_GEVONDEN baan=' + baan + ' tijd=' + tijd +
+                       ' baanEls=' + baanEls.length;
+            """, baan, tijd)
+
+            log.info(f"  JS: {resultaat}")
+            if resultaat and resultaat.startswith("OK"):
                 log.info(f"✅ {baan} om {tijd} geselecteerd!")
+                time.sleep(2)
                 screenshot(driver, "10_baan_geselecteerd")
                 return baan, tijd
-            except NoSuchElementException:
-                continue
 
     log.error("❌ Geen beschikbare padelbaan/tijd gevonden!")
     screenshot(driver, "baan_fout")
