@@ -14,8 +14,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
                     handlers=[logging.StreamHandler(sys.stdout)])
 log = logging.getLogger(__name__)
 
-LOGIN_URL     = "https://etv-volley.nl/mijn"
-RESERVEER_URL = "https://etv-volley.nl/mijn/Reservations"
+LOGIN_URL     = "https://www.etv-volley.nl/mijn"
+RESERVEER_URL = "https://www.etv-volley.nl/mijn/Reservations"
 BONDSNUMMER   = os.environ.get("KNLTB_BONDSNUMMER", "")
 WACHTWOORD    = os.environ.get("KNLTB_WACHTWOORD", "")
 TIMEOUT       = 20
@@ -140,10 +140,28 @@ def login(driver) -> bool:
         knop.click()
         time.sleep(5)
         screenshot(driver, "02_na_login")
+        log.info(f"URL na login-klik: {driver.current_url}")
 
-        if "login" in driver.current_url.lower() or "signin" in driver.current_url.lower():
-            log.error("❌ Inloggen mislukt — nog steeds op loginpagina")
-            return False
+        # Controleer of wachtwoordveld nog zichtbaar is = login mislukt
+        try:
+            pw_veld = driver.find_element(By.XPATH, "//input[@type='password']")
+            if pw_veld.is_displayed():
+                log.error("❌ Inloggen mislukt — wachtwoordveld nog zichtbaar na klik")
+                # Log eventuele foutmeldingen op de pagina
+                for sel in [
+                    "//*[contains(@class,'error') or contains(@class,'alert') or contains(@class,'warning')]",
+                    "//*[contains(text(),'onjuist') or contains(text(),'ongeldig') or contains(text(),'fout')]",
+                ]:
+                    try:
+                        el = driver.find_element(By.XPATH, sel)
+                        if el.text.strip():
+                            log.error(f"   Foutmelding op pagina: {el.text.strip()[:200]}")
+                    except Exception:
+                        pass
+                screenshot(driver, "02b_login_mislukt")
+                return False
+        except Exception:
+            pass  # Geen wachtwoordveld meer zichtbaar = login geslaagd
 
         log.info(f"✅ Ingelogd — URL: {driver.current_url}")
         return True
