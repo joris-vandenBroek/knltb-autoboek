@@ -847,13 +847,15 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
             return null;
         """, tijd, PADEL_BANEN)
 
-        # Diagnose loggen
+        # Diagnose loggen (geen backslash in f-string: Python<3.12 compatibel)
         try:
-            log.info(f"  diagnose: padel_labels={driver.execute_script('return window._padelCount||0')} "
-                     f"absY={driver.execute_script('return (window._padelAbsY||[]).slice(0,6)')} "
-                     f"tijdcellen={driver.execute_script('return window._tijdCount||0')} "
-                     f"minAfstand={driver.execute_script('return Math.round(window._minAfstand||-1)')} "
-                     f"bestePadel='{driver.execute_script('return window._bestePadel||\"\"')}'")
+            d_padel  = driver.execute_script('return window._padelCount||0')
+            d_y      = driver.execute_script('return (window._padelAbsY||[]).slice(0,6)')
+            d_cellen = driver.execute_script('return window._tijdCount||0')
+            d_afst   = driver.execute_script('return Math.round(window._minAfstand||-1)')
+            d_padnm  = driver.execute_script('return window._bestePadel||""')
+            log.info(f"  diagnose: padel_labels={d_padel} absY={d_y} "
+                     f"tijdcellen={d_cellen} minAfstand={d_afst} bestePadel='{d_padnm}'")
         except Exception:
             pass
 
