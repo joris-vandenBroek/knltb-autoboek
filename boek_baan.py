@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
@@ -520,8 +521,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             break
 
     # Stap A: klik de dag-header om de Bootstrap-accordion open te klappen.
-    # (elementFromPoint pikt anders de collapse-wrapper op, niet de cel zelf.)
-    dag_klik = driver.execute_script("""
+    dag_el = driver.execute_script("""
         var dagNr = arguments[0];
         var alle  = Array.from(document.querySelectorAll('*'));
         var dagEls = alle.filter(function(el) {
@@ -529,17 +529,34 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             var tokens = (el.innerText || '').trim().split(/\s+/);
             return tokens.indexOf(dagNr) >= 0 && el.children.length <= 1;
         });
-        if (!dagEls.length) return 'GEEN_DAG: ' + dagNr;
-        var r = dagEls[0].getBoundingClientRect();
+        if (!dagEls.length) return null;
         dagEls[0].click();
-        return 'DAG_GEKLIKT x=' + Math.round(r.left + r.width / 2);
+        return dagEls[0];
     """, dag_nr)
-    log.info(f"Dag accordion klik: {dag_klik}")
+    log.info(f"Dag accordion klik: {'OK' if dag_el else 'NIET GEVONDEN'}")
     time.sleep(0.7)
 
-    # Stap B: vind alle zichtbare dagdeel-cellen en klik de cel wiens
-    # X-middelpunt het dichtst bij het X-middelpunt van de dag-header ligt.
-    resultaat = driver.execute_script("""
+    # Log DOM-structuur van een dagdeel-element voor diagnose
+    dom_info = driver.execute_script("""
+        var alle = Array.from(document.querySelectorAll('*'));
+        var dagdeelEls = alle.filter(function(el) {
+            if (!el.offsetParent) return false;
+            var txt = (el.innerText || '').trim();
+            return txt === arguments[0] && el.children.length === 0;
+        });
+        if (!dagdeelEls.length) return 'GEEN dagdeel-elementen';
+        var el = dagdeelEls[0];
+        return 'tag=' + el.tagName
+             + ' class=' + (el.className || '').slice(0, 60)
+             + ' parent_tag=' + el.parentElement.tagName
+             + ' parent_class=' + (el.parentElement.className || '').slice(0, 60)
+             + ' html=' + el.outerHTML.slice(0, 150);
+    """, gewenst_dagdeel)
+    log.info(f"Dagdeel DOM: {dom_info}")
+
+    # Stap B: vind het dagdeel-element dichtstbij de dag-kolom, klik via ActionChains.
+    # ActionChains simuleert een echte muisklik — triggert alle JS event handlers.
+    dagdeel_el = driver.execute_script("""
         var dagNr   = arguments[0];
         var dagdeel = arguments[1];
         var alle = Array.from(document.querySelectorAll('*'));
@@ -549,14 +566,14 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             var tokens = (el.innerText || '').trim().split(/\s+/);
             return tokens.indexOf(dagNr) >= 0 && el.children.length <= 1;
         });
-        if (!dagEls.length) return 'NIET_GEVONDEN: geen dag-element voor ' + dagNr;
+        if (!dagEls.length) return null;
 
         var dagdeelEls = alle.filter(function(el) {
             if (!el.offsetParent) return false;
             var txt = (el.innerText || '').trim();
             return txt === dagdeel && el.children.length === 0;
         });
-        if (!dagdeelEls.length) return 'NIET_GEVONDEN: geen dagdeel-element voor ' + dagdeel;
+        if (!dagdeelEls.length) return null;
 
         var dagR = dagEls[0].getBoundingClientRect();
         var dagX = dagR.left + dagR.width / 2;
@@ -567,22 +584,22 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
                  - Math.abs((rb.left + rb.width / 2) - dagX);
         });
 
-        var target = dagdeelEls[0];
-        var tr = target.getBoundingClientRect();
-        target.click();
-        return 'OK dag=' + dagNr + ' dagdeel=' + dagdeel
-             + ' target_x=' + Math.round(tr.left + tr.width / 2)
-             + ' dag_x='    + Math.round(dagX);
+        return dagdeelEls[0];
     """, dag_nr, gewenst_dagdeel)
 
-    log.info(f"JS dag-selectie: {resultaat}")
-
-    if resultaat and resultaat.startswith("OK"):
-        log.info(f"✅ Dag {dag_nr} + dagdeel '{gewenst_dagdeel}' geselecteerd")
+    if dagdeel_el:
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", dagdeel_el)
+            time.sleep(0.3)
+            ActionChains(driver).move_to_element(dagdeel_el).click().perform()
+            log.info(f"✅ Dagdeel '{gewenst_dagdeel}' geklikt via ActionChains")
+        except Exception as e:
+            log.warning(f"ActionChains dagdeel mislukt ({e}), fallback naar JS click")
+            driver.execute_script("arguments[0].click();", dagdeel_el)
+            log.info(f"✅ Dagdeel '{gewenst_dagdeel}' geklikt via JS")
         time.sleep(1)
     else:
-        # Fallback: klik de eerste zichtbare niet-disabled dagdeel-cel
-        log.warning(f"JS mislukt ({resultaat}), probeer fallback...")
+        log.warning(f"Dagdeel-element niet gevonden, probeer XPath-fallback...")
         try:
             for el in driver.find_elements(By.XPATH,
                     f"//*[normalize-space(.)='{gewenst_dagdeel}']"):
@@ -596,9 +613,10 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             screenshot(driver, "dag_fout")
             return False
 
+    log.info(f"✅ Dag {dag_nr} + dagdeel '{gewenst_dagdeel}' geselecteerd")
     screenshot(driver, "08_dag_geselecteerd")
 
-    # Log alle "Volgende"-knoppen voor diagnose (tag/href/type/class)
+    # Zoek de stap-nav Volgende (type=submit, class bevat 'next', rechtsonder de tabel)
     debug_info = driver.execute_script("""
         return Array.from(document.querySelectorAll('button, a, [role="button"]'))
             .filter(function(el) {
@@ -608,28 +626,25 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
                 return i + ':tag=' + el.tagName
                      + ',href=' + (el.getAttribute('href') || '')
                      + ',type=' + (el.getAttribute('type') || '')
-                     + ',class=' + (el.className || '').slice(0, 50);
+                     + ',class=' + (el.className || '').slice(0, 60)
+                     + ',disabled=' + (el.disabled || el.getAttribute('disabled') || false);
             }).join(' || ');
     """)
     log.info(f"Gevonden Volgende-knoppen: {debug_info}")
 
-    # Multi-strategie: onderscheid stap-nav van week-nav
-    # Stap-nav gaat naar een ANDERE pagina; week-nav blijft op ReservationsDay.
-    # Strategie 1: href die NIET naar ReservationsDay gaat (stap-nav heeft ander doel)
-    # Strategie 2: type=submit button
-    # Strategie 3: laatste Volgende in DOM (stap-nav staat onder de calendar)
     volgende = driver.execute_script("""
         var alle = Array.from(document.querySelectorAll('button, a, [role="button"]'))
             .filter(function(el) {
                 return el.offsetParent && (el.innerText || '').trim() === 'Volgende';
             });
         if (!alle.length) return null;
-
-        for (var el of alle) {
-            var href = (el.getAttribute('href') || '').toLowerCase();
-            if (href && !href.includes('reservationsday') && !href.includes('/day?')) return el;
+        var el, cls;
+        for (var i = 0; i < alle.length; i++) {
+            el = alle[i]; cls = (el.className || '').toLowerCase();
+            if ((el.getAttribute('type') || '') === 'submit' && cls.includes('next')) return el;
         }
-        for (var el of alle) {
+        for (var i = 0; i < alle.length; i++) {
+            el = alle[i];
             if ((el.getAttribute('type') || '') === 'submit') return el;
         }
         return alle[alle.length - 1];
@@ -640,14 +655,69 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         screenshot(driver, "volgende_fout_dag")
         return False
 
-    driver.execute_script("arguments[0].click();", volgende)
-    time.sleep(3)  # wacht op wizard-overgang
-    log.info(f"URL na Volgende-klik: {driver.current_url}")
-    # BELANGRIJK: de wizard gebruikt dezelfde URL voor alle stappen
-    # (/me/ReservationsDay). Een URL-check is daarom NIET bruikbaar —
-    # de submit-knop werkt correct en we gaan naar de volgende stap.
-    log.info("✅ Naar baankeuze")
-    return True
+    # Klik via form.requestSubmit() — HTML-spec-conform, triggert validatie + navigatie.
+    methode = driver.execute_script("""
+        var btn  = arguments[0];
+        var form = btn.closest('form');
+        if (form && form.requestSubmit) {
+            try { form.requestSubmit(btn); return 'requestSubmit'; }
+            catch(e) { }
+        }
+        if (form) { form.submit(); return 'form.submit'; }
+        btn.click(); return 'btn.click';
+    """, volgende)
+    log.info(f"Volgende submit methode: {methode}")
+
+    # Wacht op navigatie naar ReservationsCourt (max 12s)
+    try:
+        WebDriverWait(driver, 12).until(
+            lambda d: "ReservationsCourt" in d.current_url
+        )
+        log.info(f"✅ Naar baankeuze: {driver.current_url}")
+        return True
+    except TimeoutException:
+        pass
+
+    # Geen URL-change: controleer of tijdsloten al zichtbaar zijn (AJAX-wizard)
+    url_na = driver.current_url
+    log.info(f"URL na requestSubmit: {url_na}")
+    try:
+        body = driver.find_element(By.TAG_NAME, "body").text
+        log.info(f"Body na requestSubmit (500): {body[:500]}")
+        if ":00" in body or ":30" in body:
+            log.info("✅ Tijdsloten zichtbaar — naar baankeuze (AJAX wizard)")
+            return True
+    except Exception:
+        pass
+
+    # requestSubmit navigeerde niet — probeer ActionChains als fallback
+    log.warning("requestSubmit werkte niet — probeer ActionChains click op Volgende")
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", volgende)
+        time.sleep(0.3)
+        ActionChains(driver).move_to_element(volgende).click().perform()
+        log.info("ActionChains Volgende geklikt")
+    except Exception as e:
+        log.warning(f"ActionChains mislukt ({e}), JS click als laatste redmiddel")
+        driver.execute_script("arguments[0].click();", volgende)
+
+    # Wacht nogmaals op ReservationsCourt of tijdsloten
+    try:
+        WebDriverWait(driver, 15).until(
+            lambda d: "ReservationsCourt" in d.current_url
+                      or ":00" in d.find_element(By.TAG_NAME, "body").text
+                      or ":30" in d.find_element(By.TAG_NAME, "body").text
+        )
+        log.info(f"✅ Naar baankeuze na ActionChains: {driver.current_url}")
+        return True
+    except TimeoutException:
+        try:
+            body = driver.find_element(By.TAG_NAME, "body").text
+            log.error(f"❌ Geen baankeuze na ActionChains — URL: {driver.current_url} | body: {body[:300]}")
+        except Exception:
+            pass
+        screenshot(driver, "volgende_fout_dag")
+        return False
 
 
 # ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
