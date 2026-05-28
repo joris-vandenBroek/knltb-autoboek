@@ -1,14 +1,16 @@
 name: Verwerk Wachtrij
 
-# Draait twee keer per dag: 05:00 UTC (= 07:00 NL zomertijd / 06:00 NL wintertijd)
-# en 06:00 UTC (= 08:00 NL zomertijd / 07:00 NL wintertijd). De job zelf
-# controleert vervolgens of de NL-tijd écht 07:00 is en slaat anders over.
-# Resultaat: precies één run per dag om 07:00 NL — onafhankelijk van DST.
+# Draait twee keer per dag: 04:55 UTC (= 06:55 NL zomertijd / 05:55 NL wintertijd)
+# en 05:55 UTC (= 07:55 NL zomertijd / 06:55 NL wintertijd). De job zelf
+# controleert of de NL-tijd binnen het venster 06:55-07:30 valt en slaat anders
+# over. Effectief: één run per dag om 06:55 NL — met buffer voor cold-start delay
+# (GitHub Actions cron kan tot ~15 min vertraagd worden).
+# boek_baan.py wacht vervolgens zelf tot 07:01 NL voor de daadwerkelijke boeking.
 
 on:
   schedule:
-    - cron: '0 5 * * *'   # 07:00 CEST (zomertijd, UTC+2)
-    - cron: '0 6 * * *'   # 07:00 CET  (wintertijd, UTC+1)
+    - cron: '55 4 * * *'   # 06:55 CEST (zomertijd, UTC+2)
+    - cron: '55 5 * * *'   # 06:55 CET  (wintertijd, UTC+1)
   workflow_dispatch:
 
 permissions:
@@ -24,17 +26,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Skip als niet 07:00 NL
+      - name: Skip als niet binnen 06:55-07:30 NL
         id: tijd_check
         run: |
           if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
-            nl_hour=$(date +%H)
-            if [ "$nl_hour" != "07" ]; then
-              echo "⏭️  Schedule fired buiten 07:00 NL (nu ${nl_hour}:00) — overslaan."
+            nl_hm=$(date +%H%M)
+            # Venster: 06:55 t/m 07:30 NL. Buiten dit venster is de cron
+            # gefired in de "verkeerde" DST-helft of veel te laat door delay.
+            if [ "$nl_hm" -lt 655 ] || [ "$nl_hm" -gt 730 ]; then
+              echo "⏭️  Schedule fired buiten venster 06:55-07:30 NL (nu ${nl_hm}) — overslaan."
               echo "skip=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-            echo "✅ Schedule fired om 07:00 NL — verwerk wachtrij."
+            echo "✅ Schedule fired binnen venster (nu ${nl_hm} NL) — verwerk wachtrij."
           else
             echo "🔧 Handmatig getriggerd — verwerk altijd."
           fi

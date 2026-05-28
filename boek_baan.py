@@ -1435,9 +1435,11 @@ def main():
             sys.exit(0)
         log.error("❌ Kon wachtrij-bestand niet opslaan — boeking NIET ingepland")
         sys.exit(1)
-    elif nu.date() == boekingsdatum.date() and nu.hour < 7:
-        wacht_sec = int((boekingsdatum.replace(hour=7, minute=0, second=0) - nu).total_seconds())
-        log.info(f"⏳ Wacht {wacht_sec // 60} min tot 07:00 op boekingsdatum {boekingsdatum.strftime('%d-%m-%Y')}...")
+    elif nu.date() == boekingsdatum.date() and (nu.hour < 7 or (nu.hour == 7 and nu.minute < 1)):
+        doel = boekingsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
+        wacht_sec = int((doel - nu).total_seconds())
+        log.info(f"⏳ Wacht {wacht_sec} sec tot 07:01 NL op boekingsdatum "
+                 f"{boekingsdatum.strftime('%d-%m-%Y')} (buffer voor server-klokverschil)...")
         time.sleep(wacht_sec)
     else:
         log.info(f"✅ Boeken! (dag+{dag_verschil}, boekingsdatum bereikt)")
