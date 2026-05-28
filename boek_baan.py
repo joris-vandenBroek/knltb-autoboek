@@ -186,6 +186,26 @@ def screenshot(driver, naam):
     log.info(f"📸 Screenshot: {naam}.png | URL: {driver.current_url}")
 
 
+def _log_zichtbare_spelers(driver, spelers, label: str):
+    """
+    Diagnose: log of de verwachte spelers visueel op de huidige pagina staan.
+    Telt hoe vaak elke volledige naam in body.innerText voorkomt. Belangrijk
+    voor het opsporen van het scenario waarin spelers UI-zichtbaar lijken
+    maar bij bevestig server-side verdwenen zijn.
+    """
+    try:
+        body = driver.find_element(By.TAG_NAME, "body").text
+    except Exception:
+        body = ""
+    counts = {s: body.count(s) for s in spelers}
+    aanwezig = [s for s, c in counts.items() if c > 0]
+    missend  = [s for s, c in counts.items() if c == 0]
+    log.info(f"📊 SPELERS-CHECK [{label}] URL={driver.current_url}")
+    log.info(f"   ✓ Aanwezig ({len(aanwezig)}/{len(spelers)}): {aanwezig}")
+    if missend:
+        log.warning(f"   ✗ MIST ({len(missend)}): {missend}")
+
+
 # ── STAP 1: Inloggen ──────────────────────────────────────────────────────────
 def login(driver: uc.Chrome) -> bool:
     log.info(f"Navigeer naar {LOGIN_URL}")
@@ -503,6 +523,10 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             WebDriverWait(driver, 8).until(lambda d: bool(_vind_exacte_kandidaten()))
         except TimeoutException:
             log.info(f"  Geen exacte match na 8s voor '{zoekterm}', volgende term")
+            # Geef ETV's typeahead-debounce tijd om te resetten voor de volgende
+            # zoekopdracht — anders kan een snelle vervolgcyclus de session-state
+            # corrumperen (UI lijkt toegevoegd maar server-side niet).
+            time.sleep(1.2)
             continue
 
         kandidaten = _vind_exacte_kandidaten()
@@ -517,7 +541,10 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
         if not _action_klik(el):
             log.warning(f"  Klik faalde op exacte match — volgende zoekterm")
             continue
-        time.sleep(1.5)
+        # Wacht langer (2.5s ipv 1.5s) zodat de AJAX-call die de speler
+        # server-side registreert tijd heeft om te voltooien voordat we
+        # de volgende speler gaan klikken.
+        time.sleep(2.5)
 
         # Wis zoekveld zodat input-tekst niet als 'gevonden' meetelt
         try:
@@ -1609,14 +1636,24 @@ def main():
             log.error("🚫 Speler niet gevonden — controleer spelernamen")
             sys.exit(1)
 
+        alle_spelers = [SPELER1, args.speler2, args.speler3, args.speler4]
+        _log_zichtbare_spelers(driver, alle_spelers,
+            "na voeg_spelers_toe (4 verwacht)")
+
         if not kies_dag(driver, args.datum, args.tijd):
             log.error(f"🚫 Dag {args.datum} kon niet worden geselecteerd")
             sys.exit(1)
+
+        _log_zichtbare_spelers(driver, alle_spelers,
+            "na kies_dag (baan-grid; spelers mogelijk niet meer zichtbaar)")
 
         baan, geboekte_tijd = kies_baan_en_tijd(driver, args.tijd)
         if not baan:
             log.error(f"🚫 Geen padelbaan beschikbaar op {args.datum} rondom {args.tijd}")
             sys.exit(1)
+
+        _log_zichtbare_spelers(driver, alle_spelers,
+            "na kies_baan_en_tijd (zou Confirm-pagina moeten zijn met 4 zichtbaar)")
 
         if not bevestig(driver):
             log.error("🚫 Bevestigen mislukt")
