@@ -598,36 +598,76 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
     screenshot(driver, "08_dag_geselecteerd")
 
-    # Gebruik JS om de STAP-"Volgende" te vinden, niet de week-navigatie "Volgende".
-    # Week-nav heeft altijd "Vorige" als directe buur in dezelfde parent-container.
+    # Log alle "Volgende"-knoppen voor diagnose (tag/href/type/class)
+    debug_info = driver.execute_script("""
+        return Array.from(document.querySelectorAll('button, a, [role="button"]'))
+            .filter(function(el) {
+                return el.offsetParent && (el.innerText || '').trim() === 'Volgende';
+            })
+            .map(function(el, i) {
+                return i + ':tag=' + el.tagName
+                     + ',href=' + (el.getAttribute('href') || '')
+                     + ',type=' + (el.getAttribute('type') || '')
+                     + ',class=' + (el.className || '').slice(0, 50);
+            }).join(' || ');
+    """)
+    log.info(f"Gevonden Volgende-knoppen: {debug_info}")
+
+    # Multi-strategie: onderscheid stap-nav van week-nav
+    # Stap-nav gaat naar een ANDERE pagina; week-nav blijft op ReservationsDay.
+    # Strategie 1: href die NIET naar ReservationsDay gaat (stap-nav heeft ander doel)
+    # Strategie 2: type=submit button
+    # Strategie 3: laatste Volgende in DOM (stap-nav staat onder de calendar)
     volgende = driver.execute_script("""
-        var els = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-        for (var el of els) {
-            if (!el.offsetParent) continue;
-            var tekst = (el.innerText || '').trim();
-            if (tekst !== 'Volgende' && tekst !== 'Next') continue;
-            // Week-navigatie: parent-element bevat ook een directe "Vorige"-knop
-            var parent = el.parentElement;
-            if (parent) {
-                var heeftVorige = Array.from(parent.children).some(function(b) {
-                    return (b.innerText || '').trim() === 'Vorige';
-                });
-                if (heeftVorige) continue;
-            }
-            return el;
+        var alle = Array.from(document.querySelectorAll('button, a, [role="button"]'))
+            .filter(function(el) {
+                return el.offsetParent && (el.innerText || '').trim() === 'Volgende';
+            });
+        if (!alle.length) return null;
+
+        for (var el of alle) {
+            var href = (el.getAttribute('href') || '').toLowerCase();
+            if (href && !href.includes('reservationsday') && !href.includes('/day?')) return el;
         }
-        return null;
+        for (var el of alle) {
+            if ((el.getAttribute('type') || '') === 'submit') return el;
+        }
+        return alle[alle.length - 1];
     """)
 
-    if volgende:
-        log.info(f"Stap-knop 'Volgende' gevonden")
-        driver.execute_script("arguments[0].click();", volgende)
-        time.sleep(2)
-        log.info("✅ Naar baankeuze")
-        return True
-    log.error("❌ Stap-knop 'Volgende' niet gevonden na dag")
-    screenshot(driver, "volgende_fout_dag")
-    return False
+    if not volgende:
+        log.error("❌ Geen 'Volgende' knop gevonden na dag")
+        screenshot(driver, "volgende_fout_dag")
+        return False
+
+    url_voor = driver.current_url
+    driver.execute_script("arguments[0].click();", volgende)
+    time.sleep(2)
+    url_na = driver.current_url
+    log.info(f"URL na Volgende-klik: {url_na}")
+
+    # Controleer: als URL nog ReservationsDay is, is de week-nav geklikt → fallback
+    if "ReservationsDay" in url_na:
+        log.warning("Nog steeds ReservationsDay — probeer 'Kies een baan' breadcrumb")
+        kies_baan = driver.execute_script("""
+            var els = Array.from(document.querySelectorAll('a, button'));
+            for (var el of els) {
+                if (!el.offsetParent) continue;
+                if ((el.innerText || '').trim() === 'Kies een baan') return el;
+            }
+            return null;
+        """)
+        if kies_baan:
+            driver.execute_script("arguments[0].click();", kies_baan)
+            time.sleep(2)
+            log.info(f"'Kies een baan' breadcrumb geklikt, URL: {driver.current_url}")
+        else:
+            log.error("❌ Ook 'Kies een baan' niet gevonden")
+            screenshot(driver, "volgende_fout_dag")
+            return False
+
+    log.info("✅ Naar baankeuze")
+    return True
 
 
 # ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
