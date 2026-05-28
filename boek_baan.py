@@ -1068,6 +1068,48 @@ def bevestig(driver: uc.Chrome) -> bool:
         return False
 
 
+# ── STAP 7: Verificatie ───────────────────────────────────────────────────────
+def verifieer_boeking(driver: uc.Chrome, datum: str, tijd: str) -> str:
+    """
+    Navigeer naar /mijn/Reservations en controleer of de boeking zichtbaar is.
+    Geeft de naam van de geboekte baan terug (bijv. 'Padel 1'), of '' als niet gevonden.
+    """
+    log.info("Boeking verifiëren op Mijn Reserveringen...")
+    try:
+        driver.get("https://www.etv-volley.nl/mijn/Reservations")
+        time.sleep(4)
+        screenshot(driver, "13_mijn_reserveringen")
+
+        body = driver.find_element(By.TAG_NAME, "body").text
+        log.info(f"Reserveringspagina body (800): {body[:800]}")
+
+        # Zoek de boeking aan de hand van datum of tijd
+        datum_obj  = datetime.strptime(datum, "%Y-%m-%d")
+        datum_nl   = f"{datum_obj.day}-{datum_obj.month}"     # bijv. "28-5"
+        datum_nl2  = f"{datum_obj.day} mei"                    # bijv. "28 mei"
+
+        boek_tekens = [datum, datum_nl, datum_nl2, tijd]
+        gevonden = any(t in body for t in boek_tekens)
+
+        if gevonden:
+            # Probeer padelbaan-naam te extraheren uit de body
+            baan_naam = ""
+            for b in PADEL_BANEN:
+                if b in body:
+                    baan_naam = b
+                    break
+            log.info(f"✅ Boeking BEVESTIGD op reserveringspagina! baan={baan_naam or '(onbekend)'}")
+            return baan_naam or "Padel"
+
+        log.error(f"❌ Boeking NIET zichtbaar op reserveringspagina!")
+        log.error(f"   Gezocht op: {boek_tekens}")
+        return ""
+
+    except Exception as e:
+        log.error(f"❌ Verificatie mislukt: {e}")
+        return ""
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
@@ -1140,6 +1182,15 @@ def main():
         if not bevestig(driver):
             log.error("🚫 Bevestigen mislukt")
             sys.exit(1)
+
+        # ── Verificeer dat boeking zichtbaar is op Mijn Reserveringen ────────
+        geverifieerde_baan = verifieer_boeking(driver, args.datum, geboekte_tijd)
+        if not geverifieerde_baan:
+            log.error("🚫 Boeking niet zichtbaar op reserveringspagina — agenda NIET bijgewerkt")
+            sys.exit(1)
+
+        # Gebruik geverifieerde baan-naam (betrouwbaarder dan detectie tijdens grid-klik)
+        baan = geverifieerde_baan
 
     finally:
         driver.quit()
