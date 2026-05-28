@@ -1364,6 +1364,41 @@ def verifieer_boeking(driver: uc.Chrome, datum: str, tijd: str) -> str:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4: str) -> bool:
+    """
+    Schrijf een wachtrij-bestand voor latere verwerking en push naar de repo.
+    Wordt gebruikt als de speeldatum nog meer dan 2 dagen weg ligt — de
+    verwerk_wachtrij.yml workflow pikt het bestand op om 07:00 NL op de boekingsdatum
+    en triggert boek.yml opnieuw met deze inputs.
+    """
+    import subprocess
+    tijd_slug = tijd.replace(":", "")
+    bestand = f"wachtrij/{datum}_{tijd_slug}.json"
+    payload = {
+        "datum":     datum,
+        "tijd":      tijd,
+        "spelers":   [SPELER1, speler2, speler3, speler4],
+        "ingediend": datetime.now().isoformat(timespec="seconds"),
+    }
+    os.makedirs("wachtrij", exist_ok=True)
+    with open(bestand, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+    log.info(f"📥 Wachtrij-bestand geschreven: {bestand}")
+
+    try:
+        subprocess.run(["git", "config", "user.email", "actions@github.com"], check=True)
+        subprocess.run(["git", "config", "user.name",  "knltb-autoboek-bot"], check=True)
+        subprocess.run(["git", "add", bestand], check=True)
+        subprocess.run(["git", "commit", "-m", f"wachtrij: voeg {datum} om {tijd} toe"], check=True)
+        subprocess.run(["git", "push"], check=True)
+        log.info("✅ Wachtrij-bestand gecommit en gepusht naar repo")
+        return True
+    except subprocess.CalledProcessError as e:
+        log.error(f"❌ Git push voor wachtrij mislukt: {e}")
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--datum",   required=True)
@@ -1391,8 +1426,15 @@ def main():
     log.info(f"📅 Speeldatum dag+{dag_verschil} | boekingsdatum: {boekingsdatum.strftime('%d-%m-%Y')} om 07:00")
 
     if nu.date() < boekingsdatum.date():
-        log.info(f"⏳ Te vroeg — boekingsdatum {boekingsdatum.strftime('%d-%m-%Y')} om 07:00. Script stopt.")
-        sys.exit(0)
+        log.info(f"⏳ Te vroeg om direct te boeken — speeldatum is over {dag_verschil} dagen. "
+                 f"Boekingsdatum: {boekingsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
+        log.info("📥 Zet in wachtrij voor automatische boeking op de boekingsdatum.")
+        if _zet_in_wachtrij(args.datum, args.tijd, args.speler2, args.speler3, args.speler4):
+            log.info(f"✅ In wachtrij gezet — verwerk_wachtrij workflow start de boeking "
+                     f"automatisch op {boekingsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
+            sys.exit(0)
+        log.error("❌ Kon wachtrij-bestand niet opslaan — boeking NIET ingepland")
+        sys.exit(1)
     elif nu.date() == boekingsdatum.date() and nu.hour < 7:
         wacht_sec = int((boekingsdatum.replace(hour=7, minute=0, second=0) - nu).total_seconds())
         log.info(f"⏳ Wacht {wacht_sec // 60} min tot 07:00 op boekingsdatum {boekingsdatum.strftime('%d-%m-%Y')}...")

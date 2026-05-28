@@ -1,0 +1,87 @@
+name: Verwerk Wachtrij
+
+# Draait twee keer per dag: 05:00 UTC (= 07:00 NL zomertijd / 06:00 NL wintertijd)
+# en 06:00 UTC (= 08:00 NL zomertijd / 07:00 NL wintertijd). De job zelf
+# controleert vervolgens of de NL-tijd écht 07:00 is en slaat anders over.
+# Resultaat: precies één run per dag om 07:00 NL — onafhankelijk van DST.
+
+on:
+  schedule:
+    - cron: '0 5 * * *'   # 07:00 CEST (zomertijd, UTC+2)
+    - cron: '0 6 * * *'   # 07:00 CET  (wintertijd, UTC+1)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions:  write
+
+jobs:
+  verwerk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Europe/Amsterdam
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip als niet 07:00 NL
+        id: tijd_check
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            nl_hour=$(date +%H)
+            if [ "$nl_hour" != "07" ]; then
+              echo "⏭️  Schedule fired buiten 07:00 NL (nu ${nl_hour}:00) — overslaan."
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "✅ Schedule fired om 07:00 NL — verwerk wachtrij."
+          else
+            echo "🔧 Handmatig getriggerd — verwerk altijd."
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Verwerk wachtrij-bestanden voor vandaag
+        if: steps.tijd_check.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p wachtrij
+          today=$(date +%Y-%m-%d)
+          processed=0
+          shopt -s nullglob
+          for f in wachtrij/*.json; do
+            datum=$(jq -r '.datum'      "$f")
+            tijd=$(jq -r  '.tijd'       "$f")
+            speler2=$(jq -r '.spelers[1]' "$f")
+            speler3=$(jq -r '.spelers[2]' "$f")
+            speler4=$(jq -r '.spelers[3]' "$f")
+            boekingsdatum=$(date -d "$datum - 2 days" +%Y-%m-%d)
+            if [ "$boekingsdatum" = "$today" ]; then
+              echo "📤 Trigger boek.yml: $datum om $tijd ($f)"
+              gh workflow run boek.yml \
+                --field datum="$datum" \
+                --field tijd="$tijd" \
+                --field speler2="$speler2" \
+                --field speler3="$speler3" \
+                --field speler4="$speler4"
+              rm "$f"
+              processed=$((processed + 1))
+            else
+              echo "⏭️  Skip $f (boekingsdatum $boekingsdatum, niet vandaag $today)"
+            fi
+          done
+          echo "Aantal verwerkt: $processed"
+
+      - name: Commit verwijderde wachtrij-bestanden
+        if: steps.tijd_check.outputs.skip != 'true'
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name  "github-actions[bot]"
+          if [ -n "$(git status --porcelain wachtrij/)" ]; then
+            git add wachtrij/
+            git commit -m "wachtrij: verwerk boekingen voor $(date +%Y-%m-%d)"
+            git push
+          else
+            echo "Niets te committen."
+          fi
