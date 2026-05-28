@@ -785,29 +785,136 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
 
 
 # ── STAP 6: Bevestigen ────────────────────────────────────────────────────────
+def _submit_knop(driver: uc.Chrome, knop) -> str:
+    """Dien een form in via requestSubmit → form.submit() → ActionChains → JS click."""
+    methode = driver.execute_script("""
+        var btn  = arguments[0];
+        var form = btn.closest('form');
+        if (form && form.requestSubmit) {
+            try { form.requestSubmit(btn); return 'requestSubmit'; }
+            catch(e) {}
+        }
+        if (form) { form.submit(); return 'form.submit'; }
+        btn.click(); return 'btn.click';
+    """, knop)
+    if methode in ('requestSubmit', 'form.submit', 'btn.click'):
+        return methode
+    # Extra fallback: ActionChains
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", knop)
+        time.sleep(0.3)
+        ActionChains(driver).move_to_element(knop).click().perform()
+        return 'ActionChains'
+    except Exception:
+        driver.execute_script("arguments[0].click();", knop)
+        return 'js.click.fallback'
+
+
 def bevestig(driver: uc.Chrome) -> bool:
     log.info("Bevestigen...")
+    SUCCES_WOORDEN = ["bevestigd", "succesvol", "geboekt", "reservering is",
+                      "bedankt", "thank", "confirmed", "success", "je reservering"]
+
+    def _is_succes(d):
+        try:
+            url  = d.current_url
+            body = d.find_element(By.TAG_NAME, "body").text.lower()
+            if "ReservationsCourt" not in url:
+                return True
+            return any(w in body for w in SUCCES_WOORDEN)
+        except Exception:
+            return False
+
     try:
+        # ── Stap 1: Volgende → naar de bevestigingspagina ───────────────────
         volgende = _zoek_knop(driver, ["Volgende", "Next"])
         if volgende:
-            driver.execute_script("arguments[0].click();", volgende)
-            time.sleep(2)
+            methode = _submit_knop(driver, volgende)
+            log.info(f"  Volgende submit methode: {methode}")
+            time.sleep(3)
             screenshot(driver, "11_bevestig_pagina")
+            try:
+                log.info(f"  URL na Volgende: {driver.current_url}")
+                log.info(f"  Body na Volgende (300): "
+                         f"{driver.find_element(By.TAG_NAME,'body').text[:300]}")
+            except Exception:
+                pass
 
+        # ── Stap 2: zoek de Bevestig-knop ───────────────────────────────────
         bevestig_knop = _zoek_knop(driver, ["Bevestig", "Confirm", "Boek", "Reserveer"])
         if not bevestig_knop:
             log.error("❌ Bevestig-knop niet gevonden")
             try:
-                log.error(f"Paginatekst: {driver.find_element(By.TAG_NAME,'body').text[:400]}")
+                log.error(f"Paginatekst: {driver.find_element(By.TAG_NAME,'body').text[:600]}")
             except Exception:
                 pass
             screenshot(driver, "bevestig_fout")
             return False
-        driver.execute_script("arguments[0].click();", bevestig_knop)
-        time.sleep(3)
+
+        # ── Stap 3: klik Bevestig via requestSubmit + ActionChains fallback ─
+        methode = _submit_knop(driver, bevestig_knop)
+        log.info(f"  Bevestig submit methode: {methode}")
+
+        # Wacht op succesmelding of URL-verandering (max 15 s)
+        try:
+            WebDriverWait(driver, 15).until(_is_succes)
+        except TimeoutException:
+            pass
+
+        url_na  = driver.current_url
+        try:
+            body_na = driver.find_element(By.TAG_NAME, "body").text
+        except Exception:
+            body_na = ""
+        log.info(f"  URL na Bevestig: {url_na}")
+        log.info(f"  Body na Bevestig (500): {body_na[:500]}")
         screenshot(driver, "12_na_bevestiging")
-        log.info("✅ Bevestigd!")
-        return True
+
+        if "ReservationsCourt" not in url_na:
+            log.info("✅ Bevestigd! (URL veranderd)")
+            return True
+        if any(w in body_na.lower() for w in SUCCES_WOORDEN):
+            log.info("✅ Bevestigd! (succesboodschap gevonden)")
+            return True
+
+        # ── Stap 4: extra ActionChains poging als requestSubmit niet werkte ─
+        log.warning("Eerste poging geen succes — extra ActionChains click op Bevestig")
+        try:
+            bevestig_knop2 = _zoek_knop(driver, ["Bevestig", "Confirm", "Boek", "Reserveer"])
+            if bevestig_knop2:
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({block:'center'});", bevestig_knop2)
+                time.sleep(0.5)
+                ActionChains(driver).move_to_element(bevestig_knop2).click().perform()
+                log.info("  ActionChains Bevestig geklikt")
+        except Exception as e:
+            log.warning(f"  ActionChains mislukt: {e}")
+
+        try:
+            WebDriverWait(driver, 12).until(_is_succes)
+        except TimeoutException:
+            pass
+
+        url_na2 = driver.current_url
+        try:
+            body_na2 = driver.find_element(By.TAG_NAME, "body").text
+        except Exception:
+            body_na2 = ""
+        log.info(f"  URL na ActionChains Bevestig: {url_na2}")
+        log.info(f"  Body na ActionChains Bevestig (500): {body_na2[:500]}")
+        screenshot(driver, "12b_na_bevestiging_ac")
+
+        if "ReservationsCourt" not in url_na2:
+            log.info("✅ Bevestigd! (URL veranderd na ActionChains)")
+            return True
+        if any(w in body_na2.lower() for w in SUCCES_WOORDEN):
+            log.info("✅ Bevestigd! (succesboodschap gevonden na ActionChains)")
+            return True
+
+        log.error(f"❌ Bevestigen mislukt — URL: {url_na2} | body: {body_na2[:300]}")
+        screenshot(driver, "bevestig_fout")
+        return False
+
     except Exception as e:
         log.error(f"❌ Bevestigen mislukt: {e}")
         screenshot(driver, "bevestig_fout")
