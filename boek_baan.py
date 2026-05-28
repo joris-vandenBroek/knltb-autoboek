@@ -537,7 +537,53 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
 
 
 # ── STAP 4: Dag en dagdeel kiezen ────────────────────────────────────────────
+def _vind_daypart(driver, datum: str, gewenst_dagdeel: str):
+    """Vind het div.daypart-element voor (datum, dagdeel). Idempotent — re-callable."""
+    return driver.execute_script("""
+        var targetDate = arguments[0];
+        var dagdeel    = arguments[1];
+        var candidates = Array.from(document.querySelectorAll('[data-date]'))
+            .filter(function(el) {
+                var dd = el.getAttribute('data-date') || '';
+                return dd.startsWith(targetDate);
+            });
+        if (!candidates.length) return null;
+        for (var i = 0; i < candidates.length; i++) {
+            var txt = (candidates[i].innerText || '').trim();
+            if (txt === dagdeel || txt.includes(dagdeel)) return candidates[i];
+        }
+        return candidates[0];
+    """, datum, gewenst_dagdeel)
+
+
+def _vind_volgende_knop(driver):
+    """Vind de Volgende submit-knop. Idempotent — re-callable na DOM-update."""
+    return driver.execute_script("""
+        var alle = Array.from(document.querySelectorAll('button, a, [role="button"]'))
+            .filter(function(el) {
+                return el.offsetParent && (el.innerText || '').trim() === 'Volgende';
+            });
+        if (!alle.length) return null;
+        for (var i = 0; i < alle.length; i++) {
+            var cls = (alle[i].className || '').toLowerCase();
+            if ((alle[i].getAttribute('type') || '') === 'submit' && cls.includes('next')) return alle[i];
+        }
+        for (var i = 0; i < alle.length; i++) {
+            if ((alle[i].getAttribute('type') || '') === 'submit') return alle[i];
+        }
+        return alle[alle.length - 1];
+    """)
+
+
 def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
+    """
+    Selecteer dag+dagdeel en navigeer door naar baankeuze.
+
+    Robust retry-pattern: na elke poging wordt de URL gecheckt. Als de server
+    ons terug naar ReservationsPlayers stuurt (= dagdeel-selectie geweigerd),
+    klikken we daar Volgende om weer naar dag-pagina te komen en proberen het
+    opnieuw. Max 3 pogingen.
+    """
     log.info(f"Dag kiezen: {datum}, dagdeel: {dagdeel(tijd)}")
     time.sleep(2)
     _sluit_cookie_banner(driver)
@@ -550,186 +596,194 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
     # Navigeer naar de juiste week als de dag niet zichtbaar is
     for _ in range(8):
-        if dag_nr in driver.find_element(By.TAG_NAME, "body").text:
+        try:
+            if dag_nr in driver.find_element(By.TAG_NAME, "body").text:
+                break
+        except Exception:
             break
         volgende_week = _zoek_knop(driver, [">"])
         if volgende_week:
-            driver.execute_script("arguments[0].click();", volgende_week)
+            try:
+                driver.execute_script("arguments[0].click();", volgende_week)
+            except Exception:
+                pass
             time.sleep(1.5)
         else:
             break
 
-    # Log alle div[data-date] elementen voor diagnose
-    alle_dayparts = driver.execute_script("""
-        return Array.from(document.querySelectorAll('[data-date]')).map(function(el) {
-            return el.getAttribute('data-date') + ':' + (el.innerText || '').trim().slice(0, 20);
-        }).join(' | ');
-    """)
-    log.info(f"Alle data-date elementen: {alle_dayparts}")
-
-    # Stap A+B gecombineerd: zoek het div.daypart voor de juiste datum+dagdeel
-    # direct via data-date attribuut (bypass accordeon-toggle issues).
-    # De datum in de ISO string begint met het doeldatum (YYYY-MM-DD).
-    daypart_el = driver.execute_script("""
-        var targetDate = arguments[0];   // bijv. "2026-05-28"
-        var dagdeel    = arguments[1];   // bijv. "Middag"
-
-        // Zoek alle [data-date] elementen waarvan data-date met de doeldatum begint
-        var candidates = Array.from(document.querySelectorAll('[data-date]'))
-            .filter(function(el) {
-                var dd = el.getAttribute('data-date') || '';
-                return dd.startsWith(targetDate);
-            });
-        if (!candidates.length) return null;
-
-        // Kies het element met de dagdeel-tekst
-        for (var i = 0; i < candidates.length; i++) {
-            var txt = (candidates[i].innerText || '').trim();
-            if (txt === dagdeel || txt.includes(dagdeel)) return candidates[i];
-        }
-        // Geen tekst-match: neem het eerste beschikbare datumcandidate
-        return candidates[0];
-    """, datum, gewenst_dagdeel)
-
-    if not daypart_el:
-        log.error(f"❌ div.daypart voor {datum} / {gewenst_dagdeel} niet gevonden")
-        screenshot(driver, "dag_fout")
-        return False
-
-    data_date = driver.execute_script("return arguments[0].getAttribute('data-date');", daypart_el)
-    log.info(f"Gevonden daypart: data-date={data_date}")
-
-    # Klik het div.daypart via ActionChains (isTrusted=true). ETV's jQuery-handlers
-    # filteren synthetische events (isTrusted=false) weg, dus dispatchEvent registreert
-    # de selectie niet server-side en de form-validatie stuurt je terug naar spelers.
-    # Zelfde patroon als de spelers-fix uit commit 29e25f5.
     try:
-        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", daypart_el)
-        time.sleep(0.3)
-        ActionChains(driver).move_to_element(daypart_el).click().perform()
-        log.info("Daypart geklikt via ActionChains (isTrusted=true)")
-    except Exception as e:
-        log.warning(f"ActionChains daypart mislukt ({e}), fallback dispatchEvent")
-        driver.execute_script("""
-            var el = arguments[0];
-            var rect = el.getBoundingClientRect();
-            var cx = rect.left + rect.width / 2;
-            var cy = rect.top + rect.height / 2;
-            ['mouseover', 'mouseenter', 'mousemove',
-             'mousedown', 'mouseup', 'click'].forEach(function(type) {
-                el.dispatchEvent(new MouseEvent(type, {
-                    bubbles: true, cancelable: true, view: window,
-                    clientX: cx, clientY: cy
-                }));
-            });
-        """, daypart_el)
-        log.info("Daypart geklikt via dispatchEvent (fallback)")
-    time.sleep(2)  # wacht op eventuele AJAX-respons
-
-    # Zet ALTIJD ook de hidden selectedDate input direct (backup)
-    set_ok = driver.execute_script("""
-        var input = document.querySelector('input[name="selectedDate"]');
-        if (!input) return false;
-        var setter = Object.getOwnPropertyDescriptor(
-            window.HTMLInputElement.prototype, 'value').set;
-        setter.call(input, arguments[0]);
-        input.dispatchEvent(new Event('input',  {bubbles: true}));
-        input.dispatchEvent(new Event('change', {bubbles: true}));
-        return input.value;
-    """, data_date)
-    log.info(f"selectedDate gezet: {set_ok}")
-
-    log.info(f"✅ Dag {dag_nr} + dagdeel '{gewenst_dagdeel}' geselecteerd")
-    screenshot(driver, "08_dag_geselecteerd")
-
-    # Zoek de stap-nav Volgende (type=submit, class='next', rechtsonder de tabel)
-    volgende = driver.execute_script("""
-        var alle = Array.from(document.querySelectorAll('button, a, [role="button"]'))
-            .filter(function(el) {
-                return el.offsetParent && (el.innerText || '').trim() === 'Volgende';
-            });
-        if (!alle.length) return null;
-        var el, cls;
-        for (var i = 0; i < alle.length; i++) {
-            el = alle[i]; cls = (el.className || '').toLowerCase();
-            if ((el.getAttribute('type') || '') === 'submit' && cls.includes('next')) return el;
-        }
-        for (var i = 0; i < alle.length; i++) {
-            el = alle[i];
-            if ((el.getAttribute('type') || '') === 'submit') return el;
-        }
-        return alle[alle.length - 1];
-    """)
-    log.info(f"Volgende knop: {bool(volgende)}")
-
-    if not volgende:
-        log.error("❌ Geen 'Volgende' knop gevonden na dag")
-        screenshot(driver, "volgende_fout_dag")
-        return False
-
-    # Submit via requestSubmit (HTML-spec-conform: triggert validatie + pagina-transitie)
-    methode = driver.execute_script("""
-        var btn  = arguments[0];
-        var form = btn.closest('form');
-        if (form && form.requestSubmit) {
-            try { form.requestSubmit(btn); return 'requestSubmit'; }
-            catch(e) { }
-        }
-        if (form) { form.submit(); return 'form.submit'; }
-        btn.click(); return 'btn.click';
-    """, volgende)
-    log.info(f"Volgende submit methode: {methode}")
-
-    # Wacht op navigatie naar ReservationsCourt (max 12s)
-    try:
-        WebDriverWait(driver, 12).until(
-            lambda d: "ReservationsCourt" in d.current_url
-        )
-        log.info(f"✅ Naar baankeuze: {driver.current_url}")
-        return True
-    except TimeoutException:
-        pass
-
-    # Geen URL-change: controleer of tijdsloten al zichtbaar zijn (AJAX-wizard)
-    url_na = driver.current_url
-    log.info(f"URL na requestSubmit: {url_na}")
-    try:
-        body = driver.find_element(By.TAG_NAME, "body").text
-        log.info(f"Body na requestSubmit (500): {body[:500]}")
-        if ":00" in body or ":30" in body:
-            log.info("✅ Tijdsloten zichtbaar — naar baankeuze (AJAX wizard)")
-            return True
+        alle_dayparts = driver.execute_script("""
+            return Array.from(document.querySelectorAll('[data-date]')).map(function(el) {
+                return el.getAttribute('data-date') + ':' + (el.innerText || '').trim().slice(0, 20);
+            }).join(' | ');
+        """)
+        log.info(f"Alle data-date elementen: {alle_dayparts}")
     except Exception:
         pass
 
-    # requestSubmit navigeerde niet — probeer ActionChains als fallback
-    log.warning("requestSubmit werkte niet — probeer ActionChains click op Volgende")
-    try:
-        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", volgende)
-        time.sleep(0.3)
-        ActionChains(driver).move_to_element(volgende).click().perform()
-        log.info("ActionChains Volgende geklikt")
-    except Exception as e:
-        log.warning(f"ActionChains mislukt ({e}), JS click als laatste redmiddel")
-        driver.execute_script("arguments[0].click();", volgende)
+    # ── Retry-loop: max 3 pogingen ──────────────────────────────────────────
+    for poging in range(1, 4):
+        log.info(f"━━━━ kies_dag poging {poging}/3 ━━━━")
 
-    # Wacht nogmaals op ReservationsCourt of tijdsloten
-    try:
-        WebDriverWait(driver, 15).until(
-            lambda d: "ReservationsCourt" in d.current_url
-                      or ":00" in d.find_element(By.TAG_NAME, "body").text
-                      or ":30" in d.find_element(By.TAG_NAME, "body").text
-        )
-        log.info(f"✅ Naar baankeuze na ActionChains: {driver.current_url}")
-        return True
-    except TimeoutException:
+        # Recover: als we op spelers-pagina staan, klik Volgende om door te gaan
+        url_nu = driver.current_url
+        if "ReservationsPlayers" in url_nu:
+            log.info("  Op ReservationsPlayers — klik Volgende om naar dag-pagina terug te gaan")
+            try:
+                sp_volg = _zoek_knop(driver, ["Volgende", "Next"])
+                if sp_volg:
+                    _submit_knop(driver, sp_volg)
+                    WebDriverWait(driver, 10).until(
+                        lambda d: "ReservationsDay" in d.current_url
+                    )
+                    time.sleep(1)
+                else:
+                    log.warning("  Geen Volgende op spelers-pagina — kan niet recoveren")
+                    continue
+            except Exception as e:
+                log.warning(f"  Recovery naar dag-pagina mislukt: {e}")
+                continue
+
+        if "ReservationsDay" not in driver.current_url:
+            log.warning(f"  Verkeerde URL voor dag-keuze: {driver.current_url}")
+            time.sleep(2)
+            continue
+
+        # Re-fetch daypart element (kan stale zijn na vorige poging)
         try:
-            body = driver.find_element(By.TAG_NAME, "body").text
-            log.error(f"❌ Geen baankeuze na ActionChains — URL: {driver.current_url} | body: {body[:300]}")
+            daypart_el = _vind_daypart(driver, datum, gewenst_dagdeel)
+        except Exception as e:
+            log.warning(f"  Daypart find faalde: {e}")
+            time.sleep(2)
+            continue
+
+        if not daypart_el:
+            log.error(f"  div.daypart voor {datum} / {gewenst_dagdeel} niet gevonden")
+            screenshot(driver, f"dag_fout_poging{poging}")
+            time.sleep(2)
+            continue
+
+        try:
+            data_date = driver.execute_script("return arguments[0].getAttribute('data-date');", daypart_el)
+            log.info(f"  Daypart gevonden: data-date={data_date}")
+        except Exception:
+            log.warning("  Daypart ref werd stale tijdens read — retry")
+            continue
+
+        # ── Klik daypart via ActionChains (isTrusted=true) ──────────────────
+        # ETV's jQuery-handlers filteren synthetische events (isTrusted=false) weg.
+        # Zonder echte muis-click registreert de server de selectie niet en stuurt
+        # je terug naar de spelers-pagina. Zelfde patroon als spelers-fix 29e25f5.
+        klik_ok = False
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", daypart_el)
+            time.sleep(0.3)
+            ActionChains(driver).move_to_element(daypart_el).click().perform()
+            log.info("  Daypart geklikt via ActionChains")
+            klik_ok = True
+        except Exception as e:
+            log.warning(f"  ActionChains daypart mislukt ({e}), fallback dispatchEvent")
+            try:
+                driver.execute_script("""
+                    var el = arguments[0];
+                    var rect = el.getBoundingClientRect();
+                    var cx = rect.left + rect.width / 2;
+                    var cy = rect.top + rect.height / 2;
+                    ['mouseover', 'mousedown', 'mouseup', 'click'].forEach(function(type) {
+                        el.dispatchEvent(new MouseEvent(type, {
+                            bubbles: true, cancelable: true, view: window,
+                            clientX: cx, clientY: cy
+                        }));
+                    });
+                """, daypart_el)
+                klik_ok = True
+            except Exception as e2:
+                log.warning(f"  Ook dispatchEvent faalde: {e2}")
+
+        if not klik_ok:
+            time.sleep(2)
+            continue
+        time.sleep(2)
+
+        # Backup: zet hidden selectedDate input voor sites die 'm uit DOM lezen
+        try:
+            driver.execute_script("""
+                var input = document.querySelector('input[name="selectedDate"]');
+                if (!input) return;
+                var setter = Object.getOwnPropertyDescriptor(
+                    window.HTMLInputElement.prototype, 'value').set;
+                setter.call(input, arguments[0]);
+                input.dispatchEvent(new Event('input',  {bubbles: true}));
+                input.dispatchEvent(new Event('change', {bubbles: true}));
+            """, data_date)
         except Exception:
             pass
-        screenshot(driver, "volgende_fout_dag")
-        return False
+
+        screenshot(driver, f"08_dag_geselecteerd_poging{poging}")
+
+        # ── Volgende-knop opnieuw fetchen (kan na DOM-update stale zijn) ────
+        try:
+            volgende = _vind_volgende_knop(driver)
+        except Exception as e:
+            log.warning(f"  Volgende-knop find faalde: {e}")
+            continue
+
+        if not volgende:
+            log.warning(f"  Geen Volgende-knop gevonden (poging {poging})")
+            time.sleep(2)
+            continue
+
+        # ── Submit Volgende + wacht op outcome (max 15s) ────────────────────
+        try:
+            methode = _submit_knop(driver, volgende)
+            log.info(f"  Volgende methode: {methode}")
+        except Exception as e:
+            log.warning(f"  Volgende submit faalde ({e})")
+            time.sleep(2)
+            continue
+
+        try:
+            WebDriverWait(driver, 15).until(
+                lambda d: "ReservationsCourt" in d.current_url
+                          or "ReservationsPlayers" in d.current_url
+                          or ":00" in d.find_element(By.TAG_NAME, "body").text
+                          or ":30" in d.find_element(By.TAG_NAME, "body").text
+            )
+        except TimeoutException:
+            log.warning("  Geen herkenbare navigatie binnen 15s")
+        except Exception:
+            pass
+
+        url_na = driver.current_url
+        try:
+            body_na = driver.find_element(By.TAG_NAME, "body").text
+        except Exception:
+            body_na = ""
+
+        # ── Beoordeel uitkomst ──────────────────────────────────────────────
+        if "ReservationsCourt" in url_na:
+            log.info(f"✅ Op baankeuze: {url_na}")
+            return True
+
+        if ":00" in body_na or ":30" in body_na:
+            log.info(f"✅ Tijdsloten zichtbaar (AJAX wizard, URL: {url_na})")
+            return True
+
+        if "ReservationsPlayers" in url_na:
+            log.warning(f"  ❌ Server stuurde terug naar spelers — daypart selectie geweigerd. "
+                        f"Retry (poging {poging+1}/3)")
+            screenshot(driver, f"terug_naar_spelers_poging{poging}")
+            time.sleep(2)
+            continue
+
+        # Nog steeds ReservationsDay of onbekend — submit blijkbaar mislukt
+        log.warning(f"  Geen navigatie. URL: {url_na} | body[:200]: {body_na[:200]}")
+        screenshot(driver, f"geen_nav_poging{poging}")
+        time.sleep(2)
+
+    log.error(f"❌ kies_dag faalde definitief na 3 pogingen")
+    screenshot(driver, "kies_dag_definitief_fout")
+    return False
 
 
 # ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
