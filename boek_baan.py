@@ -640,32 +640,12 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         screenshot(driver, "volgende_fout_dag")
         return False
 
-    url_voor = driver.current_url
     driver.execute_script("arguments[0].click();", volgende)
-    time.sleep(2)
-    url_na = driver.current_url
-    log.info(f"URL na Volgende-klik: {url_na}")
-
-    # Controleer: als URL nog ReservationsDay is, is de week-nav geklikt → fallback
-    if "ReservationsDay" in url_na:
-        log.warning("Nog steeds ReservationsDay — probeer 'Kies een baan' breadcrumb")
-        kies_baan = driver.execute_script("""
-            var els = Array.from(document.querySelectorAll('a, button'));
-            for (var el of els) {
-                if (!el.offsetParent) continue;
-                if ((el.innerText || '').trim() === 'Kies een baan') return el;
-            }
-            return null;
-        """)
-        if kies_baan:
-            driver.execute_script("arguments[0].click();", kies_baan)
-            time.sleep(2)
-            log.info(f"'Kies een baan' breadcrumb geklikt, URL: {driver.current_url}")
-        else:
-            log.error("❌ Ook 'Kies een baan' niet gevonden")
-            screenshot(driver, "volgende_fout_dag")
-            return False
-
+    time.sleep(3)  # wacht op wizard-overgang
+    log.info(f"URL na Volgende-klik: {driver.current_url}")
+    # BELANGRIJK: de wizard gebruikt dezelfde URL voor alle stappen
+    # (/me/ReservationsDay). Een URL-check is daarom NIET bruikbaar —
+    # de submit-knop werkt correct en we gaan naar de volgende stap.
     log.info("✅ Naar baankeuze")
     return True
 
@@ -678,13 +658,18 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     # "08:00", "09:30" etc. Padelbaan-namen staan pas zichtbaar NADAT een
     # tijdslot geselecteerd is, dus die zijn geen bruikbaar laadsignaal.
     try:
-        WebDriverWait(driver, 20).until(
+        WebDriverWait(driver, 30).until(
             lambda d: ":00" in d.find_element(By.TAG_NAME, "body").text
                       or ":30" in d.find_element(By.TAG_NAME, "body").text
         )
         log.info("✅ Tijdslot-pagina geladen (tijden zichtbaar)")
     except TimeoutException:
-        log.warning("⚠️ Tijdslot-pagina niet geladen na 20s — toch proberen")
+        try:
+            log.warning(f"⚠️ Tijdslot-pagina niet geladen na 30s — bodytekst: "
+                        f"{driver.find_element(By.TAG_NAME,'body').text[:500]}")
+        except Exception:
+            log.warning("⚠️ Tijdslot-pagina niet geladen na 30s — body niet leesbaar")
+
 
     time.sleep(1)
     screenshot(driver, "09_baan_pagina")
