@@ -745,45 +745,64 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     for tijd in tijden:
         log.info(f"Zoek tijdslot '{tijd}'...")
 
-        # Zoek tijdslot-element: geef voorkeur aan rijen met een padelbaan.
-        # Geef ook de outerHTML terug voor diagnose.
+        # Zoek tijdslot in een padel-rij via Y-coördinaat.
+        # De grid is GEEN <table> — elke rij is een reeks <div class="timeincourt">
+        # naast een court-label. Strategie:
+        #   1. Zoek label-elementen met "Padel 1".."Padel 6" tekst → noteer hun Y-middelpunt.
+        #   2. Zoek alle .timeincourt elementen met de gewenste tijdtekst.
+        #   3. Kies het tijdslot waarvan het Y-middelpunt het dichtst bij een padel-label ligt.
+        #   4. Fallback op eerste beschikbare tijdslot (niet-padel) als niets gevonden.
         cel = driver.execute_script("""
-            var tijd     = arguments[0];
-            var padelNamen = arguments[1];   // bijv. ["Padel 1","Padel 2"]
+            var tijd       = arguments[0];
+            var padelNamen = arguments[1];   // bijv. ["Padel 1","Padel 2",...]
 
-            function matchTijd(el) {
-                if (!el.offsetParent) return false;
+            // Stap 1: vind padel-label elementen en hun Y-middelpunt
+            var padelY = [];
+            document.querySelectorAll('*').forEach(function(el) {
+                if (!el.offsetParent) return;
                 var txt = (el.innerText || '').trim();
-                if (txt !== tijd
-                    && !txt.startsWith(tijd + ' ')
-                    && !txt.startsWith(tijd + '-')
-                    && txt.split(/\\s/)[0] !== tijd) return false;
-                if (el.classList.contains('disabled')
-                    || el.hasAttribute('disabled')
-                    || el.getAttribute('aria-disabled') === 'true') return false;
-                return true;
-            }
-
-            var alle = Array.from(document.querySelectorAll('*'));
-            var kandidaten = alle.filter(matchTijd);
-            if (!kandidaten.length) return null;
-
-            // Geef voorkeur aan een tijdcel in een padel-rij
-            for (var i = 0; i < kandidaten.length; i++) {
-                var el  = kandidaten[i];
-                var row = el.closest('tr') || el.closest('[class*="row"]')
-                           || el.closest('[class*="court"]') || el.parentElement;
-                if (!row) continue;
-                var rowTxt = (row.innerText || '').toLowerCase();
                 for (var n = 0; n < padelNamen.length; n++) {
-                    if (rowTxt.indexOf(padelNamen[n].toLowerCase()) >= 0) {
-                        return el;
+                    if (txt === padelNamen[n]
+                        || txt.startsWith(padelNamen[n])
+                        || txt.endsWith(padelNamen[n])) {
+                        var r = el.getBoundingClientRect();
+                        padelY.push(r.top + r.height / 2);
+                        break;
                     }
                 }
+            });
+
+            // Stap 2: verzamel alle tijdcellen voor de gewenste tijd
+            var tijdCellen = Array.from(document.querySelectorAll('.timeincourt, [data-hour]'))
+                .filter(function(el) {
+                    if (!el.offsetParent) return false;
+                    var txt = (el.innerText || '').trim();
+                    return (txt === tijd || txt.startsWith(tijd));
+                });
+
+            if (!tijdCellen.length) return null;
+
+            // Stap 3: als padel-labels gevonden, kies tijdslot dichtstbij een padel-Y
+            if (padelY.length > 0) {
+                var beste = null, minAfstand = Infinity;
+                tijdCellen.forEach(function(el) {
+                    var r   = el.getBoundingClientRect();
+                    var midY = r.top + r.height / 2;
+                    padelY.forEach(function(py) {
+                        var afstand = Math.abs(midY - py);
+                        if (afstand < minAfstand) {
+                            minAfstand = afstand;
+                            beste = el;
+                        }
+                    });
+                });
+                if (beste && minAfstand < 60) {
+                    return beste;   // max 60px afwijking = zelfde rij
+                }
             }
-            // Geen padel-rij gevonden — neem leaf-element (minste children)
-            kandidaten.sort(function(a,b){ return a.children.length - b.children.length; });
-            return kandidaten[0];
+
+            // Stap 4: fallback — eerste beschikbare tijdslot
+            return tijdCellen[0];
         """, tijd, PADEL_BANEN)
 
         if not cel:
@@ -823,13 +842,28 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
         except Exception:
             body_na = ""
 
-        # Detecteer geselecteerde padelbaan
-        baan = ""
-        for b in PADEL_BANEN:
-            if b in body_na:
-                baan = b
-                break
+        # Detecteer geselecteerde padelbaan via het geselecteerde element zelf
+        # (NIET via body-tekst: alle baannamen staan altijd in de pagina als grid-label)
+        baan = driver.execute_script("""
+            var el         = arguments[0];
+            var padelNamen = arguments[1];
+            // Loop omhoog totdat we een container vinden met een padelnaam
+            var node = el;
+            for (var i = 0; i < 8; i++) {
+                node = node.parentElement;
+                if (!node || node === document.body) break;
+                var txt = (node.innerText || '').toLowerCase();
+                for (var n = 0; n < padelNamen.length; n++) {
+                    if (txt.indexOf(padelNamen[n].toLowerCase()) >= 0
+                        && txt.length < 300) {   // niet de hele pagina
+                        return padelNamen[n];
+                    }
+                }
+            }
+            return '';
+        """, cel, PADEL_BANEN)
 
+        log.info(f"  Baan via parent-chain: '{baan}'")
         log.info(f"✅ Tijdslot {tijd} geselecteerd, baan={baan or '(onbekend)'}")
         return baan, tijd
 
@@ -987,6 +1021,11 @@ def bevestig(driver: uc.Chrome) -> bool:
         # Wacht op redirect (max 20s)
         if _wacht_op_redirect(20):
             url_na = driver.current_url
+            try:
+                body_confirm = driver.find_element(By.TAG_NAME, "body").text
+                log.info(f"  Body na bevestiging (600): {body_confirm[:600]}")
+            except Exception:
+                pass
             log.info(f"✅ Bevestigd! Redirect naar {url_na}")
             screenshot(driver, "12_na_bevestiging")
             return True
