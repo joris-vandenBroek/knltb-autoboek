@@ -597,13 +597,35 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             return False
 
     screenshot(driver, "08_dag_geselecteerd")
-    volgende = _zoek_knop(driver, ["Volgende", "Next"])
+
+    # Gebruik JS om de STAP-"Volgende" te vinden, niet de week-navigatie "Volgende".
+    # Week-nav heeft altijd "Vorige" als directe buur in dezelfde parent-container.
+    volgende = driver.execute_script("""
+        var els = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+        for (var el of els) {
+            if (!el.offsetParent) continue;
+            var tekst = (el.innerText || '').trim();
+            if (tekst !== 'Volgende' && tekst !== 'Next') continue;
+            // Week-navigatie: parent-element bevat ook een directe "Vorige"-knop
+            var parent = el.parentElement;
+            if (parent) {
+                var heeftVorige = Array.from(parent.children).some(function(b) {
+                    return (b.innerText || '').trim() === 'Vorige';
+                });
+                if (heeftVorige) continue;
+            }
+            return el;
+        }
+        return null;
+    """)
+
     if volgende:
+        log.info(f"Stap-knop 'Volgende' gevonden")
         driver.execute_script("arguments[0].click();", volgende)
         time.sleep(2)
         log.info("✅ Naar baankeuze")
         return True
-    log.error("❌ 'Volgende' knop niet gevonden na dag")
+    log.error("❌ Stap-knop 'Volgende' niet gevonden na dag")
     screenshot(driver, "volgende_fout_dag")
     return False
 
