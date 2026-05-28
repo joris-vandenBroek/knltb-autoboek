@@ -688,24 +688,32 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
 # ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
 def _sluit_cookie_banner(driver: uc.Chrome):
-    """Sluit de cookie-banner als die zichtbaar is (anders blokkeert hij klikken)."""
-    for xpath in [
-        "//button[contains(normalize-space(),'Accepteer')]",
-        "//button[contains(normalize-space(),'Accept')]",
-        "//button[contains(normalize-space(),'Weiger')]",
-        "//button[contains(normalize-space(),'Sluiten')]",
-        "//a[contains(normalize-space(),'Accepteer')]",
-    ]:
-        try:
-            els = driver.find_elements(By.XPATH, xpath)
-            for el in els:
-                if el.is_displayed():
-                    driver.execute_script("arguments[0].click();", el)
-                    log.info(f"🍪 Cookie-banner gesloten via '{el.text.strip()[:30]}'")
-                    time.sleep(0.8)
-                    return
-        except Exception:
-            pass
+    """
+    Sluit de cookie-banner als die zichtbaar is.
+    Zet implicit_wait tijdelijk op 0 zodat find_elements() direct terugkeert als er
+    geen banner is — anders wacht Selenium 5s per XPATH = 25s totaal voor niets.
+    """
+    driver.implicitly_wait(0)
+    try:
+        for xpath in [
+            "//button[contains(normalize-space(),'Accepteer')]",
+            "//button[contains(normalize-space(),'Accept')]",
+            "//button[contains(normalize-space(),'Weiger')]",
+            "//button[contains(normalize-space(),'Sluiten')]",
+            "//a[contains(normalize-space(),'Accepteer')]",
+        ]:
+            try:
+                els = driver.find_elements(By.XPATH, xpath)
+                for el in els:
+                    if el.is_displayed():
+                        driver.execute_script("arguments[0].click();", el)
+                        log.info(f"🍪 Cookie-banner gesloten via '{el.text.strip()[:30]}'")
+                        time.sleep(0.8)
+                        return
+            except Exception:
+                pass
+    finally:
+        driver.implicitly_wait(5)
 
 
 def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
@@ -885,7 +893,8 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
             pass
 
         time.sleep(0.5)
-        _sluit_cookie_banner(driver)
+        # NIET _sluit_cookie_banner() aanroepen hier: de cookie-banner is al gesloten
+        # en find_elements() wacht met implicit_wait=5s per XPATH = 25s voor niets.
 
         # ── Klik via ActionChains (real mouse event, NIET JS click) ──────────
         try:
@@ -893,10 +902,42 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
             log.info(f"  ✅ ActionChains klik op {tijd}, baan={baan}")
         except Exception as e:
             log.warning(f"  ActionChains mislukt ({e}), fallback JS click")
-            driver.execute_script("arguments[0].click();", cel)
+            try:
+                driver.execute_script("arguments[0].click();", cel)
+                log.info(f"  JS click als fallback uitgevoerd")
+            except Exception as e2:
+                log.warning(f"  JS click ook mislukt: {e2}")
 
         time.sleep(2)
         screenshot(driver, "10_baan_geselecteerd")
+
+        # ── Controleer of de selectie geregistreerd is ────────────────────────
+        # Na een geldige klik op een tijdslot verandert de klasse (bijv. 'selected')
+        # of verschijnen er foutmeldingen. Log de celstatus en controleer pagina.
+        selectie_ok = driver.execute_script("""
+            var cel      = arguments[0];
+            var padelNamen = arguments[1];
+            var tijd     = arguments[2];
+            try {
+                var cls = (cel.className || '');
+                var selected = cls.indexOf('selected') >= 0
+                            || cls.indexOf('active')   >= 0
+                            || cls.indexOf('chosen')   >= 0;
+                // Controleer ook of er een foutbericht zichtbaar is
+                var foutEls = document.querySelectorAll('.alert, .error, .warning, [class*="fout"], [class*="error"]');
+                var foutTekst = '';
+                for (var i = 0; i < foutEls.length; i++) {
+                    if (foutEls[i].offsetParent && (foutEls[i].innerText||'').trim()) {
+                        foutTekst = foutEls[i].innerText.trim().slice(0,100);
+                        break;
+                    }
+                }
+                return { cls: cls, selected: selected, fout: foutTekst };
+            } catch(e) { return { cls: 'error', selected: false, fout: e.message }; }
+        """, cel, PADEL_BANEN, tijd)
+        log.info(f"  Selectiestatus: cls='{selectie_ok.get('cls','')}' "
+                 f"selected={selectie_ok.get('selected',False)} "
+                 f"fout='{selectie_ok.get('fout','')}'")
 
         try:
             body_na = driver.find_element(By.TAG_NAME, "body").text
@@ -969,18 +1010,34 @@ def bevestig(driver: uc.Chrome) -> bool:
 
     try:
         # ── Stap 1: Volgende → bevestigingspagina ───────────────────────────
+        url_voor = driver.current_url
         volgende = _zoek_knop(driver, ["Volgende", "Next"])
         if volgende:
             methode = _submit_knop(driver, volgende)
             log.info(f"  Volgende submit methode: {methode}")
-            time.sleep(3)
+            # Wacht op URL-verandering (max 8s) zodat we niet te vroeg lezen
+            try:
+                WebDriverWait(driver, 8).until(
+                    lambda d: d.current_url != url_voor
+                )
+            except TimeoutException:
+                pass
+            time.sleep(1)
             screenshot(driver, "11_bevestig_pagina")
-            log.info(f"  URL na Volgende: {driver.current_url}")
+            url_na_vol = driver.current_url
+            log.info(f"  URL na Volgende: {url_na_vol}")
             try:
                 log.info(f"  Body na Volgende (400): "
                          f"{driver.find_element(By.TAG_NAME,'body').text[:400]}")
             except Exception:
                 pass
+
+            # Controleer of we op de juiste pagina zijn (ReservationsConfirm)
+            if "ReservationsConfirm" not in url_na_vol:
+                log.error(f"❌ Volgende bracht ons naar {url_na_vol} i.p.v. ReservationsConfirm "
+                          f"— court-selectie mogelijk niet geregistreerd")
+                screenshot(driver, "bevestig_fout_verkeerde_pagina")
+                return False
 
         # ── Stap 2: zoek confirmReservationButton (op id of data-url) ───────
         knop_info = driver.execute_script("""
