@@ -667,9 +667,15 @@
     header.textContent = huidig || `Speler ${nr} selecteren`;
     lijst.appendChild(header);
 
-    const gefilterd = q
+    // Namen die al gekozen zijn in andere speler-slots (mogen niet dubbel)
+    const alGekozen = new Set(
+      [2, 3, 4].filter(n => n !== nr).map(n => document.getElementById(`speler${n}`).value).filter(Boolean)
+    );
+
+    const gefilterd = (q
       ? alleLedenLijst.filter(n => n.toLowerCase().includes(q))
-      : alleLedenLijst;
+      : alleLedenLijst
+    ).filter(n => !alGekozen.has(n));  // sluit al gekozen spelers uit
 
     if (gefilterd.length === 0) {
       const el = document.createElement('div');
@@ -719,6 +725,13 @@
         trigger.classList.remove('invalid');
       }
     });
+
+    // Controleer dat alle gekozen spelers uniek zijn
+    const geselecteerd = [2, 3, 4].map(n => document.getElementById(`speler${n}`).value).filter(Boolean);
+    if (geselecteerd.length !== new Set(geselecteerd).size) {
+      toonToast('error', '⚠️ Elke speler mag maar één keer worden gekozen.');
+      return false;
+    }
 
     if (!ok) toonToast('error', '⚠️ Vul alle verplichte velden in (rood omlijnd).');
     return ok;
