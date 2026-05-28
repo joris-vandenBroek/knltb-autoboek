@@ -1075,46 +1075,87 @@ def bevestig(driver: uc.Chrome) -> bool:
             screenshot(driver, "bevestig_fout")
             return False
 
-        # ── Stap 3A: ActionChains klik (triggert jQuery handler op de knop) ─
-        # Voorkeur boven directe jQuery.ajax() omdat de jQuery handler ook
-        # eventuele extra data / CSRF-tokens meestuurt die wij niet kennen.
-        log.info("  Poging A: ActionChains klik op confirmReservationButton...")
-        try:
-            btn_el = driver.find_element(By.ID, "confirmReservationButton")
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn_el)
-            time.sleep(0.5)
-            ActionChains(driver).move_to_element(btn_el).click().perform()
-            log.info("  ActionChains klik uitgevoerd")
-        except Exception as e:
-            log.warning(f"  ActionChains mislukt: {e}")
-            # JS click als directe fallback
-            try:
-                driver.execute_script(
-                    "document.getElementById('confirmReservationButton').click();")
-                log.info("  JS .click() uitgevoerd als fallback")
-            except Exception as e2:
-                log.warning(f"  JS .click() ook mislukt: {e2}")
+        # ── Stap 3A: Intercept jQuery handler → haal POST-params op ─────────
+        # De site's jQuery click-handler op de bevestig-knop stuurt de boeking-
+        # data (court-id, datum, spelers) mee als POST-body. We:
+        #   1. Overschrijven jQuery.ajax tijdelijk om de params te onderscheppen.
+        #   2. Triggeren de knop via jQuery .trigger('click').
+        #   3. Sturen de opgeslagen params nogmaals als echte POST met redirect.
+        log.info("  Poging A: jQuery-trigger + intercept POST-params...")
+        intercepted = driver.execute_script("""
+            var targetUrl = arguments[0];
+            window._interceptedData = null;
+            window._interceptedCalled = false;
 
-        # Wacht tot URL weg is van ReservationsConfirm (= redirect na succesvolle boeking)
-        if _wacht_op_redirect(25):
+            if (!window.jQuery) return 'no-jQuery';
+
+            // Overschrijf jQuery.ajax tijdelijk om de POST-params te vangen
+            var origAjax = window.jQuery.ajax.bind(window.jQuery);
+            window.jQuery.ajax = function(settings) {
+                if (settings && settings.url &&
+                    settings.url.indexOf('SaveReservation') >= 0) {
+                    window._interceptedData  = settings.data || null;
+                    window._interceptedCalled = true;
+                    // Herstel direct: het werkelijke verzoek laten we via origAjax lopen
+                    window.jQuery.ajax = origAjax;
+                    return origAjax(settings);
+                }
+                window.jQuery.ajax = origAjax;
+                return origAjax(settings);
+            };
+
+            // Installeer ook globale success/error hooks voor logging
+            window._ajaxResponse = null;
+            window._ajaxStatus   = null;
+            window.jQuery(document).one('ajaxSuccess', function(e, xhr, settings) {
+                if (settings.url && settings.url.indexOf('SaveReservation') >= 0) {
+                    window._ajaxResponse = xhr.responseText.slice(0,300);
+                    window._ajaxStatus   = 'ok:' + xhr.status;
+                }
+            });
+            window.jQuery(document).one('ajaxError', function(e, xhr, settings) {
+                if (settings.url && settings.url.indexOf('SaveReservation') >= 0) {
+                    window._ajaxResponse = xhr.responseText.slice(0,300);
+                    window._ajaxStatus   = 'err:' + xhr.status;
+                }
+            });
+
+            // Trigger de jQuery-click op de knop (vuurde de handler)
+            window.jQuery('#confirmReservationButton').trigger('click');
+            return 'jQuery-trigger';
+        """, data_url)
+        log.info(f"  Intercept result: {intercepted}")
+        time.sleep(3)   # geef de AJAX-call tijd om te sturen
+
+        # Lees de onderschepte POST-data en AJAX-respons
+        intercepted_data  = driver.execute_script("return window._interceptedData;")
+        intercepted_called = driver.execute_script("return window._interceptedCalled;")
+        ajax_response     = driver.execute_script("return window._ajaxResponse;")
+        ajax_status       = driver.execute_script("return window._ajaxStatus;")
+        log.info(f"  Onderschept: called={intercepted_called} data={intercepted_data}")
+        log.info(f"  AJAX response: status={ajax_status} body={ajax_response}")
+
+        # Wacht op redirect (kan al gebeurd zijn via de site's eigen success-callback)
+        if _wacht_op_redirect(5):
             url_na = driver.current_url
             try:
-                body_confirm = driver.find_element(By.TAG_NAME, "body").text
-                log.info(f"  Body na bevestiging A (600): {body_confirm[:600]}")
+                body_a = driver.find_element(By.TAG_NAME, "body").text
+                log.info(f"  Body na bevestiging A (600): {body_a[:600]}")
             except Exception:
                 pass
-            log.info(f"✅ Bevestigd via ActionChains! Redirect naar {url_na}")
+            log.info(f"✅ Bevestigd via jQuery-trigger! Redirect naar {url_na}")
             screenshot(driver, "12_na_bevestiging")
             return True
 
         url_na = driver.current_url
-        log.warning(f"  Poging A geen redirect na 25s — URL nog: {url_na}")
+        log.warning(f"  Poging A geen redirect — URL: {url_na}")
 
-        # ── Stap 3B: fallback — jQuery.ajax() / fetch direct ─────────────────
-        log.warning("  Poging B: jQuery.ajax() / fetch direct naar SaveReservation...")
+        # ── Stap 3B: jQuery.ajax() met onderschepte params (of leeg) ──────────
+        log.warning("  Poging B: jQuery.ajax() met POST-data naar SaveReservation...")
         ajax_start = driver.execute_script("""
             var url      = arguments[0];
             var redirect = arguments[1];
+            var postData = arguments[2];   // onderschepte params of null
             window._bevestigFout    = null;
             window._bevestigStatus  = null;
 
@@ -1122,22 +1163,26 @@ def bevestig(driver: uc.Chrome) -> bool:
                 window.location.href = redirect || '/me/Reservations';
             }
 
+            var ajaxOpts = {
+                url:       url,
+                type:      'POST',
+                xhrFields: { withCredentials: true },
+                success: function(data, status, xhr) {
+                    window._bevestigStatus   = 'ok:' + xhr.status;
+                    window._bevestigResponse = xhr.responseText.slice(0,300);
+                    doeRedirect();
+                },
+                error: function(xhr, textStatus, err) {
+                    window._bevestigFout   = xhr.status + ' ' + textStatus
+                                             + ' ' + xhr.responseText.slice(0,200);
+                    window._bevestigStatus = 'error';
+                }
+            };
+            if (postData) { ajaxOpts.data = postData; }
+
             if (window.jQuery) {
-                window.jQuery.ajax({
-                    url:  url,
-                    type: 'POST',
-                    xhrFields: { withCredentials: true },
-                    success: function(data, status, xhr) {
-                        window._bevestigStatus = 'ok:' + xhr.status;
-                        doeRedirect();
-                    },
-                    error: function(xhr, textStatus, err) {
-                        window._bevestigFout   = xhr.status + ' ' + textStatus
-                                                 + ' ' + xhr.responseText.slice(0,200);
-                        window._bevestigStatus = 'error';
-                    }
-                });
-                return 'jQuery.ajax';
+                window.jQuery.ajax(ajaxOpts);
+                return 'jQuery.ajax' + (postData ? '+data' : '-nodata');
             }
 
             fetch(url, {
@@ -1153,17 +1198,20 @@ def bevestig(driver: uc.Chrome) -> bool:
                 window._bevestigStatus = 'fetch-error';
             });
             return 'fetch';
-        """, data_url, redirect)
+        """, data_url, redirect, intercepted_data)
         log.info(f"  AJAX gestart via: {ajax_start}")
 
         if _wacht_op_redirect(25):
             url_na2 = driver.current_url
+            b_resp   = driver.execute_script("return window._bevestigResponse||'';")
+            b_status = driver.execute_script("return window._bevestigStatus||'';")
+            log.info(f"  AJAX B response: status={b_status} body={b_resp[:200]}")
             try:
                 body_confirm2 = driver.find_element(By.TAG_NAME, "body").text
                 log.info(f"  Body na bevestiging B (600): {body_confirm2[:600]}")
             except Exception:
                 pass
-            log.info(f"✅ Bevestigd via jQuery.ajax! Redirect naar {url_na2}")
+            log.info(f"✅ Bevestigd via jQuery.ajax+data! Redirect naar {url_na2}")
             screenshot(driver, "12_na_bevestiging")
             return True
 
@@ -1189,43 +1237,52 @@ def bevestig(driver: uc.Chrome) -> bool:
 # ── STAP 7: Verificatie ───────────────────────────────────────────────────────
 def verifieer_boeking(driver: uc.Chrome, datum: str, tijd: str) -> str:
     """
-    Navigeer naar /mijn/Reservations en controleer of de boeking zichtbaar is.
+    Controleer of de boeking zichtbaar is op de reserveringspagina.
+    Probeert zowel /mijn/Reservations als /me/Reservations.
     Geeft de naam van de geboekte baan terug (bijv. 'Padel 1'), of '' als niet gevonden.
     """
-    log.info("Boeking verifiëren op Mijn Reserveringen...")
-    try:
-        driver.get("https://www.etv-volley.nl/mijn/Reservations")
-        time.sleep(4)
-        screenshot(driver, "13_mijn_reserveringen")
+    log.info("Boeking verifiëren...")
 
-        body = driver.find_element(By.TAG_NAME, "body").text
-        log.info(f"Reserveringspagina body (800): {body[:800]}")
+    datum_obj  = datetime.strptime(datum, "%Y-%m-%d")
+    datum_nl   = f"{datum_obj.day}-{datum_obj.month}"   # bijv. "28-5"
+    datum_nl2  = f"{datum_obj.day} mei"                  # bijv. "28 mei"
+    datum_nl3  = f"{datum_obj.day:02d}-{datum_obj.month:02d}-{datum_obj.year}"  # "28-05-2026"
+    boek_tekens = [datum, datum_nl, datum_nl2, datum_nl3, tijd]
 
-        # Zoek de boeking aan de hand van datum of tijd
-        datum_obj  = datetime.strptime(datum, "%Y-%m-%d")
-        datum_nl   = f"{datum_obj.day}-{datum_obj.month}"     # bijv. "28-5"
-        datum_nl2  = f"{datum_obj.day} mei"                    # bijv. "28 mei"
+    def _check_pagina(url: str, scherm_naam: str) -> str:
+        try:
+            driver.get(url)
+            time.sleep(5)   # geef AJAX-content tijd om te laden
+            screenshot(driver, scherm_naam)
+            body = driver.find_element(By.TAG_NAME, "body").text
+            log.info(f"  {url} body (800): {body[:800]}")
 
-        boek_tekens = [datum, datum_nl, datum_nl2, tijd]
-        gevonden = any(t in body for t in boek_tekens)
+            if any(t in body for t in boek_tekens):
+                baan_naam = next((b for b in PADEL_BANEN if b in body), "")
+                log.info(f"✅ Boeking BEVESTIGD op {url}! baan={baan_naam or '(onbekend)'}")
+                return baan_naam or "Padel"
 
-        if gevonden:
-            # Probeer padelbaan-naam te extraheren uit de body
-            baan_naam = ""
-            for b in PADEL_BANEN:
-                if b in body:
-                    baan_naam = b
-                    break
-            log.info(f"✅ Boeking BEVESTIGD op reserveringspagina! baan={baan_naam or '(onbekend)'}")
-            return baan_naam or "Padel"
+            log.info(f"  Boeking NIET gevonden op {url} (gezocht: {boek_tekens})")
+            return ""
+        except Exception as e:
+            log.warning(f"  Verificatie fout op {url}: {e}")
+            return ""
 
-        log.error(f"❌ Boeking NIET zichtbaar op reserveringspagina!")
-        log.error(f"   Gezocht op: {boek_tekens}")
-        return ""
+    # Probeer eerst /mijn/Reservations (Mijn Boekingen-overzicht)
+    baan = _check_pagina("https://www.etv-volley.nl/mijn/Reservations",
+                         "13_mijn_reserveringen")
+    if baan:
+        return baan
 
-    except Exception as e:
-        log.error(f"❌ Verificatie mislukt: {e}")
-        return ""
+    # Probeer /me/Reservations (wizard-startpagina, toont ook huidige boeking)
+    baan = _check_pagina("https://www.etv-volley.nl/me/Reservations",
+                         "13b_me_reserveringen")
+    if baan:
+        return baan
+
+    log.error(f"❌ Boeking NIET zichtbaar op beide reserveringspagina's!")
+    log.error(f"   Gezocht op: {boek_tekens}")
+    return ""
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
