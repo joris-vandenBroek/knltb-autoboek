@@ -454,46 +454,58 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             continue
         screenshot(driver, f"05b_zoek_{index}_{achternaam}")
 
-        # Wacht tot een ZICHTBARE EXACTE MATCH verschijnt (max 8s)
+        # ── Helper: vind alle zichtbare elementen met EXACTE tekst-match ─────
+        # Gebruikt zowel voor WebDriverWait als voor het uiteindelijke klik —
+        # zo kan de wait niet 'succesvol' eindigen op een element dat we daarna
+        # niet kunnen vinden (bv. een input-wrapper of een <span>-leaf die niet
+        # in de specifieke selectors voorkomt).
+        def _vind_exacte_kandidaten():
+            selectors = [
+                "//*[@role='option']",
+                f"//li[contains(.,'{achternaam}')]",
+                f"//div[contains(@class,'player') or contains(@class,'suggestion')"
+                f"      or contains(@class,'result') or contains(@class,'item')]"
+                f"[contains(.,'{achternaam}')]",
+                # Brede fallback: élk leaf-element met achternaam in tekst,
+                # excl. structurele en input-elementen
+                f"//*[contains(.,'{achternaam}')"
+                f"    and not(self::input) and not(self::textarea)"
+                f"    and not(self::html) and not(self::body)"
+                f"    and not(self::script) and not(self::style)"
+                f"    and not(self::form) and not(self::nav)"
+                f"    and not(self::header) and not(self::footer)"
+                f"    and not(self::main) and not(self::section)]",
+            ]
+            result = []
+            seen_ids = set()
+            driver.implicitly_wait(0)
+            try:
+                for sel in selectors:
+                    try:
+                        for el in driver.find_elements(By.XPATH, sel):
+                            if not el.is_displayed():
+                                continue
+                            if not _is_exact_doel(el.text):
+                                continue
+                            eid = el.id
+                            if eid in seen_ids:
+                                continue
+                            seen_ids.add(eid)
+                            result.append((el, _norm(el.text), sel))
+                    except Exception:
+                        pass
+            finally:
+                driver.implicitly_wait(5)
+            return result
+
+        # Wacht tot er minstens één EXACTE kandidaat is (max 8s)
         try:
-            WebDriverWait(driver, 8).until(
-                lambda d: any(
-                    el.is_displayed() and _is_exact_doel(el.text)
-                    for el in d.find_elements(By.XPATH,
-                        f"//*[contains(.,'{achternaam}') and not(self::input)"
-                        f"    and not(self::html) and not(self::body)]")
-                )
-            )
+            WebDriverWait(driver, 8).until(lambda d: bool(_vind_exacte_kandidaten()))
         except TimeoutException:
             log.info(f"  Geen exacte match na 8s voor '{zoekterm}', volgende term")
             continue
 
-        # Verzamel alle EXACTE kandidaten (strict equality, geen fuzzy)
-        selectors = [
-            "//*[@role='option']",
-            f"//li[contains(.,'{achternaam}')]",
-            f"//div[contains(@class,'player') or contains(@class,'suggestion')"
-            f"      or contains(@class,'result') or contains(@class,'item')]"
-            f"[contains(.,'{achternaam}')]",
-        ]
-        kandidaten = []
-        seen_ids = set()
-        driver.implicitly_wait(0)
-        for sel in selectors:
-            try:
-                for el in driver.find_elements(By.XPATH, sel):
-                    if not el.is_displayed():
-                        continue
-                    if not _is_exact_doel(el.text):
-                        continue
-                    eid = el.id  # unieke Selenium element-id
-                    if eid in seen_ids:
-                        continue
-                    seen_ids.add(eid)
-                    kandidaten.append((el, _norm(el.text), sel))
-            except Exception:
-                pass
-        driver.implicitly_wait(5)
+        kandidaten = _vind_exacte_kandidaten()
 
         if not kandidaten:
             log.warning(f"  ⚠️ Geen EXACTE match voor '{speler}' bij zoekterm '{zoekterm}'")
