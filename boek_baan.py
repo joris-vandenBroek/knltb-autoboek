@@ -520,72 +520,66 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         else:
             break
 
-    # Stap A: klik de dag-header om de Bootstrap-accordion open te klappen.
-    dag_el = driver.execute_script("""
-        var dagNr = arguments[0];
-        var alle  = Array.from(document.querySelectorAll('*'));
-        var dagEls = alle.filter(function(el) {
-            if (!el.offsetParent) return false;
-            var tokens = (el.innerText || '').trim().split(/\s+/);
-            return tokens.indexOf(dagNr) >= 0 && el.children.length <= 1;
-        });
-        if (!dagEls.length) return null;
-        dagEls[0].click();
-        return dagEls[0];
-    """, dag_nr)
-    log.info(f"Dag accordion klik: {'OK' if dag_el else 'NIET GEVONDEN'}")
-    time.sleep(1.5)  # wacht tot accordion volledig is uitgeklapt
+    # Log alle div[data-date] elementen voor diagnose
+    alle_dayparts = driver.execute_script("""
+        return Array.from(document.querySelectorAll('[data-date]')).map(function(el) {
+            return el.getAttribute('data-date') + ':' + (el.innerText || '').trim().slice(0, 20);
+        }).join(' | ');
+    """)
+    log.info(f"Alle data-date elementen: {alle_dayparts}")
 
-    # Stap B: lees de data-date van het div.daypart element voor de juiste dag/dagdeel.
-    # De pagina heeft een hidden <input name="selectedDate"> die op dit waarde moet staan.
-    # Een visuele klik triggert dit hidden field NIET — we zetten het rechtstreeks.
-    data_date = driver.execute_script("""
-        var dagNr   = arguments[0];
-        var dagdeel = arguments[1];
-        var alle = Array.from(document.querySelectorAll('*'));
+    # Stap A+B gecombineerd: zoek het div.daypart voor de juiste datum+dagdeel
+    # direct via data-date attribuut (bypass accordeon-toggle issues).
+    # De datum in de ISO string begint met het doeldatum (YYYY-MM-DD).
+    daypart_el = driver.execute_script("""
+        var targetDate = arguments[0];   // bijv. "2026-05-28"
+        var dagdeel    = arguments[1];   // bijv. "Middag"
 
-        // Zoek dag-header element
-        var dagEls = alle.filter(function(el) {
-            if (!el.offsetParent) return false;
-            var tokens = (el.innerText || '').trim().split(/\s+/);
-            return tokens.indexOf(dagNr) >= 0 && el.children.length <= 1;
-        });
-        if (!dagEls.length) return 'GEEN_DAG';
+        // Zoek alle [data-date] elementen waarvan data-date met de doeldatum begint
+        var candidates = Array.from(document.querySelectorAll('[data-date]'))
+            .filter(function(el) {
+                var dd = el.getAttribute('data-date') || '';
+                return dd.startsWith(targetDate);
+            });
+        if (!candidates.length) return null;
 
-        // Zoek dagdeel leaf-elementen
-        var dagdeelEls = alle.filter(function(el) {
-            if (!el.offsetParent) return false;
-            var txt = (el.innerText || '').trim();
-            return txt === dagdeel && el.children.length === 0;
-        });
-        if (!dagdeelEls.length) return 'GEEN_DAGDEEL';
-
-        // Sorteer op X-nabijheid bij de dag-kolom
-        var dagR = dagEls[0].getBoundingClientRect();
-        var dagX = dagR.left + dagR.width / 2;
-        dagdeelEls.sort(function(a, b) {
-            var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
-            return Math.abs((ra.left + ra.width / 2) - dagX)
-                 - Math.abs((rb.left + rb.width / 2) - dagX);
-        });
-
-        // Loop omhoog naar het div.daypart element met data-date attribuut
-        var el = dagdeelEls[0];
-        while (el && el !== document.body) {
-            var dd = el.getAttribute('data-date');
-            if (dd) return dd;
-            el = el.parentElement;
+        // Kies het element met de dagdeel-tekst
+        for (var i = 0; i < candidates.length; i++) {
+            var txt = (candidates[i].innerText || '').trim();
+            if (txt === dagdeel || txt.includes(dagdeel)) return candidates[i];
         }
-        return 'GEEN_DATA_DATE';
-    """, dag_nr, gewenst_dagdeel)
+        // Geen tekst-match: neem het eerste beschikbare datumcandidate
+        return candidates[0];
+    """, datum, gewenst_dagdeel)
 
-    log.info(f"Dagdeel data-date: {data_date}")
-    if not data_date or data_date.startswith("GEEN"):
-        log.error(f"❌ Kan data-date niet bepalen: {data_date}")
+    if not daypart_el:
+        log.error(f"❌ div.daypart voor {datum} / {gewenst_dagdeel} niet gevonden")
         screenshot(driver, "dag_fout")
         return False
 
-    # Zet de hidden selectedDate input rechtstreeks op de data-date waarde
+    data_date = driver.execute_script("return arguments[0].getAttribute('data-date');", daypart_el)
+    log.info(f"Gevonden daypart: data-date={data_date}")
+
+    # Klik het div.daypart element via een dispatched MouseEvent DIRECT op het element.
+    # Dit triggert de click-handler op het element zelf (geen bubbling vanuit kind).
+    driver.execute_script("""
+        var el = arguments[0];
+        el.scrollIntoView({block: 'center'});
+        var rect = el.getBoundingClientRect();
+        var cx = rect.left + rect.width / 2;
+        var cy = rect.top + rect.height / 2;
+        ['mouseover', 'mouseenter', 'mousemove',
+         'mousedown', 'mouseup', 'click'].forEach(function(type) {
+            el.dispatchEvent(new MouseEvent(type, {
+                bubbles: true, cancelable: true, view: window,
+                clientX: cx, clientY: cy
+            }));
+        });
+    """, daypart_el)
+    log.info(f"Daypart geklikt via dispatchEvent")
+    time.sleep(2)  # wacht op eventuele AJAX-respons
+
+    # Zet ALTIJD ook de hidden selectedDate input direct (backup)
     set_ok = driver.execute_script("""
         var input = document.querySelector('input[name="selectedDate"]');
         if (!input) return false;
@@ -594,9 +588,9 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         setter.call(input, arguments[0]);
         input.dispatchEvent(new Event('input',  {bubbles: true}));
         input.dispatchEvent(new Event('change', {bubbles: true}));
-        return true;
+        return input.value;
     """, data_date)
-    log.info(f"selectedDate gezet: {set_ok} → {data_date}")
+    log.info(f"selectedDate gezet: {set_ok}")
 
     log.info(f"✅ Dag {dag_nr} + dagdeel '{gewenst_dagdeel}' geselecteerd")
     screenshot(driver, "08_dag_geselecteerd")
@@ -840,25 +834,22 @@ def main():
         log.error("❌ Datum moet YYYY-MM-DD zijn")
         sys.exit(1)
 
-    # 48-uurs check
-    speelmoment     = datetime.combine(speeldatum.date(), datetime.strptime(args.tijd, "%H:%M").time())
-    uren_tot_spelen = (speelmoment - datetime.now()).total_seconds() / 3600
-    log.info(f"⏱️  Uren tot speelmoment: {uren_tot_spelen:.1f}")
+    # Boekingsstrategie: vanaf 07:00 op (speeldatum - 2 kalenderdagen) mag worden geboekt.
+    # Dat geldt voor alle dagdelen van dag 0, dag+1 en dag+2.
+    nu            = datetime.now()
+    boekingsdatum = speeldatum - timedelta(days=2)
+    dag_verschil  = (speeldatum.date() - nu.date()).days
+    log.info(f"📅 Speeldatum dag+{dag_verschil} | boekingsdatum: {boekingsdatum.strftime('%d-%m-%Y')} om 07:00")
 
-    if uren_tot_spelen >= 48:
-        boekingsdatum = speeldatum - timedelta(days=2)
-        nu = datetime.now()
-        if nu.date() < boekingsdatum.date():
-            log.info(f"📅 Boekingsdatum is {boekingsdatum.strftime('%d-%m-%Y')} om 07:00 — script stopt.")
-            sys.exit(0)
-        elif nu.date() == boekingsdatum.date() and nu.hour < 7:
-            wacht_sec = int((boekingsdatum.replace(hour=7, minute=0, second=0) - nu).total_seconds())
-            log.info(f"⏳ Wacht {wacht_sec // 60} min tot 07:00...")
-            time.sleep(wacht_sec)
-        else:
-            log.info("✅ Boekingsdatum en na 07:00 — direct boeken!")
+    if nu.date() < boekingsdatum.date():
+        log.info(f"⏳ Te vroeg — boekingsdatum {boekingsdatum.strftime('%d-%m-%Y')} om 07:00. Script stopt.")
+        sys.exit(0)
+    elif nu.date() == boekingsdatum.date() and nu.hour < 7:
+        wacht_sec = int((boekingsdatum.replace(hour=7, minute=0, second=0) - nu).total_seconds())
+        log.info(f"⏳ Wacht {wacht_sec // 60} min tot 07:00 op boekingsdatum {boekingsdatum.strftime('%d-%m-%Y')}...")
+        time.sleep(wacht_sec)
     else:
-        log.info("⚡ Minder dan 48 uur — direct boeken!")
+        log.info(f"✅ Boeken! (dag+{dag_verschil}, boekingsdatum bereikt)")
 
     log.info("=" * 50)
     log.info("🎾 ETV Volley Padelbaan Auto-Reservering")
