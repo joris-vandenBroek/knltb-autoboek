@@ -1173,6 +1173,16 @@ def bevestig(driver: uc.Chrome) -> bool:
         log.info(f"  Onderschept: called={intercepted_called} data={intercepted_data}")
         log.info(f"  AJAX response: status={ajax_status} body={ajax_response}")
 
+        # Controleer op server-side fout: "Niet gevonden" = boeking afgewezen
+        if ajax_response and (
+            "niet gevonden" in ajax_response.lower()
+            or "not found" in ajax_response.lower()
+        ):
+            log.error(f"  ❌ Server wees boeking af (Poging A): '{ajax_response}' — "
+                      f"boeking NIET aangemaakt. Controleer of je al een actieve reservering hebt.")
+            screenshot(driver, "bevestig_server_fout")
+            return False
+
         # Wacht op redirect (kan al gebeurd zijn via de site's eigen success-callback)
         if _wacht_op_redirect(5):
             url_na = driver.current_url
@@ -1207,8 +1217,16 @@ def bevestig(driver: uc.Chrome) -> bool:
                 xhrFields: { withCredentials: true },
                 success: function(data, status, xhr) {
                     window._bevestigStatus   = 'ok:' + xhr.status;
-                    window._bevestigResponse = xhr.responseText.slice(0,300);
-                    doeRedirect();
+                    window._bevestigResponse = (data || xhr.responseText || '').slice(0,300);
+                    // Controleer op server-side fout in de body (HTTP 200 maar inhoud = fout)
+                    var bodyLower = window._bevestigResponse.toLowerCase();
+                    if (bodyLower.indexOf('niet gevonden') >= 0 ||
+                        bodyLower.indexOf('not found') >= 0) {
+                        window._bevestigStatus = 'error:not-found';
+                        window._bevestigFout   = window._bevestigResponse;
+                    } else {
+                        doeRedirect();
+                    }
                 },
                 error: function(xhr, textStatus, err) {
                     window._bevestigFout   = xhr.status + ' ' + textStatus
@@ -1243,12 +1261,26 @@ def bevestig(driver: uc.Chrome) -> bool:
             url_na2 = driver.current_url
             b_resp   = driver.execute_script("return window._bevestigResponse||'';")
             b_status = driver.execute_script("return window._bevestigStatus||'';")
+            b_fout   = driver.execute_script("return window._bevestigFout||'';")
             log.info(f"  AJAX B response: status={b_status} body={b_resp[:200]}")
             try:
                 body_confirm2 = driver.find_element(By.TAG_NAME, "body").text
                 log.info(f"  Body na bevestiging B (600): {body_confirm2[:600]}")
             except Exception:
                 pass
+
+            # Controleer of Poging B ook een fout terugkreeg
+            if b_status == 'error:not-found' or (
+                b_fout and (
+                    "niet gevonden" in b_fout.lower()
+                    or "not found" in b_fout.lower()
+                )
+            ):
+                log.error(f"  ❌ Server wees boeking ook af (Poging B): '{b_fout or b_resp}' — "
+                          f"boeking NIET aangemaakt.")
+                screenshot(driver, "bevestig_server_fout_b")
+                return False
+
             log.info(f"✅ Bevestigd via jQuery.ajax+data! Redirect naar {url_na2}")
             screenshot(driver, "12_na_bevestiging")
             return True
@@ -1282,10 +1314,13 @@ def verifieer_boeking(driver: uc.Chrome, datum: str, tijd: str) -> str:
     log.info("Boeking verifiëren...")
 
     datum_obj  = datetime.strptime(datum, "%Y-%m-%d")
-    datum_nl   = f"{datum_obj.day}-{datum_obj.month}"   # bijv. "28-5"
-    datum_nl2  = f"{datum_obj.day} mei"                  # bijv. "28 mei"
-    datum_nl3  = f"{datum_obj.day:02d}-{datum_obj.month:02d}-{datum_obj.year}"  # "28-05-2026"
-    boek_tekens = [datum, datum_nl, datum_nl2, datum_nl3, tijd]
+    datum_nl   = f"{datum_obj.day}-{datum_obj.month}"   # bijv. "29-5"
+    datum_nl2  = f"{datum_obj.day} mei"                  # bijv. "29 mei"
+    datum_nl3  = f"{datum_obj.day:02d}-{datum_obj.month:02d}-{datum_obj.year}"  # "29-05-2026"
+    # Let op: gebruik GEEN losse tijdstring als zoekterm — die matcht ook op boekingen
+    # van andere datums (bijv. een bestaande boeking op een andere dag om 15:00).
+    # Vereiste: datum ÉN tijd moeten allebei aanwezig zijn op de pagina.
+    datum_tekens = [datum, datum_nl, datum_nl2, datum_nl3]
 
     def _check_pagina(url: str, scherm_naam: str) -> str:
         try:
@@ -1295,12 +1330,17 @@ def verifieer_boeking(driver: uc.Chrome, datum: str, tijd: str) -> str:
             body = driver.find_element(By.TAG_NAME, "body").text
             log.info(f"  {url} body (800): {body[:800]}")
 
-            if any(t in body for t in boek_tekens):
+            # Verificatie: datum én tijd moeten allebei aanwezig zijn
+            datum_ok = any(t in body for t in datum_tekens)
+            tijd_ok  = tijd in body
+            if datum_ok and tijd_ok:
                 baan_naam = next((b for b in PADEL_BANEN if b in body), "")
                 log.info(f"✅ Boeking BEVESTIGD op {url}! baan={baan_naam or '(onbekend)'}")
                 return baan_naam or "Padel"
 
-            log.info(f"  Boeking NIET gevonden op {url} (gezocht: {boek_tekens})")
+            log.info(f"  Boeking NIET gevonden op {url} "
+                     f"(datum_ok={datum_ok} tijd_ok={tijd_ok} "
+                     f"datum_tekens={datum_tekens} tijd='{tijd}')")
             return ""
         except Exception as e:
             log.warning(f"  Verificatie fout op {url}: {e}")
