@@ -368,11 +368,15 @@
     /* ── Wachtrij ────────────────────────────────────────── */
     .wachtrij-list { padding: 4px 0 8px; }
     .wachtrij-item {
-      padding: 14px 22px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px 18px 14px 22px;
       border-bottom: 1px solid var(--border);
       line-height: 1.4;
     }
     .wachtrij-item:last-child { border-bottom: none; }
+    .wachtrij-item-inhoud { flex: 1; min-width: 0; }
     .wachtrij-datum {
       font-size: 1.02rem;
       font-weight: 600;
@@ -382,12 +386,27 @@
       font-size: 0.88rem;
       color: #4a5568;
       margin-top: 3px;
+      word-wrap: break-word;
     }
     .wachtrij-boekt {
       font-size: 0.82rem;
       color: var(--grijs);
       margin-top: 6px;
     }
+    .wachtrij-del {
+      background: none;
+      border: none;
+      font-size: 1.35rem;
+      padding: 8px 10px;
+      cursor: pointer;
+      color: var(--grijs);
+      border-radius: 10px;
+      flex-shrink: 0;
+      line-height: 1;
+      transition: background 0.15s, color 0.15s;
+    }
+    .wachtrij-del:active   { background: #fed7d7; color: var(--fout); }
+    .wachtrij-del:disabled { opacity: 0.4; cursor: default; }
     .wachtrij-leeg {
       padding: 16px 22px 18px;
       font-size: 0.95rem;
@@ -661,6 +680,12 @@
     return `${yy}-${mm}-${dd}`;
   }
 
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])
+    );
+  }
+
   async function laadWachtrij() {
     const lijst = document.getElementById('wachtrijList');
     try {
@@ -679,30 +704,89 @@
         lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>';
         return;
       }
-      const items = await Promise.all(json.map(async f => {
+      const entries = await Promise.all(json.map(async f => {
         try {
           const cr = await fetch(f.download_url);
-          return await cr.json();
+          const content = await cr.json();
+          return { file: f, content };
         } catch (_) { return null; }
       }));
-      const geldig = items.filter(x => x && x.datum && x.tijd && Array.isArray(x.spelers));
+      const geldig = entries.filter(e =>
+        e && e.content && e.content.datum && e.content.tijd && Array.isArray(e.content.spelers)
+      );
       if (geldig.length === 0) {
         lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>';
         return;
       }
-      geldig.sort((a, b) => (a.datum + a.tijd).localeCompare(b.datum + b.tijd));
-      lijst.innerHTML = geldig.map(item => {
+      geldig.sort((a, b) =>
+        (a.content.datum + a.content.tijd).localeCompare(b.content.datum + b.content.tijd)
+      );
+      lijst.innerHTML = geldig.map(e => {
+        const item      = e.content;
         const boekDatum = minusDagen(item.datum, 2);
-        const spelers   = item.spelers.join(', ');
+        const spelers   = escapeHtml(item.spelers.join(', '));
+        const datum     = escapeHtml(`${formatNL(item.datum)} om ${item.tijd}`);
+        const boekt     = escapeHtml(`Boekt automatisch op ${formatNL(boekDatum)} om 07:00`);
+        const path      = escapeHtml(e.file.path);
+        const sha       = escapeHtml(e.file.sha);
         return `
           <div class="wachtrij-item">
-            <div class="wachtrij-datum">🗓️ ${formatNL(item.datum)} om ${item.tijd}</div>
-            <div class="wachtrij-spelers">${spelers}</div>
-            <div class="wachtrij-boekt">Boekt automatisch op ${formatNL(boekDatum)} om 07:00</div>
+            <div class="wachtrij-item-inhoud">
+              <div class="wachtrij-datum">🗓️ ${datum}</div>
+              <div class="wachtrij-spelers">${spelers}</div>
+              <div class="wachtrij-boekt">${boekt}</div>
+            </div>
+            <button class="wachtrij-del" title="Verwijder deze ingeplande reservering"
+                    onclick="verwijderWachtrij(this,'${path}','${sha}')">🗑️</button>
           </div>`;
       }).join('');
     } catch (e) {
       lijst.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>';
+    }
+  }
+
+  async function verwijderWachtrij(btn, path, sha) {
+    const pat = getPat();
+    if (!pat) {
+      toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️');
+      return;
+    }
+    const naam = path.split('/').pop() || path;
+    if (!confirm(`Deze ingeplande reservering verwijderen?\n\n${naam}`)) return;
+
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    try {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/contents/${path}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization':        `Bearer ${pat}`,
+          'Accept':               'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type':         'application/json'
+        },
+        body: JSON.stringify({
+          message: `wachtrij: verwijder ${naam}`,
+          sha
+        })
+      });
+      if (r.ok) {
+        toonToast('success', '✅ Reservering verwijderd.');
+        setTimeout(laadWachtrij, 800);
+      } else {
+        const err = await r.json().catch(() => ({}));
+        const hint = r.status === 404
+          ? ' (bestand al weg of token mist `contents:write` scope)'
+          : '';
+        toonToast('error',
+          `❌ Verwijderen mislukt (${r.status})${hint}${err.message ? '\n' + err.message : ''}`);
+        btn.disabled = false;
+        btn.textContent = '🗑️';
+      }
+    } catch (e) {
+      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+      btn.disabled = false;
+      btn.textContent = '🗑️';
     }
   }
 
