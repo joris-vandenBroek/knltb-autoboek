@@ -534,28 +534,43 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         return dagEls[0];
     """, dag_nr)
     log.info(f"Dag accordion klik: {'OK' if dag_el else 'NIET GEVONDEN'}")
-    time.sleep(0.7)
+    time.sleep(1.5)  # wacht tot accordion volledig is uitgeklapt
 
-    # Log DOM-structuur van een dagdeel-element voor diagnose
-    dom_info = driver.execute_script("""
+    # Log parent-chain van dagdeel-element voor diagnose (tag, href, onclick, class)
+    dom_chain = driver.execute_script("""
+        var dd = arguments[0];
         var alle = Array.from(document.querySelectorAll('*'));
         var dagdeelEls = alle.filter(function(el) {
             if (!el.offsetParent) return false;
-            var txt = (el.innerText || '').trim();
-            return txt === arguments[0] && el.children.length === 0;
+            return (el.innerText || '').trim() === dd && el.children.length === 0;
         });
-        if (!dagdeelEls.length) return 'GEEN dagdeel-elementen';
-        var el = dagdeelEls[0];
-        return 'tag=' + el.tagName
-             + ' class=' + (el.className || '').slice(0, 60)
-             + ' parent_tag=' + el.parentElement.tagName
-             + ' parent_class=' + (el.parentElement.className || '').slice(0, 60)
-             + ' html=' + el.outerHTML.slice(0, 150);
+        if (!dagdeelEls.length) return 'GEEN';
+        var el = dagdeelEls[0], chain = [];
+        for (var d = 0; d < 5 && el && el !== document.body; d++) {
+            chain.push('d' + d + ':' + el.tagName
+                + '[cls=' + (el.className || '').slice(0, 40)
+                + ',href=' + (el.href || el.getAttribute('href') || '-')
+                + ',onclick=' + (el.onclick ? 'ja' : '-')
+                + ',html=' + el.outerHTML.slice(0, 80) + ']');
+            el = el.parentElement;
+        }
+        return chain.join(' | ');
     """, gewenst_dagdeel)
-    log.info(f"Dagdeel DOM: {dom_info}")
+    log.info(f"Dagdeel parent chain: {dom_chain}")
 
-    # Stap B: vind het dagdeel-element dichtstbij de dag-kolom, klik via ActionChains.
-    # ActionChains simuleert een echte muisklik — triggert alle JS event handlers.
+    # Log form inputs voor klik (om later te vergelijken)
+    form_voor = driver.execute_script("""
+        var form = document.querySelector('form');
+        if (!form) return 'geen form: action=? method=?';
+        return 'action=' + form.action + ' method=' + form.method
+             + ' | ' + Array.from(form.elements).map(function(el) {
+                   return el.name + ':' + el.type + ':' + (el.value || '');
+               }).join(' | ');
+    """)
+    log.info(f"Form VOOR klik: {form_voor}")
+
+    # Stap B: vind het dagdeel-element dichtstbij de dag-kolom.
+    # Loop daarna omhoog naar de dichtstbijzijnde klikbare voorouder (a/button/label/li).
     dagdeel_el = driver.execute_script("""
         var dagNr   = arguments[0];
         var dagdeel = arguments[1];
@@ -584,7 +599,19 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
                  - Math.abs((rb.left + rb.width / 2) - dagX);
         });
 
-        return dagdeelEls[0];
+        // Loop omhoog naar de dichtstbijzijnde klikbare voorouder
+        var target = dagdeelEls[0];
+        var el = target.parentElement;
+        var depth = 0;
+        while (el && el !== document.body && depth < 5) {
+            if (el.tagName === 'A' || el.tagName === 'BUTTON' || el.tagName === 'LABEL' ||
+                el.getAttribute('role') === 'button' || el.onclick) {
+                return el;  // klikbare voorouder gevonden
+            }
+            el = el.parentElement;
+            depth++;
+        }
+        return target;  // geen klikbare voorouder — gebruik leaf
     """, dag_nr, gewenst_dagdeel)
 
     if dagdeel_el:
@@ -594,24 +621,38 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             ActionChains(driver).move_to_element(dagdeel_el).click().perform()
             log.info(f"✅ Dagdeel '{gewenst_dagdeel}' geklikt via ActionChains")
         except Exception as e:
-            log.warning(f"ActionChains dagdeel mislukt ({e}), fallback naar JS click")
+            log.warning(f"ActionChains dagdeel mislukt ({e}), JS click")
             driver.execute_script("arguments[0].click();", dagdeel_el)
-            log.info(f"✅ Dagdeel '{gewenst_dagdeel}' geklikt via JS")
-        time.sleep(1)
+        time.sleep(1.5)
     else:
-        log.warning(f"Dagdeel-element niet gevonden, probeer XPath-fallback...")
+        log.warning(f"Dagdeel-element niet gevonden, XPath-fallback...")
         try:
             for el in driver.find_elements(By.XPATH,
                     f"//*[normalize-space(.)='{gewenst_dagdeel}']"):
                 if el.is_displayed():
                     driver.execute_script("arguments[0].click();", el)
-                    log.info(f"Fallback: eerste zichtbare '{gewenst_dagdeel}' geklikt")
-                    time.sleep(1)
+                    log.info(f"Fallback: '{gewenst_dagdeel}' geklikt")
+                    time.sleep(1.5)
                     break
         except Exception as e:
             log.error(f"❌ Dagdeel-fallback mislukt: {e}")
             screenshot(driver, "dag_fout")
             return False
+
+    # Log form inputs NA klik (zie of dagdeel-waarde veranderd is)
+    form_na = driver.execute_script("""
+        var form = document.querySelector('form');
+        if (!form) return 'geen form';
+        return Array.from(form.elements).map(function(el) {
+            return el.name + ':' + el.type + ':' + (el.value || '');
+        }).join(' | ');
+    """)
+    log.info(f"Form NA klik: {form_na}")
+
+    # Check of we al op ReservationsCourt zijn (click navigeerde zelf)
+    if "ReservationsCourt" in driver.current_url:
+        log.info(f"✅ Dagdeel-klik navigeerde naar: {driver.current_url}")
+        return True
 
     log.info(f"✅ Dag {dag_nr} + dagdeel '{gewenst_dagdeel}' geselecteerd")
     screenshot(driver, "08_dag_geselecteerd")
