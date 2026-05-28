@@ -599,23 +599,31 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     data_date = driver.execute_script("return arguments[0].getAttribute('data-date');", daypart_el)
     log.info(f"Gevonden daypart: data-date={data_date}")
 
-    # Klik het div.daypart element via een dispatched MouseEvent DIRECT op het element.
-    # Dit triggert de click-handler op het element zelf (geen bubbling vanuit kind).
-    driver.execute_script("""
-        var el = arguments[0];
-        el.scrollIntoView({block: 'center'});
-        var rect = el.getBoundingClientRect();
-        var cx = rect.left + rect.width / 2;
-        var cy = rect.top + rect.height / 2;
-        ['mouseover', 'mouseenter', 'mousemove',
-         'mousedown', 'mouseup', 'click'].forEach(function(type) {
-            el.dispatchEvent(new MouseEvent(type, {
-                bubbles: true, cancelable: true, view: window,
-                clientX: cx, clientY: cy
-            }));
-        });
-    """, daypart_el)
-    log.info(f"Daypart geklikt via dispatchEvent")
+    # Klik het div.daypart via ActionChains (isTrusted=true). ETV's jQuery-handlers
+    # filteren synthetische events (isTrusted=false) weg, dus dispatchEvent registreert
+    # de selectie niet server-side en de form-validatie stuurt je terug naar spelers.
+    # Zelfde patroon als de spelers-fix uit commit 29e25f5.
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", daypart_el)
+        time.sleep(0.3)
+        ActionChains(driver).move_to_element(daypart_el).click().perform()
+        log.info("Daypart geklikt via ActionChains (isTrusted=true)")
+    except Exception as e:
+        log.warning(f"ActionChains daypart mislukt ({e}), fallback dispatchEvent")
+        driver.execute_script("""
+            var el = arguments[0];
+            var rect = el.getBoundingClientRect();
+            var cx = rect.left + rect.width / 2;
+            var cy = rect.top + rect.height / 2;
+            ['mouseover', 'mouseenter', 'mousemove',
+             'mousedown', 'mouseup', 'click'].forEach(function(type) {
+                el.dispatchEvent(new MouseEvent(type, {
+                    bubbles: true, cancelable: true, view: window,
+                    clientX: cx, clientY: cy
+                }));
+            });
+        """, daypart_el)
+        log.info("Daypart geklikt via dispatchEvent (fallback)")
     time.sleep(2)  # wacht op eventuele AJAX-respons
 
     # Zet ALTIJD ook de hidden selectedDate input direct (backup)
