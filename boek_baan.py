@@ -375,12 +375,40 @@ def _zoek_veld_spelers(driver: uc.Chrome):
 
 def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
     """
-    Zoek en selecteer één speler.
-    BELANGRIJK: gebruik ActionChains voor alle klikken — JS execute_script().click()
-    genereert events met isTrusted=false die de site's jQuery handlers negeren,
-    waardoor de speler niet in de server-sessie wordt opgeslagen.
+    Selecteer EXCLUSIEF de opgegeven speler via het typeahead-zoekveld.
+
+    HARDE GARANTIE: het script klikt ALLEEN op een element waarvan de
+    genormaliseerde tekst EXACT gelijk is aan één van de geaccepteerde
+    naamvormen van deze speler:
+      - de volledige naam ("Chris van Waardenburg")
+      - voornaam + achternaam zonder tussenvoegsel ("Chris Waardenburg")
+
+    Een container-element met meerdere namen, of een fuzzy 'bevat-achternaam'
+    match, wordt geweigerd. Reden: op 28-05 vanochtend selecteerde het script
+    per ongeluk 'Christel Beckmann Asselman' ipv 'Chris van Waardenburg' omdat
+    een container met meerdere namen matchte op 'Waardenburg'.
+
+    Daarnaast: na de klik wordt geverifieerd dat de doelnaam zichtbaar is op
+    de pagina (= in het geselecteerde-spelers paneel). Lukt dat niet → return
+    False zodat de hele boeking faalt — beter mislukken dan een verkeerde
+    speler boeken.
+
+    De vroegere 'Recent mee gespeeld'-shortcut is verwijderd: die gebruikte
+    een 'contains(.,achternaam)' XPath wat exact hetzelfde risico had.
     """
-    achternaam = speler.split()[-1]
+    woorden    = speler.split()
+    achternaam = woorden[-1]
+
+    # GEACCEPTEERDE EXACTE TEKSTVORMEN — nooit alleen achternaam
+    accepted = [speler]
+    if len(woorden) >= 3:
+        accepted.append(f"{woorden[0]} {achternaam}")
+
+    def _norm(s: str) -> str:
+        return ' '.join((s or '').split()).strip()
+
+    def _is_exact_doel(tekst: str) -> bool:
+        return _norm(tekst) in accepted
 
     def _action_klik(el):
         """Klik via ActionChains (isTrusted=true) met JS-click als fallback."""
@@ -397,100 +425,132 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             except Exception:
                 return False
 
-    # 1. Probeer eerst via 'Recent mee gespeeld' – klik op het +-knopje via ActionChains
-    try:
-        driver.implicitly_wait(0)
-        recent_plus = driver.find_elements(By.XPATH,
-            f"//div[contains(@class,'recent') or contains(@class,'Recent')]"
-            f"//*[contains(.,'{achternaam}')]"
-            f"/ancestor::*[contains(@class,'player') or contains(@class,'card') or contains(@class,'item')]"
-            f"//*[contains(@class,'add') or contains(@class,'plus') or text()='+']")
-        driver.implicitly_wait(5)
-        for knop in recent_plus:
-            if knop.is_displayed():
-                if _action_klik(knop):
-                    log.info(f"  ✅ {speler} via 'Recent mee gespeeld' toegevoegd (ActionChains)")
-                    time.sleep(1.5)
-                    return True
-    except Exception:
-        driver.implicitly_wait(5)
-
-    # 2. Zoek via het zoekveld
     zoek_veld = _zoek_veld_spelers(driver)
     if not zoek_veld:
         log.error(f"  ❌ Zoekveld niet gevonden voor '{speler}'")
         return False
 
-    woorden    = speler.split()
-    zoektermen = [speler, achternaam]
+    # Zoektermen van specifiek naar breder. Achternaam-only is laatste redmiddel
+    # (de strikte match-check voorkomt dat een verkeerde speler wordt geklikt).
+    zoektermen = [speler]
     if len(woorden) >= 3:
-        zoektermen.insert(1, woorden[0] + " " + woorden[-1])  # "Chris Waardenburg"
+        zoektermen.append(f"{woorden[0]} {achternaam}")
+    zoektermen.append(achternaam)
 
-    geselecteerd = False
     for zoekterm in zoektermen:
-        # Wis het veld en typ de zoekterm (echte toetsaanslagen → typeahead)
-        zoek_veld.click()
-        zoek_veld.send_keys(Keys.CONTROL + "a")
-        zoek_veld.send_keys(Keys.DELETE)
-        time.sleep(0.3)
-        zoek_veld.send_keys(zoekterm)
-        log.info(f"  Zoekterm ingevuld: '{zoekterm}'")
+        # Wis veld + typ via echte toetsaanslagen (typeahead-trigger)
+        try:
+            zoek_veld.click()
+            zoek_veld.send_keys(Keys.CONTROL + "a")
+            zoek_veld.send_keys(Keys.DELETE)
+            time.sleep(0.3)
+            zoek_veld.send_keys(zoekterm)
+            log.info(f"  Zoekterm ingevuld: '{zoekterm}'")
+        except Exception as e:
+            log.warning(f"  Zoekveld input faalde ({e}), refetch en volgende term")
+            zoek_veld = _zoek_veld_spelers(driver)
+            if not zoek_veld:
+                continue
+            continue
         screenshot(driver, f"05b_zoek_{index}_{achternaam}")
 
-        # Wacht tot suggestie verschijnt (max 8s)
+        # Wacht tot een ZICHTBARE EXACTE MATCH verschijnt (max 8s)
         try:
             WebDriverWait(driver, 8).until(
                 lambda d: any(
-                    el.is_displayed() and achternaam.lower() in el.text.lower()
+                    el.is_displayed() and _is_exact_doel(el.text)
                     for el in d.find_elements(By.XPATH,
                         f"//*[contains(.,'{achternaam}') and not(self::input)"
                         f"    and not(self::html) and not(self::body)]")
                 )
             )
         except TimeoutException:
-            log.info(f"  Geen suggestie na 8s voor '{zoekterm}', volgende proberen...")
+            log.info(f"  Geen exacte match na 8s voor '{zoekterm}', volgende term")
             continue
 
-        # 3. Kies het KLEINSTE zichtbare element dat de achternaam bevat.
-        #    Groot element (bijv. sectiecontainer 'Spelers') overslaan.
+        # Verzamel alle EXACTE kandidaten (strict equality, geen fuzzy)
         selectors = [
-            f"//*[@role='option'][contains(.,'{achternaam}')]",
+            "//*[@role='option']",
             f"//li[contains(.,'{achternaam}')]",
             f"//div[contains(@class,'player') or contains(@class,'suggestion')"
             f"      or contains(@class,'result') or contains(@class,'item')]"
             f"[contains(.,'{achternaam}')]",
-            f"//*[contains(.,'{achternaam}') and not(self::html) and not(self::body)"
-            f"    and not(self::div[@id]) and not(self::input)]",
         ]
         kandidaten = []
+        seen_ids = set()
         driver.implicitly_wait(0)
         for sel in selectors:
             try:
                 for el in driver.find_elements(By.XPATH, sel):
-                    tekst = el.text.strip()
-                    if el.is_displayed() and achternaam.lower() in tekst.lower() \
-                            and 0 < len(tekst) < 200:
-                        kandidaten.append((len(tekst), el, tekst, sel))
+                    if not el.is_displayed():
+                        continue
+                    if not _is_exact_doel(el.text):
+                        continue
+                    eid = el.id  # unieke Selenium element-id
+                    if eid in seen_ids:
+                        continue
+                    seen_ids.add(eid)
+                    kandidaten.append((el, _norm(el.text), sel))
             except Exception:
                 pass
         driver.implicitly_wait(5)
 
-        if kandidaten:
-            # Sorteer op tekstlengte en klik de kleinste
-            kandidaten.sort(key=lambda x: x[0])
-            _, best_el, best_tekst, best_sel = kandidaten[0]
-            log.info(f"  Suggestie (kleinste, {len(best_tekst)} tekens): "
-                     f"'{best_tekst[:60]}' via '{best_sel[:50]}'")
-            if _action_klik(best_el):
-                time.sleep(1.5)
-                log.info(f"  ✅ {speler} geselecteerd via ActionChains (zoekterm '{zoekterm}')")
-                geselecteerd = True
+        if not kandidaten:
+            log.warning(f"  ⚠️ Geen EXACTE match voor '{speler}' bij zoekterm '{zoekterm}'")
+            continue
 
-        if geselecteerd:
+        el, tekst, sel = kandidaten[0]
+        log.info(f"  ✓ Exacte match: '{tekst}' via '{sel[:60]}'")
+
+        if not _action_klik(el):
+            log.warning(f"  Klik faalde op exacte match — volgende zoekterm")
+            continue
+        time.sleep(1.5)
+
+        # Wis zoekveld zodat input-tekst niet als 'gevonden' meetelt
+        try:
+            zoek_veld_na = _zoek_veld_spelers(driver)
+            if zoek_veld_na:
+                zoek_veld_na.click()
+                zoek_veld_na.send_keys(Keys.CONTROL + "a")
+                zoek_veld_na.send_keys(Keys.DELETE)
+        except Exception:
+            pass
+        time.sleep(0.5)
+
+        # POST-KLIK VERIFICATIE: doelnaam (volledige vorm) moet zichtbaar zijn
+        # op de pagina, in een element dat geen <input> is. Zo niet → fail.
+        try:
+            doel_zichtbaar = driver.execute_script("""
+                var accepted = arguments[0];
+                var alle = document.querySelectorAll('body *');
+                for (var i = 0; i < alle.length; i++) {
+                    var el = alle[i];
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') continue;
+                    if (!el.offsetParent) continue;  // niet zichtbaar
+                    var t = (el.innerText || '').trim();
+                    if (!t) continue;
+                    // Normaliseer whitespace
+                    var norm = t.replace(/\\s+/g, ' ').trim();
+                    for (var j = 0; j < accepted.length; j++) {
+                        if (norm.indexOf(accepted[j]) >= 0) return true;
+                    }
+                }
+                return false;
+            """, accepted)
+        except Exception:
+            doel_zichtbaar = False
+
+        if doel_zichtbaar:
+            log.info(f"  ✅ {speler} geselecteerd EN geverifieerd (zoekterm '{zoekterm}')")
             return True
 
-    # Geen suggestie gevonden
-    log.error(f"  ❌ Geen suggestie voor '{speler}' (geprobeerd: {zoektermen})")
+        log.error(f"  ❌ Klik gelukt maar '{speler}' NIET zichtbaar op pagina — "
+                  f"selectie waarschijnlijk niet geregistreerd door ETV")
+        screenshot(driver, f"05d_niet_geverifieerd_{achternaam}")
+        return False
+
+    log.error(f"  ❌ Geen exacte match voor '{speler}' (geprobeerd: {zoektermen})")
     try:
         zichtbaar_tekst = driver.find_element(By.TAG_NAME, "body").text
         log.error(f"  Paginatekst (500 tekens): {zichtbaar_tekst[:500]}")
