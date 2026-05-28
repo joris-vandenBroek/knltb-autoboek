@@ -502,6 +502,7 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
 def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     log.info(f"Dag kiezen: {datum}, dagdeel: {dagdeel(tijd)}")
     time.sleep(2)
+    _sluit_cookie_banner(driver)
     screenshot(driver, "07_dag_pagina")
 
     doel_datum      = datetime.strptime(datum, "%Y-%m-%d")
@@ -686,12 +687,31 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
 
 # ── STAP 5: Baan en tijd kiezen ──────────────────────────────────────────────
+def _sluit_cookie_banner(driver: uc.Chrome):
+    """Sluit de cookie-banner als die zichtbaar is (anders blokkeert hij klikken)."""
+    for xpath in [
+        "//button[contains(normalize-space(),'Accepteer')]",
+        "//button[contains(normalize-space(),'Accept')]",
+        "//button[contains(normalize-space(),'Weiger')]",
+        "//button[contains(normalize-space(),'Sluiten')]",
+        "//a[contains(normalize-space(),'Accepteer')]",
+    ]:
+        try:
+            els = driver.find_elements(By.XPATH, xpath)
+            for el in els:
+                if el.is_displayed():
+                    driver.execute_script("arguments[0].click();", el)
+                    log.info(f"🍪 Cookie-banner gesloten via '{el.text.strip()[:30]}'")
+                    time.sleep(0.8)
+                    return
+        except Exception:
+            pass
+
+
 def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     log.info("Baankeuze pagina laden...")
 
-    # Wacht tot de tijdslot-pagina geladen is: er verschijnen elementen zoals
-    # "08:00", "09:30" etc. Padelbaan-namen staan pas zichtbaar NADAT een
-    # tijdslot geselecteerd is, dus die zijn geen bruikbaar laadsignaal.
+    # Wacht tot de tijdslot-pagina geladen is
     try:
         WebDriverWait(driver, 30).until(
             lambda d: ":00" in d.find_element(By.TAG_NAME, "body").text
@@ -705,79 +725,113 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
         except Exception:
             log.warning("⚠️ Tijdslot-pagina niet geladen na 30s — body niet leesbaar")
 
-
     time.sleep(1)
+
+    # ── Sluit cookie-banner vóór we iets klikken ─────────────────────────────
+    _sluit_cookie_banner(driver)
+
     screenshot(driver, "09_baan_pagina")
 
     tijden = genereer_tijden(voorkeur_tijd)
     log.info(f"Tijden om te proberen: {tijden}")
 
-    # Log paginatekst voor diagnose (eerste 3000 tekens)
+    # Log paginatekst voor diagnose
     try:
         pagina = driver.find_element(By.TAG_NAME, "body").text
         log.info(f"Baan-pagina tekst (3000): {pagina[:3000]}")
     except Exception:
         pass
 
-    # Baankeuze = tijdslot klikken. Het systeem koppelt daarna een baan.
-    # Klik het eerste beschikbare tijdslot dat overeenkomt met gewenste tijd.
     for tijd in tijden:
         log.info(f"Zoek tijdslot '{tijd}'...")
 
-        resultaat = driver.execute_script("""
-            var tijd = arguments[0];
-            var alle = Array.from(document.querySelectorAll('*'));
+        # Zoek tijdslot-element: geef voorkeur aan rijen met een padelbaan.
+        # Geef ook de outerHTML terug voor diagnose.
+        cel = driver.execute_script("""
+            var tijd     = arguments[0];
+            var padelNamen = arguments[1];   // bijv. ["Padel 1","Padel 2"]
 
-            // Verzamel alle kandidaten die de tijdtekst bevatten.
-            // Geef voorkeur aan leaf-elementen (children.length === 0) zodat
-            // een Bootstrap collapse-wrapper niet per ongeluk wordt geklikt.
-            var kandidaten = [];
-            for (var el of alle) {
-                if (!el.offsetParent) continue;
+            function matchTijd(el) {
+                if (!el.offsetParent) return false;
                 var txt = (el.innerText || '').trim();
-
-                if (txt !== tijd &&
-                    !txt.startsWith(tijd + ' ') &&
-                    !txt.startsWith(tijd + '-') &&
-                    txt.split(/\s/)[0] !== tijd) continue;
-
-                if (el.classList.contains('disabled') ||
-                    el.hasAttribute('disabled') ||
-                    el.getAttribute('aria-disabled') === 'true') continue;
-
-                kandidaten.push(el);
+                if (txt !== tijd
+                    && !txt.startsWith(tijd + ' ')
+                    && !txt.startsWith(tijd + '-')
+                    && txt.split(/\\s/)[0] !== tijd) return false;
+                if (el.classList.contains('disabled')
+                    || el.hasAttribute('disabled')
+                    || el.getAttribute('aria-disabled') === 'true') return false;
+                return true;
             }
 
-            if (!kandidaten.length) return 'NIET_GEVONDEN tijd=' + tijd;
+            var alle = Array.from(document.querySelectorAll('*'));
+            var kandidaten = alle.filter(matchTijd);
+            if (!kandidaten.length) return null;
 
-            // Sorteer: leaf-elementen (geen kinderen) eerst
-            kandidaten.sort(function(a, b) { return a.children.length - b.children.length; });
+            // Geef voorkeur aan een tijdcel in een padel-rij
+            for (var i = 0; i < kandidaten.length; i++) {
+                var el  = kandidaten[i];
+                var row = el.closest('tr') || el.closest('[class*="row"]')
+                           || el.closest('[class*="court"]') || el.parentElement;
+                if (!row) continue;
+                var rowTxt = (row.innerText || '').toLowerCase();
+                for (var n = 0; n < padelNamen.length; n++) {
+                    if (rowTxt.indexOf(padelNamen[n].toLowerCase()) >= 0) {
+                        return el;
+                    }
+                }
+            }
+            // Geen padel-rij gevonden — neem leaf-element (minste children)
+            kandidaten.sort(function(a,b){ return a.children.length - b.children.length; });
+            return kandidaten[0];
+        """, tijd, PADEL_BANEN)
 
-            var target = kandidaten[0];
-            target.click();
-            return 'OK tijd=' + tijd + ' tag=' + target.tagName
-                 + ' class=' + (target.className || '')
-                 + ' children=' + target.children.length;
-        """, tijd)
+        if not cel:
+            log.info(f"  Geen tijdslot '{tijd}' gevonden")
+            continue
 
-        log.info(f"  JS: {resultaat}")
-        if resultaat and resultaat.startswith("OK"):
-            time.sleep(2)
-            screenshot(driver, "10_baan_geselecteerd")
+        # Log elementinfo en scroll in beeld
+        try:
+            info = driver.execute_script("""
+                var el = arguments[0];
+                el.scrollIntoView({block:'center', behavior:'instant'});
+                return el.tagName + ' class=' + (el.className||'')
+                       + ' txt=' + (el.innerText||'').trim().slice(0,30)
+                       + ' html=' + el.outerHTML.slice(0,120);
+            """, cel)
+            log.info(f"  Tijdslot element: {info}")
+        except Exception:
+            pass
 
-            # Bepaal welke baan geselecteerd is vanuit de paginatekst
-            baan = ""
-            try:
-                tekst = driver.find_element(By.TAG_NAME, "body").text
-                for b in PADEL_BANEN:
-                    if b in tekst:
-                        baan = b
-                        break
-            except Exception:
-                pass
+        time.sleep(0.5)   # wacht op scroll
 
-            log.info(f"✅ Tijdslot {tijd} geselecteerd, baan={baan or '(onbekend)'}")
-            return baan, tijd
+        # ── Klik via ActionChains (real mouse event, NIET JS click) ──────────
+        try:
+            ActionChains(driver).move_to_element(cel).click().perform()
+            log.info(f"  ✅ ActionChains klik op {tijd}")
+        except Exception as e:
+            log.warning(f"  ActionChains mislukt ({e}), fallback JS click")
+            driver.execute_script("arguments[0].click();", cel)
+
+        time.sleep(2)
+        screenshot(driver, "10_baan_geselecteerd")
+
+        # Log body na klik — als selectie werkte verandert de body
+        try:
+            body_na = driver.find_element(By.TAG_NAME, "body").text
+            log.info(f"  Body na klik (500): {body_na[:500]}")
+        except Exception:
+            body_na = ""
+
+        # Detecteer geselecteerde padelbaan
+        baan = ""
+        for b in PADEL_BANEN:
+            if b in body_na:
+                baan = b
+                break
+
+        log.info(f"✅ Tijdslot {tijd} geselecteerd, baan={baan or '(onbekend)'}")
+        return baan, tijd
 
     log.error("❌ Geen beschikbaar tijdslot gevonden!")
     screenshot(driver, "baan_fout")
