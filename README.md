@@ -77,9 +77,15 @@ Ga naar: **Settings → Secrets and variables → Actions → New repository sec
 2. Kies datum (DD-MM-JJJJ), tijd en 3 medespelers
 3. Tik op "Baan boeken"
 
-GitHub Actions doet de rest:
-  ✅ < 48 uur voor speelmoment → direct boeken
-  ✅ > 48 uur → wacht tot 2 dagen voor speeldatum om 07:00
+GitHub Actions doet de rest. Het boekvenster opent om 07:00 op
+(speeldatum − 2 kalenderdagen). Het script kiest automatisch:
+
+  ✅ Speeldatum = vandaag of morgen          → boekt direct
+  ✅ Speeldatum = overmorgen (dag+2)         → wacht tot 07:00 vandaag,
+                                                dan boekt direct
+  ⏳ Speeldatum = dag+3                       → script stopt met "Te vroeg".
+                                                Start de workflow morgen vóór 07:00
+  ⛔ Speeldatum = dag+4 of verder             → script stopt met "Te vroeg"
 
 Script probeert Padelbaan 1 t/m 6 op voorkeurstijd.
 Bij bezette baan probeert het automatisch alternatieve tijden.
@@ -87,6 +93,11 @@ Bij bezette baan probeert het automatisch alternatieve tijden.
 4. ✅ Afspraak verschijnt automatisch in Google Agenda:
    "🎾 Padel – Padel 3 – ETV Volley"
 ```
+
+> **Let op:** de GitHub Actions runner heeft een timeout van 15 minuten.
+> Voor `dag+2`-boekingen werkt het wachten-tot-07:00 prima zolang je de workflow
+> niet ruim vóór 06:45 start. Voor `dag+3` moet je de workflow op de boekingsdatum
+> zelf (= 2 dagen vóór speeldatum) opnieuw triggeren.
 
 ---
 
@@ -105,6 +116,9 @@ Handmatig verversen kan op twee manieren:
 | Probleem | Oplossing |
 |----------|-----------|
 | Boeking mislukt | Actions → rode run → download "screenshots" voor foutdiagnose |
+| Workflow stopt met "Te vroeg" | Speeldatum ligt verder dan `dag+2` weg — start de workflow opnieuw op (speeldatum − 2 dagen) vóór 07:00 |
 | Afspraak niet in agenda | Controleer `GOOGLE_CALENDAR_CREDENTIALS` en of agenda gedeeld is met serviceaccount |
 | Naam niet gevonden in autocomplete | Tik op 🔄 Verversen om de ledenlijst bij te werken |
 | App vraagt token | Voer GitHub PAT in via ⚙️ (eenmalig per apparaat) |
+
+---
