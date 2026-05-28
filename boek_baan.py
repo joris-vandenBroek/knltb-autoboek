@@ -536,143 +536,72 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     log.info(f"Dag accordion klik: {'OK' if dag_el else 'NIET GEVONDEN'}")
     time.sleep(1.5)  # wacht tot accordion volledig is uitgeklapt
 
-    # Log parent-chain van dagdeel-element voor diagnose (tag, href, onclick, class)
-    dom_chain = driver.execute_script("""
-        var dd = arguments[0];
-        var alle = Array.from(document.querySelectorAll('*'));
-        var dagdeelEls = alle.filter(function(el) {
-            if (!el.offsetParent) return false;
-            return (el.innerText || '').trim() === dd && el.children.length === 0;
-        });
-        if (!dagdeelEls.length) return 'GEEN';
-        var el = dagdeelEls[0], chain = [];
-        for (var d = 0; d < 5 && el && el !== document.body; d++) {
-            chain.push('d' + d + ':' + el.tagName
-                + '[cls=' + (el.className || '').slice(0, 40)
-                + ',href=' + (el.href || el.getAttribute('href') || '-')
-                + ',onclick=' + (el.onclick ? 'ja' : '-')
-                + ',html=' + el.outerHTML.slice(0, 80) + ']');
-            el = el.parentElement;
-        }
-        return chain.join(' | ');
-    """, gewenst_dagdeel)
-    log.info(f"Dagdeel parent chain: {dom_chain}")
-
-    # Log form inputs voor klik (om later te vergelijken)
-    form_voor = driver.execute_script("""
-        var form = document.querySelector('form');
-        if (!form) return 'geen form: action=? method=?';
-        return 'action=' + form.action + ' method=' + form.method
-             + ' | ' + Array.from(form.elements).map(function(el) {
-                   return el.name + ':' + el.type + ':' + (el.value || '');
-               }).join(' | ');
-    """)
-    log.info(f"Form VOOR klik: {form_voor}")
-
-    # Stap B: vind het dagdeel-element dichtstbij de dag-kolom.
-    # Loop daarna omhoog naar de dichtstbijzijnde klikbare voorouder (a/button/label/li).
-    dagdeel_el = driver.execute_script("""
+    # Stap B: lees de data-date van het div.daypart element voor de juiste dag/dagdeel.
+    # De pagina heeft een hidden <input name="selectedDate"> die op dit waarde moet staan.
+    # Een visuele klik triggert dit hidden field NIET — we zetten het rechtstreeks.
+    data_date = driver.execute_script("""
         var dagNr   = arguments[0];
         var dagdeel = arguments[1];
         var alle = Array.from(document.querySelectorAll('*'));
 
+        // Zoek dag-header element
         var dagEls = alle.filter(function(el) {
             if (!el.offsetParent) return false;
             var tokens = (el.innerText || '').trim().split(/\s+/);
             return tokens.indexOf(dagNr) >= 0 && el.children.length <= 1;
         });
-        if (!dagEls.length) return null;
+        if (!dagEls.length) return 'GEEN_DAG';
 
+        // Zoek dagdeel leaf-elementen
         var dagdeelEls = alle.filter(function(el) {
             if (!el.offsetParent) return false;
             var txt = (el.innerText || '').trim();
             return txt === dagdeel && el.children.length === 0;
         });
-        if (!dagdeelEls.length) return null;
+        if (!dagdeelEls.length) return 'GEEN_DAGDEEL';
 
+        // Sorteer op X-nabijheid bij de dag-kolom
         var dagR = dagEls[0].getBoundingClientRect();
         var dagX = dagR.left + dagR.width / 2;
-
         dagdeelEls.sort(function(a, b) {
             var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
             return Math.abs((ra.left + ra.width / 2) - dagX)
                  - Math.abs((rb.left + rb.width / 2) - dagX);
         });
 
-        // Loop omhoog naar de dichtstbijzijnde klikbare voorouder
-        var target = dagdeelEls[0];
-        var el = target.parentElement;
-        var depth = 0;
-        while (el && el !== document.body && depth < 5) {
-            if (el.tagName === 'A' || el.tagName === 'BUTTON' || el.tagName === 'LABEL' ||
-                el.getAttribute('role') === 'button' || el.onclick) {
-                return el;  // klikbare voorouder gevonden
-            }
+        // Loop omhoog naar het div.daypart element met data-date attribuut
+        var el = dagdeelEls[0];
+        while (el && el !== document.body) {
+            var dd = el.getAttribute('data-date');
+            if (dd) return dd;
             el = el.parentElement;
-            depth++;
         }
-        return target;  // geen klikbare voorouder — gebruik leaf
+        return 'GEEN_DATA_DATE';
     """, dag_nr, gewenst_dagdeel)
 
-    if dagdeel_el:
-        try:
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", dagdeel_el)
-            time.sleep(0.3)
-            ActionChains(driver).move_to_element(dagdeel_el).click().perform()
-            log.info(f"✅ Dagdeel '{gewenst_dagdeel}' geklikt via ActionChains")
-        except Exception as e:
-            log.warning(f"ActionChains dagdeel mislukt ({e}), JS click")
-            driver.execute_script("arguments[0].click();", dagdeel_el)
-        time.sleep(1.5)
-    else:
-        log.warning(f"Dagdeel-element niet gevonden, XPath-fallback...")
-        try:
-            for el in driver.find_elements(By.XPATH,
-                    f"//*[normalize-space(.)='{gewenst_dagdeel}']"):
-                if el.is_displayed():
-                    driver.execute_script("arguments[0].click();", el)
-                    log.info(f"Fallback: '{gewenst_dagdeel}' geklikt")
-                    time.sleep(1.5)
-                    break
-        except Exception as e:
-            log.error(f"❌ Dagdeel-fallback mislukt: {e}")
-            screenshot(driver, "dag_fout")
-            return False
+    log.info(f"Dagdeel data-date: {data_date}")
+    if not data_date or data_date.startswith("GEEN"):
+        log.error(f"❌ Kan data-date niet bepalen: {data_date}")
+        screenshot(driver, "dag_fout")
+        return False
 
-    # Log form inputs NA klik (zie of dagdeel-waarde veranderd is)
-    form_na = driver.execute_script("""
-        var form = document.querySelector('form');
-        if (!form) return 'geen form';
-        return Array.from(form.elements).map(function(el) {
-            return el.name + ':' + el.type + ':' + (el.value || '');
-        }).join(' | ');
-    """)
-    log.info(f"Form NA klik: {form_na}")
-
-    # Check of we al op ReservationsCourt zijn (click navigeerde zelf)
-    if "ReservationsCourt" in driver.current_url:
-        log.info(f"✅ Dagdeel-klik navigeerde naar: {driver.current_url}")
-        return True
+    # Zet de hidden selectedDate input rechtstreeks op de data-date waarde
+    set_ok = driver.execute_script("""
+        var input = document.querySelector('input[name="selectedDate"]');
+        if (!input) return false;
+        var setter = Object.getOwnPropertyDescriptor(
+            window.HTMLInputElement.prototype, 'value').set;
+        setter.call(input, arguments[0]);
+        input.dispatchEvent(new Event('input',  {bubbles: true}));
+        input.dispatchEvent(new Event('change', {bubbles: true}));
+        return true;
+    """, data_date)
+    log.info(f"selectedDate gezet: {set_ok} → {data_date}")
 
     log.info(f"✅ Dag {dag_nr} + dagdeel '{gewenst_dagdeel}' geselecteerd")
     screenshot(driver, "08_dag_geselecteerd")
 
-    # Zoek de stap-nav Volgende (type=submit, class bevat 'next', rechtsonder de tabel)
-    debug_info = driver.execute_script("""
-        return Array.from(document.querySelectorAll('button, a, [role="button"]'))
-            .filter(function(el) {
-                return el.offsetParent && (el.innerText || '').trim() === 'Volgende';
-            })
-            .map(function(el, i) {
-                return i + ':tag=' + el.tagName
-                     + ',href=' + (el.getAttribute('href') || '')
-                     + ',type=' + (el.getAttribute('type') || '')
-                     + ',class=' + (el.className || '').slice(0, 60)
-                     + ',disabled=' + (el.disabled || el.getAttribute('disabled') || false);
-            }).join(' || ');
-    """)
-    log.info(f"Gevonden Volgende-knoppen: {debug_info}")
-
+    # Zoek de stap-nav Volgende (type=submit, class='next', rechtsonder de tabel)
     volgende = driver.execute_script("""
         var alle = Array.from(document.querySelectorAll('button, a, [role="button"]'))
             .filter(function(el) {
@@ -690,13 +619,14 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         }
         return alle[alle.length - 1];
     """)
+    log.info(f"Volgende knop: {bool(volgende)}")
 
     if not volgende:
         log.error("❌ Geen 'Volgende' knop gevonden na dag")
         screenshot(driver, "volgende_fout_dag")
         return False
 
-    # Klik via form.requestSubmit() — HTML-spec-conform, triggert validatie + navigatie.
+    # Submit via requestSubmit (HTML-spec-conform: triggert validatie + pagina-transitie)
     methode = driver.execute_script("""
         var btn  = arguments[0];
         var form = btn.closest('form');
