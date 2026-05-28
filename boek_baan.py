@@ -1387,16 +1387,24 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
     log.info(f"📥 Wachtrij-bestand geschreven: {bestand}")
 
     try:
-        subprocess.run(["git", "config", "user.email", "actions@github.com"], check=True)
+        subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
         subprocess.run(["git", "config", "user.name",  "knltb-autoboek-bot"], check=True)
         subprocess.run(["git", "add", bestand], check=True)
         subprocess.run(["git", "commit", "-m", f"wachtrij: voeg {datum} om {tijd} toe"], check=True)
-        subprocess.run(["git", "push"], check=True)
-        log.info("✅ Wachtrij-bestand gecommit en gepusht naar repo")
-        return True
     except subprocess.CalledProcessError as e:
-        log.error(f"❌ Git push voor wachtrij mislukt: {e}")
+        log.error(f"❌ Git commit voor wachtrij mislukt: {e}")
         return False
+
+    # Retry-lus voor race condities met andere bots/commits op main.
+    for poging in range(1, 6):
+        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=False)
+        if subprocess.run(["git", "push"]).returncode == 0:
+            log.info(f"✅ Wachtrij-bestand gecommit en gepusht (poging {poging})")
+            return True
+        log.warning(f"⚠️  Push poging {poging} mislukt — retry na {poging}s")
+        time.sleep(poging)
+    log.error("❌ Push voor wachtrij faalde na 5 pogingen")
+    return False
 
 
 def main():

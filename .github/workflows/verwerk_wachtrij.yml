@@ -80,12 +80,23 @@ jobs:
       - name: Commit verwijderde wachtrij-bestanden
         if: steps.tijd_check.outputs.skip != 'true'
         run: |
-          git config user.email "actions@github.com"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name  "github-actions[bot]"
-          if [ -n "$(git status --porcelain wachtrij/)" ]; then
-            git add wachtrij/
-            git commit -m "wachtrij: verwerk boekingen voor $(date +%Y-%m-%d)"
-            git push
-          else
+          if [ -z "$(git status --porcelain wachtrij/)" ]; then
             echo "Niets te committen."
+            exit 0
           fi
+          git add wachtrij/
+          git commit -m "wachtrij: verwerk boekingen voor $(date +%Y-%m-%d)"
+          # Retry-lus voor race condities met andere bots/commits op main.
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main || true
+            if git push; then
+              echo "✅ Push gelukt (poging $i)"
+              exit 0
+            fi
+            echo "⚠️  Push poging $i mislukt — opnieuw na ${i}s"
+            sleep "$i"
+          done
+          echo "❌ Push faalde na 5 pogingen"
+          exit 1

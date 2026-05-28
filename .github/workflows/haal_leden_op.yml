@@ -39,8 +39,23 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add leden.json
-          git diff --cached --quiet || git commit -m "Ledenlijst bijgewerkt"
-          git push
+          if git diff --cached --quiet; then
+            echo "Geen wijzigingen aan leden.json — niets te committen."
+            exit 0
+          fi
+          git commit -m "Ledenlijst bijgewerkt"
+          # Retry-lus voor race condities met andere bots/commits op main.
+          for i in 1 2 3 4 5; do
+            git pull --rebase origin main || true
+            if git push; then
+              echo "✅ Push gelukt (poging $i)"
+              exit 0
+            fi
+            echo "⚠️  Push poging $i mislukt — opnieuw na ${i}s"
+            sleep "$i"
+          done
+          echo "❌ Push faalde na 5 pogingen"
+          exit 1
 
       - name: Screenshots bij fout
         if: failure()
