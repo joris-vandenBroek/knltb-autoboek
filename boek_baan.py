@@ -742,92 +742,153 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     except Exception:
         pass
 
-    for tijd in tijden:
-        log.info(f"Zoek tijdslot '{tijd}'...")
-
-        # Zoek tijdslot in een padel-rij via Y-coördinaat.
-        # De grid is GEEN <table> — elke rij is een reeks <div class="timeincourt">
-        # naast een court-label. Strategie:
-        #   1. Zoek label-elementen met "Padel 1".."Padel 6" tekst → noteer hun Y-middelpunt.
-        #   2. Zoek alle .timeincourt elementen met de gewenste tijdtekst.
-        #   3. Kies het tijdslot waarvan het Y-middelpunt het dichtst bij een padel-label ligt.
-        #   4. Fallback op eerste beschikbare tijdslot (niet-padel) als niets gevonden.
-        cel = driver.execute_script("""
-            var tijd       = arguments[0];
-            var padelNamen = arguments[1];   // bijv. ["Padel 1","Padel 2",...]
-
-            // Stap 1: vind padel-label elementen en hun Y-middelpunt
-            var padelY = [];
-            document.querySelectorAll('*').forEach(function(el) {
-                if (!el.offsetParent) return;
+    # ── Scroll naar padel-rijen zodat getBoundingClientRect() klopt ──────────
+    # Padel-banen staan onderaan het grid; scroll ze eerst in beeld zodat de
+    # browser hun layout berekend heeft en de Y-coördinaten kloppen.
+    try:
+        scroll_result = driver.execute_script("""
+            var padelNamen = arguments[0];
+            var allEls = Array.from(document.querySelectorAll('*'));
+            for (var i = 0; i < allEls.length; i++) {
+                var el  = allEls[i];
                 var txt = (el.innerText || '').trim();
+                if (txt.length === 0 || txt.length > 25) continue;
                 for (var n = 0; n < padelNamen.length; n++) {
-                    if (txt === padelNamen[n]
-                        || txt.startsWith(padelNamen[n])
-                        || txt.endsWith(padelNamen[n])) {
-                        var r = el.getBoundingClientRect();
-                        padelY.push(r.top + r.height / 2);
+                    if (txt.indexOf(padelNamen[n]) >= 0) {
+                        el.scrollIntoView({block: 'center', behavior: 'instant'});
+                        return 'Gevonden en gescrolled: ' + txt;
+                    }
+                }
+            }
+            // Fallback: scroll naar 70% van paginahoogte
+            window.scrollTo(0, document.body.scrollHeight * 0.7);
+            return 'Fallback scroll 70%';
+        """, PADEL_BANEN)
+        log.info(f"Scroll naar padel: {scroll_result}")
+        time.sleep(0.8)
+        _sluit_cookie_banner(driver)
+    except Exception as e:
+        log.warning(f"Scroll naar padel mislukt: {e}")
+
+    for tijd in tijden:
+        log.info(f"Zoek padel tijdslot '{tijd}'...")
+
+        # Zoek tijdslot in een padel-rij via ABSOLUTE document-Y (scroll-onafhankelijk).
+        # getBoundingClientRect().top + window.scrollY = absolute document-Y.
+        # Strategie:
+        #   1. Vind padel-label elementen (kleine tekst ≤25 tekens met "Padel N")
+        #      en bereken hun absolute document-Y.
+        #   2. Verzamel alle .timeincourt / [data-hour] cellen met de gewenste tijd
+        #      en bereken hun absolute document-Y.
+        #   3. Kies de tijdcel met de kleinste absolute Y-afstand tot een padel-label.
+        #   4. Geen match binnen 120px → return null (weiger smashcourt als fallback).
+        result = driver.execute_script("""
+            var tijd       = arguments[0];
+            var padelNamen = arguments[1];
+
+            // ── Stap 1: padel-labels → absolute document-Y ────────────────────────
+            var padelItems = [];
+            document.querySelectorAll('*').forEach(function(el) {
+                var r = el.getBoundingClientRect();
+                if (r.width <= 0 || r.height <= 0) return;   // niet gerenderd/zichtbaar
+                var txt = (el.innerText || '').trim();
+                if (txt.length === 0 || txt.length > 25) return;  // te lang = container
+                for (var n = 0; n < padelNamen.length; n++) {
+                    if (txt.indexOf(padelNamen[n]) >= 0) {
+                        padelItems.push({
+                            name: padelNamen[n],
+                            absY: r.top + window.scrollY + r.height / 2
+                        });
                         break;
                     }
                 }
             });
 
-            // Stap 2: verzamel alle tijdcellen voor de gewenste tijd
-            var tijdCellen = Array.from(document.querySelectorAll('.timeincourt, [data-hour]'))
-                .filter(function(el) {
-                    if (!el.offsetParent) return false;
-                    var txt = (el.innerText || '').trim();
-                    return (txt === tijd || txt.startsWith(tijd));
-                });
+            window._padelCount = padelItems.length;
+            window._padelAbsY  = padelItems.map(function(p) { return Math.round(p.absY); });
 
-            if (!tijdCellen.length) return null;
+            // ── Stap 2: tijdcellen → absolute document-Y ─────────────────────────
+            var tijdItems = Array.from(
+                document.querySelectorAll('.timeincourt, [data-hour]')
+            ).filter(function(el) {
+                var r = el.getBoundingClientRect();
+                if (r.width <= 0 || r.height <= 0) return false;
+                var txt = (el.innerText || '').trim();
+                return txt === tijd || txt.startsWith(tijd);
+            }).map(function(el) {
+                var r = el.getBoundingClientRect();
+                return { el: el, absY: r.top + window.scrollY + r.height / 2 };
+            });
 
-            // Stap 3: als padel-labels gevonden, kies tijdslot dichtstbij een padel-Y
-            if (padelY.length > 0) {
-                var beste = null, minAfstand = Infinity;
-                tijdCellen.forEach(function(el) {
-                    var r   = el.getBoundingClientRect();
-                    var midY = r.top + r.height / 2;
-                    padelY.forEach(function(py) {
-                        var afstand = Math.abs(midY - py);
-                        if (afstand < minAfstand) {
-                            minAfstand = afstand;
-                            beste = el;
-                        }
-                    });
+            window._tijdCount = tijdItems.length;
+
+            if (!tijdItems.length || !padelItems.length) return null;
+
+            // ── Stap 3: kies tijdcel dichtstbij een padel-label ──────────────────
+            var beste = null, minAfstand = Infinity, bestePadel = '';
+            tijdItems.forEach(function(ti) {
+                padelItems.forEach(function(pi) {
+                    var afstand = Math.abs(ti.absY - pi.absY);
+                    if (afstand < minAfstand) {
+                        minAfstand = afstand;
+                        beste      = ti.el;
+                        bestePadel = pi.name;
+                    }
                 });
-                if (beste && minAfstand < 60) {
-                    return beste;   // max 60px afwijking = zelfde rij
-                }
+            });
+
+            window._minAfstand = minAfstand;
+            window._bestePadel = bestePadel;
+
+            // Max 120px afwijking = zelfde rij (rijen zijn typisch 40-60px hoog)
+            if (beste && minAfstand < 120) {
+                return { cel: beste, baan: bestePadel };
             }
-
-            // Stap 4: fallback — eerste beschikbare tijdslot
-            return tijdCellen[0];
+            return null;
         """, tijd, PADEL_BANEN)
 
-        if not cel:
-            log.info(f"  Geen tijdslot '{tijd}' gevonden")
+        # Diagnose loggen
+        try:
+            log.info(f"  diagnose: padel_labels={driver.execute_script('return window._padelCount||0')} "
+                     f"absY={driver.execute_script('return (window._padelAbsY||[]).slice(0,6)')} "
+                     f"tijdcellen={driver.execute_script('return window._tijdCount||0')} "
+                     f"minAfstand={driver.execute_script('return Math.round(window._minAfstand||-1)')} "
+                     f"bestePadel='{driver.execute_script('return window._bestePadel||\"\"')}'")
+        except Exception:
+            pass
+
+        if not result:
+            log.info(f"  Geen padel tijdslot '{tijd}' gevonden (bezet of buiten drempel)")
             continue
 
-        # Log elementinfo en scroll in beeld
+        # result is een dict {cel: WebElement, baan: 'Padel N'}
+        cel  = result.get('cel') if isinstance(result, dict) else result
+        baan = result.get('baan', '') if isinstance(result, dict) else ''
+
+        if not cel:
+            log.info(f"  Geen cel in result voor tijdslot '{tijd}'")
+            continue
+
+        # Log elementinfo en scroll cel in beeld
         try:
             info = driver.execute_script("""
                 var el = arguments[0];
                 el.scrollIntoView({block:'center', behavior:'instant'});
                 return el.tagName + ' class=' + (el.className||'')
                        + ' txt=' + (el.innerText||'').trim().slice(0,30)
-                       + ' html=' + el.outerHTML.slice(0,120);
+                       + ' html=' + el.outerHTML.slice(0,150);
             """, cel)
             log.info(f"  Tijdslot element: {info}")
         except Exception:
             pass
 
-        time.sleep(0.5)   # wacht op scroll
+        time.sleep(0.5)
+        _sluit_cookie_banner(driver)
 
         # ── Klik via ActionChains (real mouse event, NIET JS click) ──────────
         try:
             ActionChains(driver).move_to_element(cel).click().perform()
-            log.info(f"  ✅ ActionChains klik op {tijd}")
+            log.info(f"  ✅ ActionChains klik op {tijd}, baan={baan}")
         except Exception as e:
             log.warning(f"  ActionChains mislukt ({e}), fallback JS click")
             driver.execute_script("arguments[0].click();", cel)
@@ -835,39 +896,16 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
         time.sleep(2)
         screenshot(driver, "10_baan_geselecteerd")
 
-        # Log body na klik — als selectie werkte verandert de body
         try:
             body_na = driver.find_element(By.TAG_NAME, "body").text
             log.info(f"  Body na klik (500): {body_na[:500]}")
         except Exception:
-            body_na = ""
+            pass
 
-        # Detecteer geselecteerde padelbaan via het geselecteerde element zelf
-        # (NIET via body-tekst: alle baannamen staan altijd in de pagina als grid-label)
-        baan = driver.execute_script("""
-            var el         = arguments[0];
-            var padelNamen = arguments[1];
-            // Loop omhoog totdat we een container vinden met een padelnaam
-            var node = el;
-            for (var i = 0; i < 8; i++) {
-                node = node.parentElement;
-                if (!node || node === document.body) break;
-                var txt = (node.innerText || '').toLowerCase();
-                for (var n = 0; n < padelNamen.length; n++) {
-                    if (txt.indexOf(padelNamen[n].toLowerCase()) >= 0
-                        && txt.length < 300) {   // niet de hele pagina
-                        return padelNamen[n];
-                    }
-                }
-            }
-            return '';
-        """, cel, PADEL_BANEN)
-
-        log.info(f"  Baan via parent-chain: '{baan}'")
-        log.info(f"✅ Tijdslot {tijd} geselecteerd, baan={baan or '(onbekend)'}")
+        log.info(f"✅ Tijdslot {tijd} geselecteerd, baan={baan}")
         return baan, tijd
 
-    log.error("❌ Geen beschikbaar tijdslot gevonden!")
+    log.error("❌ Geen beschikbaar padel tijdslot gevonden!")
     screenshot(driver, "baan_fout")
     return "", ""
 
