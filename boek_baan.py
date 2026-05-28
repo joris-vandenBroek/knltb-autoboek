@@ -865,39 +865,57 @@ def _submit_knop(driver: uc.Chrome, knop) -> str:
 
 
 def bevestig(driver: uc.Chrome) -> bool:
-    log.info("Bevestigen...")
-    SUCCES_WOORDEN = ["bevestigd", "succesvol", "geboekt", "reservering is",
-                      "bedankt", "thank", "confirmed", "success", "je reservering"]
+    """
+    Stap 6: klik Volgende → ga naar bevestigingspagina → roep SaveReservation aan.
 
-    def _is_succes(d):
+    De bevestigingsknop is een <a id="confirmReservationButton"
+    data-url="/Ajax/Profile/SaveReservation" data-redirect="/me/Reservations">.
+    Er is GEEN form — de knop triggert een AJAX-call via een jQuery click-handler.
+    We roepen de AJAX-endpoint daarom rechtstreeks aan via jQuery.ajax() / fetch().
+    """
+    log.info("Bevestigen...")
+
+    def _wacht_op_redirect(max_sec=20):
+        """True als de URL weg is van ReservationsCourt binnen max_sec seconden."""
         try:
-            url  = d.current_url
-            body = d.find_element(By.TAG_NAME, "body").text.lower()
-            if "ReservationsCourt" not in url:
-                return True
-            return any(w in body for w in SUCCES_WOORDEN)
-        except Exception:
+            WebDriverWait(driver, max_sec).until(
+                lambda d: "ReservationsCourt" not in d.current_url
+            )
+            return True
+        except TimeoutException:
             return False
 
     try:
-        # ── Stap 1: Volgende → naar de bevestigingspagina ───────────────────
+        # ── Stap 1: Volgende → bevestigingspagina ───────────────────────────
         volgende = _zoek_knop(driver, ["Volgende", "Next"])
         if volgende:
             methode = _submit_knop(driver, volgende)
             log.info(f"  Volgende submit methode: {methode}")
             time.sleep(3)
             screenshot(driver, "11_bevestig_pagina")
+            log.info(f"  URL na Volgende: {driver.current_url}")
             try:
-                log.info(f"  URL na Volgende: {driver.current_url}")
-                log.info(f"  Body na Volgende (300): "
-                         f"{driver.find_element(By.TAG_NAME,'body').text[:300]}")
+                log.info(f"  Body na Volgende (400): "
+                         f"{driver.find_element(By.TAG_NAME,'body').text[:400]}")
             except Exception:
                 pass
 
-        # ── Stap 2: zoek de Bevestig-knop ───────────────────────────────────
-        bevestig_knop = _zoek_knop(driver, ["Bevestig", "Confirm", "Boek", "Reserveer"])
-        if not bevestig_knop:
-            log.error("❌ Bevestig-knop niet gevonden")
+        # ── Stap 2: zoek confirmReservationButton (op id of data-url) ───────
+        knop_info = driver.execute_script("""
+            var btn = document.getElementById('confirmReservationButton')
+                   || document.querySelector('[data-url*="SaveReservation"]')
+                   || document.querySelector('[data-url*="Confirm"]');
+            if (!btn) return null;
+            return {
+                id:       btn.id,
+                dataUrl:  btn.getAttribute('data-url'),
+                redirect: btn.getAttribute('data-redirect'),
+                html:     btn.outerHTML.slice(0, 300)
+            };
+        """)
+
+        if not knop_info:
+            log.error("❌ confirmReservationButton niet gevonden via id/data-url")
             try:
                 log.error(f"Paginatekst: {driver.find_element(By.TAG_NAME,'body').text[:600]}")
             except Exception:
@@ -905,72 +923,108 @@ def bevestig(driver: uc.Chrome) -> bool:
             screenshot(driver, "bevestig_fout")
             return False
 
-        # ── Stap 3: klik Bevestig via requestSubmit + ActionChains fallback ─
-        methode = _submit_knop(driver, bevestig_knop)
-        log.info(f"  Bevestig submit methode: {methode}")
+        log.info(f"  Knop gevonden: id={knop_info.get('id')} "
+                 f"data-url={knop_info.get('dataUrl')} "
+                 f"redirect={knop_info.get('redirect')}")
+        log.info(f"  HTML: {knop_info.get('html')}")
 
-        # Wacht op succesmelding of URL-verandering (max 15 s)
-        try:
-            WebDriverWait(driver, 15).until(_is_succes)
-        except TimeoutException:
-            pass
+        data_url   = knop_info.get('dataUrl', '')
+        redirect   = knop_info.get('redirect', '/me/Reservations')
 
-        url_na  = driver.current_url
-        try:
-            body_na = driver.find_element(By.TAG_NAME, "body").text
-        except Exception:
-            body_na = ""
-        log.info(f"  URL na Bevestig: {url_na}")
-        log.info(f"  Body na Bevestig (500): {body_na[:500]}")
-        screenshot(driver, "12_na_bevestiging")
+        if not data_url:
+            log.error("❌ data-url attribuut ontbreekt op bevestig-knop")
+            screenshot(driver, "bevestig_fout")
+            return False
 
-        if "ReservationsCourt" not in url_na:
-            log.info("✅ Bevestigd! (URL veranderd)")
+        # ── Stap 3: roep de AJAX-endpoint rechtstreeks aan ───────────────────
+        # Poging A: jQuery.ajax() — meest betrouwbaar voor jQuery-apps
+        ajax_start = driver.execute_script("""
+            var url      = arguments[0];
+            var redirect = arguments[1];
+            window._bevestigFout    = null;
+            window._bevestigStatus  = null;
+
+            function doeRedirect() {
+                window.location.href = redirect || '/me/Reservations';
+            }
+
+            if (window.jQuery) {
+                window.jQuery.ajax({
+                    url:  url,
+                    type: 'POST',
+                    xhrFields: { withCredentials: true },
+                    success: function(data, status, xhr) {
+                        window._bevestigStatus = 'ok:' + xhr.status;
+                        doeRedirect();
+                    },
+                    error: function(xhr, textStatus, err) {
+                        window._bevestigFout   = xhr.status + ' ' + textStatus
+                                                 + ' ' + xhr.responseText.slice(0,200);
+                        window._bevestigStatus = 'error';
+                    }
+                });
+                return 'jQuery.ajax';
+            }
+
+            // Fallback: fetch API
+            fetch(url, {
+                method:      'POST',
+                credentials: 'include',
+                headers:     { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function(r) {
+                window._bevestigStatus = 'fetch:' + r.status;
+                if (r.ok) { doeRedirect(); }
+                else { r.text().then(function(t){ window._bevestigFout = t.slice(0,200); }); }
+            }).catch(function(e) {
+                window._bevestigFout   = e.message;
+                window._bevestigStatus = 'fetch-error';
+            });
+            return 'fetch';
+        """, data_url, redirect)
+
+        log.info(f"  AJAX gestart via: {ajax_start}")
+
+        # Wacht op redirect (max 20s)
+        if _wacht_op_redirect(20):
+            url_na = driver.current_url
+            log.info(f"✅ Bevestigd! Redirect naar {url_na}")
+            screenshot(driver, "12_na_bevestiging")
             return True
-        if any(w in body_na.lower() for w in SUCCES_WOORDEN):
-            log.info("✅ Bevestigd! (succesboodschap gevonden)")
-            return True
 
-        # ── Stap 4: extra ActionChains poging als requestSubmit niet werkte ─
-        log.warning("Eerste poging geen succes — extra ActionChains click op Bevestig")
+        # Geen redirect — log wat er mis ging
+        fout   = driver.execute_script("return window._bevestigFout || '(geen fout)';")
+        status = driver.execute_script("return window._bevestigStatus || '(onbekend)';")
+        url_na = driver.current_url
+        log.error(f"❌ AJAX geen redirect — status={status} fout={fout} url={url_na}")
+
+        # ── Poging B: ActionChains klik als AJAX-call niet werkte ───────────
+        log.warning("Probeer ActionChains klik op confirmReservationButton...")
         try:
-            bevestig_knop2 = _zoek_knop(driver, ["Bevestig", "Confirm", "Boek", "Reserveer"])
-            if bevestig_knop2:
-                driver.execute_script(
-                    "arguments[0].scrollIntoView({block:'center'});", bevestig_knop2)
-                time.sleep(0.5)
-                ActionChains(driver).move_to_element(bevestig_knop2).click().perform()
-                log.info("  ActionChains Bevestig geklikt")
+            btn_el = driver.find_element(By.ID, "confirmReservationButton")
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", btn_el)
+            time.sleep(0.5)
+            ActionChains(driver).move_to_element(btn_el).click().perform()
+            log.info("  ActionChains klik uitgevoerd")
         except Exception as e:
             log.warning(f"  ActionChains mislukt: {e}")
 
-        try:
-            WebDriverWait(driver, 12).until(_is_succes)
-        except TimeoutException:
-            pass
+        if _wacht_op_redirect(15):
+            url_na2 = driver.current_url
+            log.info(f"✅ Bevestigd via ActionChains! Redirect naar {url_na2}")
+            screenshot(driver, "12_na_bevestiging")
+            return True
 
         url_na2 = driver.current_url
         try:
             body_na2 = driver.find_element(By.TAG_NAME, "body").text
         except Exception:
             body_na2 = ""
-        log.info(f"  URL na ActionChains Bevestig: {url_na2}")
-        log.info(f"  Body na ActionChains Bevestig (500): {body_na2[:500]}")
-        screenshot(driver, "12b_na_bevestiging_ac")
-
-        if "ReservationsCourt" not in url_na2:
-            log.info("✅ Bevestigd! (URL veranderd na ActionChains)")
-            return True
-        if any(w in body_na2.lower() for w in SUCCES_WOORDEN):
-            log.info("✅ Bevestigd! (succesboodschap gevonden na ActionChains)")
-            return True
-
-        log.error(f"❌ Bevestigen mislukt — URL: {url_na2} | body: {body_na2[:300]}")
+        log.error(f"❌ Bevestigen definitief mislukt — URL: {url_na2} | body: {body_na2[:400]}")
         screenshot(driver, "bevestig_fout")
         return False
 
     except Exception as e:
-        log.error(f"❌ Bevestigen mislukt: {e}")
+        log.error(f"❌ Bevestigen mislukt (exception): {e}")
         screenshot(driver, "bevestig_fout")
         return False
 
