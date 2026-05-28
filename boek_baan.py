@@ -374,24 +374,46 @@ def _zoek_veld_spelers(driver: uc.Chrome):
 
 
 def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
-    """Zoek en selecteer één speler; probeer ook 'Recent mee gespeeld'-kaartjes."""
+    """
+    Zoek en selecteer één speler.
+    BELANGRIJK: gebruik ActionChains voor alle klikken — JS execute_script().click()
+    genereert events met isTrusted=false die de site's jQuery handlers negeren,
+    waardoor de speler niet in de server-sessie wordt opgeslagen.
+    """
     achternaam = speler.split()[-1]
 
-    # 1. Probeer eerst via 'Recent mee gespeeld' – klik op het +-knopje
+    def _action_klik(el):
+        """Klik via ActionChains (isTrusted=true) met JS-click als fallback."""
+        try:
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+            time.sleep(0.2)
+            ActionChains(driver).move_to_element(el).click().perform()
+            return True
+        except Exception as e:
+            log.warning(f"  ActionChains klik mislukt ({e}), probeer JS click")
+            try:
+                driver.execute_script("arguments[0].click();", el)
+                return True
+            except Exception:
+                return False
+
+    # 1. Probeer eerst via 'Recent mee gespeeld' – klik op het +-knopje via ActionChains
     try:
+        driver.implicitly_wait(0)
         recent_plus = driver.find_elements(By.XPATH,
             f"//div[contains(@class,'recent') or contains(@class,'Recent')]"
             f"//*[contains(.,'{achternaam}')]"
             f"/ancestor::*[contains(@class,'player') or contains(@class,'card') or contains(@class,'item')]"
             f"//*[contains(@class,'add') or contains(@class,'plus') or text()='+']")
+        driver.implicitly_wait(5)
         for knop in recent_plus:
             if knop.is_displayed():
-                driver.execute_script("arguments[0].click();", knop)
-                log.info(f"  ✅ {speler} via 'Recent mee gespeeld' toegevoegd")
-                time.sleep(1)
-                return True
+                if _action_klik(knop):
+                    log.info(f"  ✅ {speler} via 'Recent mee gespeeld' toegevoegd (ActionChains)")
+                    time.sleep(1.5)
+                    return True
     except Exception:
-        pass
+        driver.implicitly_wait(5)
 
     # 2. Zoek via het zoekveld
     zoek_veld = _zoek_veld_spelers(driver)
@@ -399,17 +421,14 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
         log.error(f"  ❌ Zoekveld niet gevonden voor '{speler}'")
         return False
 
-    # 2b. Typ de naam via send_keys (simuleert echte toetsaanslagen, triggert typeahead)
-    #     Probeer meerdere zoektermen tot er een suggestie verschijnt
-    woorden     = speler.split()
-    # Probeer: volledige naam → achternaam → voornaam+achternaam (zonder tussenvoegsel)
-    zoektermen  = [speler, achternaam]
+    woorden    = speler.split()
+    zoektermen = [speler, achternaam]
     if len(woorden) >= 3:
-        zoektermen.insert(1, woorden[0] + " " + woorden[-1])   # "Chris Waardenburg"
+        zoektermen.insert(1, woorden[0] + " " + woorden[-1])  # "Chris Waardenburg"
 
     geselecteerd = False
     for zoekterm in zoektermen:
-        # Wis het veld en typ de zoekterm karakter voor karakter
+        # Wis het veld en typ de zoekterm (echte toetsaanslagen → typeahead)
         zoek_veld.click()
         zoek_veld.send_keys(Keys.CONTROL + "a")
         zoek_veld.send_keys(Keys.DELETE)
@@ -418,7 +437,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
         log.info(f"  Zoekterm ingevuld: '{zoekterm}'")
         screenshot(driver, f"05b_zoek_{index}_{achternaam}")
 
-        # Wacht tot er een suggestie met de achternaam verschijnt (max 8s)
+        # Wacht tot suggestie verschijnt (max 8s)
         try:
             WebDriverWait(driver, 8).until(
                 lambda d: any(
@@ -429,10 +448,11 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
                 )
             )
         except TimeoutException:
-            log.info(f"  Geen suggestie na 8s voor zoekterm '{zoekterm}', volgende proberen...")
+            log.info(f"  Geen suggestie na 8s voor '{zoekterm}', volgende proberen...")
             continue
 
-        # 3. Klik de suggestie — zoek het kleinste zichtbare element met de achternaam
+        # 3. Kies het KLEINSTE zichtbare element dat de achternaam bevat.
+        #    Groot element (bijv. sectiecontainer 'Spelers') overslaan.
         selectors = [
             f"//*[@role='option'][contains(.,'{achternaam}')]",
             f"//li[contains(.,'{achternaam}')]",
@@ -442,25 +462,34 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             f"//*[contains(.,'{achternaam}') and not(self::html) and not(self::body)"
             f"    and not(self::div[@id]) and not(self::input)]",
         ]
+        kandidaten = []
+        driver.implicitly_wait(0)
         for sel in selectors:
             try:
                 for el in driver.find_elements(By.XPATH, sel):
                     tekst = el.text.strip()
-                    if el.is_displayed() and achternaam.lower() in tekst.lower():
-                        log.info(f"  Suggestie via '{sel[:60]}': '{tekst[:60]}'")
-                        driver.execute_script("arguments[0].click();", el)
-                        time.sleep(1.2)
-                        log.info(f"  ✅ {speler} geselecteerd via zoekterm '{zoekterm}'")
-                        geselecteerd = True
-                        break
-            except Exception as e:
-                log.debug(f"  Selector overgeslagen: {e}")
-            if geselecteerd:
-                break
+                    if el.is_displayed() and achternaam.lower() in tekst.lower() \
+                            and 0 < len(tekst) < 200:
+                        kandidaten.append((len(tekst), el, tekst, sel))
+            except Exception:
+                pass
+        driver.implicitly_wait(5)
+
+        if kandidaten:
+            # Sorteer op tekstlengte en klik de kleinste
+            kandidaten.sort(key=lambda x: x[0])
+            _, best_el, best_tekst, best_sel = kandidaten[0]
+            log.info(f"  Suggestie (kleinste, {len(best_tekst)} tekens): "
+                     f"'{best_tekst[:60]}' via '{best_sel[:50]}'")
+            if _action_klik(best_el):
+                time.sleep(1.5)
+                log.info(f"  ✅ {speler} geselecteerd via ActionChains (zoekterm '{zoekterm}')")
+                geselecteerd = True
+
         if geselecteerd:
             return True
 
-    # Geen enkele zoekterm leverde resultaat op
+    # Geen suggestie gevonden
     log.error(f"  ❌ Geen suggestie voor '{speler}' (geprobeerd: {zoektermen})")
     try:
         zichtbaar_tekst = driver.find_element(By.TAG_NAME, "body").text
@@ -485,9 +514,18 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
 
     volgende = _zoek_knop(driver, ["Volgende", "Next"])
     if volgende:
-        driver.execute_script("arguments[0].click();", volgende)
-        time.sleep(2)
-        log.info("✅ Spelers toegevoegd, naar dagkeuze")
+        # Gebruik _submit_knop (requestSubmit chain) zodat speler-IDs als form-data
+        # naar de server worden gestuurd. Losse JS .click() negeert form submission.
+        methode = _submit_knop(driver, volgende)
+        log.info(f"  Volgende (spelers) methode: {methode}")
+        # Wacht op URL-verandering (max 8s)
+        url_voor = driver.current_url
+        try:
+            WebDriverWait(driver, 8).until(lambda d: d.current_url != url_voor)
+        except TimeoutException:
+            pass
+        time.sleep(1)
+        log.info(f"✅ Spelers toegevoegd, URL: {driver.current_url}")
         return True
     log.error("❌ 'Volgende' knop niet gevonden na spelers")
     try:
