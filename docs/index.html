@@ -248,8 +248,20 @@
     .leden-row {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 20px 16px;
+      gap: 12px;
+    }
+    .leden-info-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
     }
     #ledenInfo { font-size: 0.85rem; color: var(--grijs); }
+    .leden-ververs-info {
+      font-size: 0.75rem;
+      color: var(--grijs);
+      opacity: 0.85;
+    }
     .btn-verversen {
       background: none;
       border: 1.5px solid var(--border);
@@ -526,7 +538,10 @@
   <input type="hidden" id="speler4">
 
   <div class="leden-row">
-    <span id="ledenInfo">Ledenlijst laden…</span>
+    <div class="leden-info-wrap">
+      <span id="ledenInfo">Ledenlijst laden…</span>
+      <span id="ledenVerversInfo" class="leden-ververs-info"></span>
+    </div>
     <button class="btn-verversen" id="verversBtn" onclick="verversLeden()">🔄&nbsp;Verversen</button>
   </div>
 </div>
@@ -613,6 +628,35 @@
   tijdEl.value = '15:00';
 
   /* ─── Ledenlijst laden ─────────────────────────────────── */
+  async function ledenLaatstVervestDatum() {
+    // Haalt commit-datum van de laatste wijziging aan leden.json op via de
+    // GitHub Commits API. Werkt zonder auth voor publieke repos.
+    try {
+      const headers = { 'Accept': 'application/vnd.github+json' };
+      const pat = getPat();
+      if (pat) headers['Authorization'] = `Bearer ${pat}`;   // hoger rate limit met PAT
+      const r = await fetch(
+        `https://api.github.com/repos/${REPO}/commits?path=leden.json&per_page=1`,
+        { headers }
+      );
+      if (!r.ok) return null;
+      const data = await r.json();
+      if (!Array.isArray(data) || data.length === 0) return null;
+      return data[0].commit?.author?.date || data[0].commit?.committer?.date || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function formatDDMMYYYY(iso) {
+    const dt = new Date(iso);
+    if (isNaN(dt)) return null;
+    const dd   = String(dt.getDate()).padStart(2, '0');
+    const mm   = String(dt.getMonth() + 1).padStart(2, '0');
+    const yyyy = dt.getFullYear();
+    return `${dd}-${mm}-${yyyy}`;
+  }
+
   async function laadLeden() {
     try {
       const r = await fetch(LEDEN_URL + '?t=' + Date.now());
@@ -621,6 +665,12 @@
         if (Array.isArray(data) && data.length > 0) {
           alleLedenLijst = data;
           document.getElementById('ledenInfo').textContent = `${data.length} leden`;
+          // Datum van laatste refresh apart ophalen — async, niet blokkerend
+          ledenLaatstVervestDatum().then(iso => {
+            const span = document.getElementById('ledenVerversInfo');
+            const datum = iso ? formatDDMMYYYY(iso) : null;
+            span.textContent = datum ? `Laatst ververst op ${datum}` : '';
+          });
           return;
         }
       }
