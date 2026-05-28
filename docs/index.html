@@ -425,6 +425,32 @@
       color: var(--grijs);
       font-style: italic;
     }
+
+    /* Refresh-knop in card-header (rechtsboven) */
+    .card-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-right: 14px;
+    }
+    .card-header-row .card-header {
+      border-bottom: none;
+      padding: 18px 0 8px 22px;
+      flex: 1;
+    }
+    .btn-refresh-mini {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 5px 10px 5px 8px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      color: var(--grijs);
+      white-space: nowrap;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .btn-refresh-mini:active   { border-color: var(--groen-btn); color: var(--groen-btn); }
+    .btn-refresh-mini:disabled { opacity: 0.4; cursor: default; }
   </style>
 </head>
 <body>
@@ -548,7 +574,10 @@
 
 <!-- ── Ingeplande reserveringen (wachtrij) ──────────────── -->
 <div class="card">
-  <div class="card-header">🕒 Ingeplande reserveringen</div>
+  <div class="card-header-row">
+    <div class="card-header">🕒 Ingeplande reserveringen</div>
+    <button class="btn-refresh-mini" id="wachtrijVerversBtn" onclick="laadWachtrij(true)">🔄&nbsp;Verversen</button>
+  </div>
   <div class="wachtrij-list" id="wachtrijList">
     <div class="wachtrij-leeg">Wachtrij laden…</div>
   </div>
@@ -736,8 +765,10 @@
     );
   }
 
-  async function laadWachtrij() {
+  async function laadWachtrij(handmatig) {
     const lijst = document.getElementById('wachtrijList');
+    const btn   = document.getElementById('wachtrijVerversBtn');
+    if (handmatig && btn) { btn.disabled = true; btn.textContent = '⏳…'; }
     try {
       const r = await fetch(WACHTRIJ_API + '?t=' + Date.now());
       if (r.status === 404) {
@@ -792,6 +823,8 @@
       }).join('');
     } catch (e) {
       lijst.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>';
+    } finally {
+      if (handmatig && btn) { btn.disabled = false; btn.textContent = '🔄 Verversen'; }
     }
   }
 
