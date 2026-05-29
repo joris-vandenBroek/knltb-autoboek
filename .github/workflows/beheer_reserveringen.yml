@@ -1,0 +1,57 @@
+name: Beheer Reserveringen
+
+# Workflow_dispatch met optionele cancel_id input.
+# - Zonder cancel_id: scrape reserveringen en update reserveringen.json
+# - Met cancel_id (formaat YYYY-MM-DD_HHMM_baan-slug): annuleer die boeking,
+#   dan scrape opnieuw en update reserveringen.json.
+# Wordt aangeroepen door de PWA (verversen-knop + prullenbakje per boeking).
+
+on:
+  workflow_dispatch:
+    inputs:
+      cancel_id:
+        description: 'ID van te annuleren reservering (laat leeg om alleen te scrapen)'
+        required: false
+        default: ''
+
+jobs:
+  beheer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      TZ: Europe/Amsterdam
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installeer dependencies
+        run: |
+          sudo apt-get install -y xvfb
+          pip install undetected-chromedriver selenium
+
+      - name: Beheer reserveringen
+        env:
+          DISPLAY:           :99
+          KNLTB_BONDSNUMMER: ${{ secrets.KNLTB_BONDSNUMMER }}
+          KNLTB_WACHTWOORD:  ${{ secrets.KNLTB_WACHTWOORD }}
+        run: |
+          Xvfb :99 -screen 0 1280x900x24 &
+          sleep 2
+          if [ -n "${{ inputs.cancel_id }}" ]; then
+            python lees_reserveringen.py --cancel "${{ inputs.cancel_id }}"
+          else
+            python lees_reserveringen.py
+          fi
+
+      - name: Screenshots bij fout
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-reserveringen
+          path: '*.png'
+          retention-days: 3

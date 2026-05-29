@@ -486,6 +486,17 @@
   </div>
 </div>
 
+<!-- ── Mijn boekingen ──────────────────────────────────── -->
+<div class="card">
+  <div class="card-header-row">
+    <div class="card-header">📅 Mijn boekingen</div>
+    <button class="btn-refresh-mini" id="reservVerversBtn" onclick="verversReserveringen()">🔄&nbsp;Verversen</button>
+  </div>
+  <div class="wachtrij-list" id="reservList">
+    <div class="wachtrij-leeg">Boekingen laden…</div>
+  </div>
+</div>
+
 <!-- ── Wanneer ─────────────────────────────────────────── -->
 <div class="card">
   <div class="card-header">Wanneer</div>
@@ -881,6 +892,113 @@
   }
 
   laadWachtrij();
+
+  /* ─── Mijn boekingen (actieve ETV-reserveringen) ───────── */
+  const RESERV_URL      = `https://raw.githubusercontent.com/${REPO}/main/reserveringen.json`;
+  const BEHEER_WORKFLOW = 'beheer_reserveringen.yml';
+
+  async function laadReserveringen() {
+    const lijst = document.getElementById('reservList');
+    try {
+      const r = await fetch(RESERV_URL + '?t=' + Date.now());
+      if (r.status === 404) {
+        lijst.innerHTML = '<div class="wachtrij-leeg">Nog geen lijst — tik 🔄 Verversen om je boekingen op te halen.</div>';
+        return;
+      }
+      if (!r.ok) {
+        lijst.innerHTML = '<div class="wachtrij-leeg">Kon boekingen niet laden.</div>';
+        return;
+      }
+      const data = await r.json();
+      const items = Array.isArray(data.reserveringen) ? data.reserveringen : [];
+      if (items.length === 0) {
+        const bij = data.bijgewerkt ? `<br><small style="opacity:0.7">Gecontroleerd op ${formatDDMMYYYY(data.bijgewerkt) || '?'}</small>` : '';
+        lijst.innerHTML = `<div class="wachtrij-leeg">Geen actieve reserveringen.${bij}</div>`;
+        return;
+      }
+      items.sort((a, b) => (a.datum + a.tijd).localeCompare(b.datum + b.tijd));
+      lijst.innerHTML = items.map(rv => {
+        const datum = escapeHtml(`${formatNL(rv.datum)} om ${rv.tijd}`);
+        const baan  = escapeHtml(rv.baan || 'baan onbekend');
+        const id    = escapeHtml(rv.id || '');
+        return `
+          <div class="wachtrij-item">
+            <div class="wachtrij-item-inhoud">
+              <div class="wachtrij-datum">🎾 ${datum}</div>
+              <div class="wachtrij-spelers">${baan}</div>
+            </div>
+            <button class="wachtrij-del" title="Annuleer deze boeking"
+                    onclick="annuleerReservering(this,'${id}','${escapeHtml(rv.datum)}','${escapeHtml(rv.tijd)}')">🗑️</button>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      lijst.innerHTML = '<div class="wachtrij-leeg">Kon boekingen niet laden.</div>';
+    }
+  }
+
+  async function verversReserveringen() {
+    const pat = getPat();
+    if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
+    const btn = document.getElementById('reservVerversBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳…';
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/workflows/${BEHEER_WORKFLOW}/dispatches`,
+        { method: 'POST',
+          headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
+                     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref: 'main', inputs: { cancel_id: '' } }) }
+      );
+      if (r.status === 204) {
+        toonToast('success', '🔄 Boekingen worden opgehaald (~1.5 min).\nLijst ververst zelf zodra klaar.');
+        // Probeer 4× met oplopende interval te herladen
+        setTimeout(laadReserveringen, 90000);
+        setTimeout(laadReserveringen, 120000);
+        setTimeout(laadReserveringen, 150000);
+        setTimeout(laadReserveringen, 180000);
+      } else {
+        toonToast('error', `❌ Workflow-trigger faalde (${r.status})`);
+      }
+    } catch (e) {
+      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+    }
+    btn.disabled = false;
+    btn.textContent = '🔄 Verversen';
+  }
+
+  async function annuleerReservering(btn, id, datum, tijd) {
+    const pat = getPat();
+    if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
+    if (!confirm(`Deze boeking annuleren?\n\n${formatNL(datum)} om ${tijd}`)) return;
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/workflows/${BEHEER_WORKFLOW}/dispatches`,
+        { method: 'POST',
+          headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
+                     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref: 'main', inputs: { cancel_id: id } }) }
+      );
+      if (r.status === 204) {
+        toonToast('success', '🗑️ Annulering wordt verwerkt (~1.5 min).\nLijst ververst zelf.');
+        setTimeout(laadReserveringen, 100000);
+        setTimeout(laadReserveringen, 140000);
+        setTimeout(laadReserveringen, 180000);
+      } else {
+        toonToast('error', `❌ Workflow-trigger faalde (${r.status})`);
+        btn.disabled = false;
+        btn.textContent = '🗑️';
+      }
+    } catch (e) {
+      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+      btn.disabled = false;
+      btn.textContent = '🗑️';
+    }
+  }
+
+  laadReserveringen();
 
   /* ─── Herstel opgeslagen spelers ───────────────────────── */
   const opgeslagen = JSON.parse(localStorage.getItem(SPELERS_KEY) || '[]');
