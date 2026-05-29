@@ -527,7 +527,34 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
                         pass
             finally:
                 driver.implicitly_wait(5)
-            return result
+
+            # Filter wrapper-elementen: als een element exact-match heeft EN een
+            # child dat ook exact-match heeft, is dit een wrapper. Click op een
+            # wrapper triggert geen specifieke speler-add-handler.
+            # Voorbeeld run #60: matched class='players searchresults' was de
+            # outer container van zoekresultaten; binnenin zaten .card mb-3
+            # rows met de echte add-handlers.
+            leaf_result = []
+            for el, tekst, sel in result:
+                try:
+                    has_matching_child = driver.execute_script("""
+                        var el = arguments[0];
+                        var accepted = arguments[1];
+                        var alleKinderen = el.querySelectorAll('*');
+                        for (var i = 0; i < alleKinderen.length; i++) {
+                            var c = alleKinderen[i];
+                            var ct = (c.innerText || '').replace(/\\s+/g, ' ').trim();
+                            for (var j = 0; j < accepted.length; j++) {
+                                if (ct === accepted[j]) return true;
+                            }
+                        }
+                        return false;
+                    """, el, accepted)
+                    if not has_matching_child:
+                        leaf_result.append((el, tekst, sel))
+                except Exception:
+                    leaf_result.append((el, tekst, sel))
+            return leaf_result if leaf_result else result
 
         # Wacht tot er minstens één EXACTE kandidaat is (max 8s)
         try:
