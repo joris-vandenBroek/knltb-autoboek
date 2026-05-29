@@ -1559,7 +1559,7 @@ def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
         return baan
 
     log.error(f"❌ Reservering NIET zichtbaar op beide reserveringspagina's!")
-    log.error(f"   Gezocht op: {boek_tekens}")
+    log.error(f"   Gezocht op: {datum_tekens}")
     return ""
 
 
