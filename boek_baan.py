@@ -534,10 +534,19 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             WebDriverWait(driver, 8).until(lambda d: bool(_vind_exacte_kandidaten()))
         except TimeoutException:
             log.info(f"  Geen exacte match na 8s voor '{zoekterm}', volgende term")
-            # Geef ETV's typeahead-debounce tijd om te resetten voor de volgende
-            # zoekopdracht — anders kan een snelle vervolgcyclus de session-state
-            # corrumperen (UI lijkt toegevoegd maar server-side niet).
-            time.sleep(1.2)
+            # Sluit typeahead-dropdown via Escape om ETV's DOM-hergebruik te
+            # dwingen tot een vers gerenderde row bij de volgende zoekterm.
+            # Symptoom in run #59: 2e zoekterm gaf visible text 'Chris van
+            # Waardenburg' maar onderliggende data-id verwees nog naar
+            # Christel Beckmann Asselman uit de 1e poging.
+            try:
+                zoek_veld.send_keys(Keys.ESCAPE)
+                time.sleep(0.3)
+                zoek_veld.send_keys(Keys.CONTROL + "a")
+                zoek_veld.send_keys(Keys.DELETE)
+            except Exception:
+                pass
+            time.sleep(1.5)
             continue
 
         kandidaten = _vind_exacte_kandidaten()
@@ -549,12 +558,30 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
         el, tekst, sel = kandidaten[0]
         log.info(f"  ✓ Exacte match (initieel): '{tekst}' via '{sel[:60]}'")
 
+        # DIAGNOSE: dump alle attributen + outerHTML van het te klikken
+        # element. Run #59 onthulde dat ETV's typeahead het element-DOM
+        # hergebruikt: visible text 'Chris van Waardenburg' maar onderliggend
+        # data-id verwees nog naar Christel Beckmann Asselman → server boekt
+        # de verkeerde speler. Met dit log zien we exact welke data we klikken.
+        try:
+            el_diag = driver.execute_script("""
+                var el = arguments[0];
+                var attrs = {};
+                for (var i = 0; i < el.attributes.length; i++) {
+                    attrs[el.attributes[i].name] = el.attributes[i].value;
+                }
+                return {
+                    tag:  el.tagName,
+                    attrs: attrs,
+                    html: el.outerHTML.slice(0, 400)
+                };
+            """, el)
+            log.info(f"  🔍 Element-attrs: {el_diag.get('attrs')}")
+            log.info(f"  🔍 Element-html: {el_diag.get('html')}")
+        except Exception as e:
+            log.warning(f"  Element-diagnose mislukt: {e}")
+
         # ── RE-VERIFICATIE vlak vóór klik ──────────────────────────────────
-        # Tussen kandidaten-collectie en click kan ETV's typeahead-AJAX een
-        # extra suggestie aan hetzelfde container-element hebben toegevoegd.
-        # Voorbeeld run #55: element had eerst tekst 'Toine Aanraad', AJAX
-        # voegde 'Toine van Gils' eronder toe → element heeft nu tekst
-        # 'Toine Aanraad Toine van Gils' → click landt op verkeerde row.
         try:
             huidige = _norm(el.text)
         except Exception:
