@@ -477,10 +477,26 @@ def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
         )
         service = build("calendar", "v3", credentials=creds, cache_discovery=False)
 
-        start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M")
-        # Zoek events in een window van -1 uur tot +2 uur rondom het slot
-        time_min = (start_dt - timedelta(hours=1)).isoformat() + "Z"
-        time_max = (start_dt + timedelta(hours=2)).isoformat() + "Z"
+        # Booking time is NL-lokaal. Maak datetime timezone-aware in Europe/Amsterdam
+        # zodat het zoekvenster overeenkomt met het tijdstip waarop Google
+        # Calendar het event heeft opgeslagen (timeZone="Europe/Amsterdam").
+        try:
+            from zoneinfo import ZoneInfo
+            tz_nl = ZoneInfo("Europe/Amsterdam")
+            start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M").replace(tzinfo=tz_nl)
+        except ImportError:
+            # Fallback voor Python <3.9 — bepaal CEST/CET via maand
+            start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M")
+            offset = "+02:00" if 4 <= start_dt.month <= 10 else "+01:00"
+            tz_offset_str = offset
+
+        # Window: -1u tot +2u rond het slot
+        time_min = (start_dt - timedelta(hours=1)).isoformat()
+        time_max = (start_dt + timedelta(hours=2)).isoformat()
+        if not time_min.endswith(('Z', '+01:00', '+02:00', '-01:00', '-02:00')) and 'T' in time_min:
+            # Fallback-pad zonder zoneinfo — voeg expliciete offset toe
+            time_min += tz_offset_str
+            time_max += tz_offset_str
 
         events_result = service.events().list(
             calendarId=GOOGLE_CALENDAR_ID,
@@ -492,6 +508,7 @@ def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
         events = events_result.get('items', [])
         log.info(f"  Agenda-zoekvenster {time_min} → {time_max}: {len(events)} 'Padel'-event(s) gevonden")
 
+        # Match op datum+tijd substring (zonder timezone)
         target_dt_local = start_dt.strftime("%Y-%m-%dT%H:%M")
         verwijderd = 0
         for ev in events:
