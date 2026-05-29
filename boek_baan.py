@@ -555,27 +555,38 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
         time.sleep(0.5)
 
         # POST-KLIK VERIFICATIE: doelnaam (volledige vorm) moet zichtbaar zijn
-        # op de pagina, in een element dat geen <input> is. Zo niet → fail.
-        try:
-            doel_zichtbaar = driver.execute_script("""
-                var accepted = arguments[0];
-                var alle = document.querySelectorAll('body *');
-                for (var i = 0; i < alle.length; i++) {
-                    var el = alle[i];
-                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') continue;
-                    if (!el.offsetParent) continue;  // niet zichtbaar
-                    var t = (el.innerText || '').trim();
-                    if (!t) continue;
-                    // Normaliseer whitespace
-                    var norm = t.replace(/\\s+/g, ' ').trim();
-                    for (var j = 0; j < accepted.length; j++) {
-                        if (norm.indexOf(accepted[j]) >= 0) return true;
+        # op de pagina, in een element dat geen <input> is.
+        # Retry tot 4x met oplopende delay omdat ETV's "geselecteerde
+        # spelers"-paneel soms een paar seconden vertraagd is met updaten.
+        def _is_speler_zichtbaar():
+            try:
+                return driver.execute_script("""
+                    var accepted = arguments[0];
+                    var alle = document.querySelectorAll('body *');
+                    for (var i = 0; i < alle.length; i++) {
+                        var el = alle[i];
+                        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') continue;
+                        if (!el.offsetParent) continue;
+                        var t = (el.innerText || '').trim();
+                        if (!t) continue;
+                        var norm = t.replace(/\\s+/g, ' ').trim();
+                        for (var j = 0; j < accepted.length; j++) {
+                            if (norm.indexOf(accepted[j]) >= 0) return true;
+                        }
                     }
-                }
-                return false;
-            """, accepted)
-        except Exception:
-            doel_zichtbaar = False
+                    return false;
+                """, accepted)
+            except Exception:
+                return False
+
+        doel_zichtbaar = False
+        for verif_poging in range(1, 5):   # 4 pogingen
+            if _is_speler_zichtbaar():
+                doel_zichtbaar = True
+                if verif_poging > 1:
+                    log.info(f"  Speler verschenen na verificatie-poging {verif_poging}")
+                break
+            time.sleep(1.5)               # 1.5s per poging = max ~6s extra wachten
 
         if doel_zichtbaar:
             log.info(f"  ✅ {speler} geselecteerd EN geverifieerd (zoekterm '{zoekterm}')")
