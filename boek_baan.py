@@ -1601,14 +1601,11 @@ def main():
             sys.exit(0)
         log.error("❌ Kon wachtrij-bestand niet opslaan — boeking NIET ingepland")
         sys.exit(1)
-    elif nu.date() == boekingsdatum.date() and (nu.hour < 7 or (nu.hour == 7 and nu.minute < 1)):
-        doel = boekingsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
-        wacht_sec = int((doel - nu).total_seconds())
-        log.info(f"⏳ Wacht {wacht_sec} sec tot 07:01 NL op boekingsdatum "
-                 f"{boekingsdatum.strftime('%d-%m-%Y')} (buffer voor server-klokverschil)...")
-        time.sleep(wacht_sec)
     else:
         log.info(f"✅ Boeken! (dag+{dag_verschil}, boekingsdatum bereikt)")
+        if nu.date() == boekingsdatum.date() and (nu.hour < 7 or (nu.hour == 7 and nu.minute < 1)):
+            log.info(f"   Cron is vroeg gestart — login/spelers/dag/baan worden NU al "
+                     f"voorbereid, bevestig-klik volgt pas op 07:01 NL.")
 
     log.info("=" * 50)
     log.info("🎾 ETV Volley Padelbaan Auto-Reservering")
@@ -1651,6 +1648,19 @@ def main():
 
         _log_zichtbare_spelers(driver, alle_spelers,
             "na kies_baan_en_tijd (zou Confirm-pagina moeten zijn met 4 zichtbaar)")
+
+        # ── Klok-buffer: wacht tot 07:01 NL als we nog vroeg zijn ──────────
+        # Cron-job.org triggert om 06:50 zodat login + spelers + dag + baan
+        # alvast klaar staan tijdens de wachttijd. Pas op 07:01 wordt de
+        # daadwerkelijke bevestig-klik gedaan, zodat de ETV-server het slot
+        # gegarandeerd geopend heeft. Voorkomt klok-skew-issues.
+        nu_pre_bevestig = datetime.now()
+        doel_bevestig   = boekingsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
+        if nu_pre_bevestig.date() == boekingsdatum.date() and nu_pre_bevestig < doel_bevestig:
+            wacht_sec = int((doel_bevestig - nu_pre_bevestig).total_seconds())
+            log.info(f"⏳ Wacht {wacht_sec} sec tot 07:01 NL vóór bevestig-klik...")
+            time.sleep(wacht_sec)
+            log.info(f"⏰ {datetime.now().strftime('%H:%M:%S')} NL — bevestig-venster open, klikken nu.")
 
         if not bevestig(driver):
             log.error("🚫 Bevestigen mislukt")
