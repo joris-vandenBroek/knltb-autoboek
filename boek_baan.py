@@ -456,17 +456,20 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
     if len(woorden) >= 3:
         accepted.append(f"{woorden[0]} {achternaam}")
 
-    def _vind_addplayer_card():
+    def _vind_addplayer_data_id() -> tuple:
         """
-        Vind in .searchresults OF .recentplayers een .addPlayer[data-id]
-        waarvan innerText (whitespace-genormaliseerd) EXACT gelijk is aan
-        één van de geaccepteerde naamvormen.
-        Returns dict {element, data_id, tekst} of None.
+        Vind in .searchresults of .recentplayers een .addPlayer[data-id]
+        waarvan innerText EXACT gelijk is aan een geaccepteerde naamvorm.
+        Returns (data_id, tekst) of (None, None).
+
+        BELANGRIJK: returnt ALLEEN de data-id (string), niet het element.
+        Element-refs die uit execute_script komen verstalen onmiddellijk
+        wanneer de typeahead-DOM ververst — wat ETV doet binnen ~300ms.
+        Door alleen het stabiele data-id terug te geven, kunnen we daarna
+        het element VERS via Selenium opzoeken en direct klikken.
         """
-        return driver.execute_script("""
+        res = driver.execute_script("""
             var accepted = arguments[0];
-            // Zoek in searchresults én recentplayers — beide bevatten
-            // .addPlayer[data-id] kaarten met dezelfde server-handler.
             var containers = document.querySelectorAll(
                 '.searchresults, .recentplayers'
             );
@@ -478,17 +481,16 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
                     var t = (card.innerText || '').replace(/\\s+/g, ' ').trim();
                     for (var j = 0; j < accepted.length; j++) {
                         if (t === accepted[j]) {
-                            return {
-                                element: card,
-                                dataId:  card.getAttribute('data-id'),
-                                tekst:   t
-                            };
+                            return { dataId: card.getAttribute('data-id'), tekst: t };
                         }
                     }
                 }
             }
             return null;
         """, accepted)
+        if not res:
+            return (None, None)
+        return (res.get('dataId'), res.get('tekst'))
 
     def _is_in_youplaywith(data_id: str) -> bool:
         """Check of #youPlayWith een element bevat met deze data-id."""
@@ -536,10 +538,11 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             continue
         screenshot(driver, f"05b_zoek_{index}_{achternaam}")
 
-        # Wacht tot er een .addPlayer[data-id] card verschijnt met EXACTE
-        # naam-match (in .searchresults of .recentplayers)
+        # Wacht tot er een .addPlayer[data-id] card verschijnt met EXACTE match
         try:
-            WebDriverWait(driver, 8).until(lambda d: _vind_addplayer_card() is not None)
+            WebDriverWait(driver, 8).until(
+                lambda d: _vind_addplayer_data_id()[0] is not None
+            )
         except TimeoutException:
             log.info(f"  Geen .addPlayer card met exacte naam-match na 8s")
             try:
@@ -550,25 +553,37 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             time.sleep(1.0)
             continue
 
-        card = _vind_addplayer_card()
-        if not card:
+        data_id, tekst = _vind_addplayer_data_id()
+        if not data_id:
             continue
-
-        el       = card.get('element')
-        data_id  = card.get('dataId')
-        tekst    = card.get('tekst')
         log.info(f"  ✓ Card gevonden: data-id={data_id}, tekst='{tekst}'")
 
-        # Klik via ActionChains (isTrusted=true) — ETV's jQuery handler
-        # filtert synthetische events weg
+        # Vind het element VERS via Selenium met de stabiele data-id.
+        # JS-returns van execute_script verstalen meteen wanneer ETV's
+        # typeahead de DOM ververst (gebeurt binnen ~300ms — bewezen in
+        # run #61 waar alle 3 zoektermen StaleElementReferenceException
+        # gaven). Selenium's eigen find_element returnt een live ref.
         try:
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
-            time.sleep(0.3)
-            ActionChains(driver).move_to_element(el).click().perform()
+            el = driver.find_element(
+                By.CSS_SELECTOR, f'.addPlayer[data-id="{data_id}"]'
+            )
         except Exception as e:
-            log.warning(f"  ActionChains click faalde ({e}), JS fallback")
+            log.warning(f"  Element met data-id={data_id} niet gevonden: {e}")
+            continue
+
+        # Klik via ActionChains — minimaliseer tijd tussen find en click
+        try:
+            ActionChains(driver).move_to_element(el).click().perform()
+            log.info(f"  Klik uitgevoerd op data-id={data_id}")
+        except Exception as e:
+            log.warning(f"  ActionChains faalde ({type(e).__name__}), JS fallback")
             try:
-                driver.execute_script("arguments[0].click();", el)
+                # Re-fetch + JS click op het element
+                driver.execute_script(
+                    f'var el=document.querySelector(\'.addPlayer[data-id="{data_id}"]\'); '
+                    f'if(el)el.click();'
+                )
+                log.info(f"  JS click uitgevoerd op data-id={data_id}")
             except Exception as e2:
                 log.warning(f"  JS click ook mislukt: {e2}")
                 continue
