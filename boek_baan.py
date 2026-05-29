@@ -474,11 +474,17 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             continue
         screenshot(driver, f"05b_zoek_{index}_{achternaam}")
 
-        # ── Helper: vind alle zichtbare elementen met EXACTE tekst-match ─────
-        # Gebruikt zowel voor WebDriverWait als voor het uiteindelijke klik —
-        # zo kan de wait niet 'succesvol' eindigen op een element dat we daarna
-        # niet kunnen vinden (bv. een input-wrapper of een <span>-leaf die niet
-        # in de specifieke selectors voorkomt).
+        # ── Helper: vind alle zichtbare typeahead-suggestie-rijen ────────────
+        # ALLEEN specifieke suggestie-containers (role=option, <li>, of <div>
+        # met class player/suggestion/result/item). De vorige brede fallback
+        # `//*[contains(...)]` matchte ook elementen in het "Recent mee gespeeld"
+        # paneel — die hebben een andere click-handler die UI-only werkt en de
+        # speler NIET server-side registreert. Vandaar dat boekingen UI-side
+        # 'verified' leken maar bij bevestig "niet genoeg spelers" gaven.
+        #
+        # Mocht ETV's typeahead in een onbekende container renderen waar deze
+        # selectors niet op matchen, dan faalt deze speler-add expliciet. Beter
+        # dan stilletjes een verkeerd element klikken.
         def _vind_exacte_kandidaten():
             selectors = [
                 "//*[@role='option']",
@@ -486,15 +492,6 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
                 f"//div[contains(@class,'player') or contains(@class,'suggestion')"
                 f"      or contains(@class,'result') or contains(@class,'item')]"
                 f"[contains(.,'{achternaam}')]",
-                # Brede fallback: élk leaf-element met achternaam in tekst,
-                # excl. structurele en input-elementen
-                f"//*[contains(.,'{achternaam}')"
-                f"    and not(self::input) and not(self::textarea)"
-                f"    and not(self::html) and not(self::body)"
-                f"    and not(self::script) and not(self::style)"
-                f"    and not(self::form) and not(self::nav)"
-                f"    and not(self::header) and not(self::footer)"
-                f"    and not(self::main) and not(self::section)]",
             ]
             result = []
             seen_ids = set()
