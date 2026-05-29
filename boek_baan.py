@@ -612,46 +612,78 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             pass
         time.sleep(0.5)
 
-        # POST-KLIK VERIFICATIE: doelnaam (volledige vorm) moet zichtbaar zijn
-        # op de pagina, in een element dat geen <input> is.
-        # Retry tot 4x met oplopende delay omdat ETV's "geselecteerde
-        # spelers"-paneel soms een paar seconden vertraagd is met updaten.
-        def _is_speler_zichtbaar():
+        # ── POST-KLIK VERIFICATIE: ECHTE check ──────────────────────────────
+        # Joris is altijd speler 1 (hardcoded). ETV toont geselecteerde
+        # spelers samen in dezelfde container (kleinste container met Joris
+        # erin = de "Je gaat spelen met"-lijst).
+        #
+        # Echte check: zit onze DOELSPELER samen met Joris in die kleinste
+        # container? Zo nee → ETV registreerde een verkeerde speler (zoals
+        # in run #59 waar Christel werd toegevoegd ipv Chris). Abort.
+        #
+        # Vroegere "naam staat ergens op de pagina"-check werd hier door
+        # misleid: Chris stond ook in het Recent-paneel → verificatie passte
+        # ondanks dat de SERVER Christel had geregistreerd.
+        def _check_in_spelerslijst():
             try:
                 return driver.execute_script("""
                     var accepted = arguments[0];
+                    var joris = 'Joris van den Broek';
                     var alle = document.querySelectorAll('body *');
+                    var beste = null, bestLen = Infinity;
                     for (var i = 0; i < alle.length; i++) {
                         var el = alle[i];
                         if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') continue;
                         if (!el.offsetParent) continue;
                         var t = (el.innerText || '').trim();
-                        if (!t) continue;
-                        var norm = t.replace(/\\s+/g, ' ').trim();
-                        for (var j = 0; j < accepted.length; j++) {
-                            if (norm.indexOf(accepted[j]) >= 0) return true;
+                        if (!t || t.length > 600) continue;
+                        if (t.indexOf(joris) < 0) continue;
+                        // Kleinste element dat Joris bevat = de spelerslijst
+                        if (t.length < bestLen) {
+                            beste = t.replace(/\\s+/g, ' ').trim();
+                            bestLen = t.length;
                         }
                     }
-                    return false;
+                    if (!beste) return { ok: null, tekst: '(geen container met Joris)' };
+                    for (var j = 0; j < accepted.length; j++) {
+                        if (beste.indexOf(accepted[j]) >= 0) {
+                            return { ok: true, tekst: beste };
+                        }
+                    }
+                    return { ok: false, tekst: beste };
                 """, accepted)
-            except Exception:
-                return False
+            except Exception as e:
+                return {"ok": None, "tekst": f"(exception: {e})"}
 
-        doel_zichtbaar = False
-        for verif_poging in range(1, 5):   # 4 pogingen
-            if _is_speler_zichtbaar():
-                doel_zichtbaar = True
+        check_result = None
+        for verif_poging in range(1, 5):
+            check_result = _check_in_spelerslijst()
+            if check_result.get('ok') is True:
                 if verif_poging > 1:
-                    log.info(f"  Speler verschenen na verificatie-poging {verif_poging}")
+                    log.info(f"  Speler verschenen in spelerslijst na verificatie-poging {verif_poging}")
                 break
-            time.sleep(1.5)               # 1.5s per poging = max ~6s extra wachten
+            if check_result.get('ok') is False:
+                # Definitieve mismatch — wachten heeft geen zin, ETV heeft
+                # iets anders geregistreerd
+                break
+            time.sleep(1.5)
 
-        if doel_zichtbaar:
-            log.info(f"  ✅ {speler} geselecteerd EN geverifieerd (zoekterm '{zoekterm}')")
+        if check_result and check_result.get('ok') is True:
+            log.info(f"  ✅ {speler} ECHT geselecteerd in spelerslijst "
+                     f"(zoekterm '{zoekterm}')")
+            log.info(f"     Spelerslijst-inhoud: '{check_result.get('tekst', '')[:200]}'")
             return True
 
-        log.error(f"  ❌ Klik gelukt maar '{speler}' NIET zichtbaar op pagina — "
-                  f"selectie waarschijnlijk niet geregistreerd door ETV")
+        if check_result and check_result.get('ok') is False:
+            log.error(f"  ❌ VERKEERDE SPELER GESELECTEERD! Spelerslijst bevat: "
+                      f"'{check_result.get('tekst', '')[:300]}'")
+            log.error(f"     Verwacht: een van {accepted}")
+            log.error(f"     → Niet doorgaan met deze speler — abort voor data-integriteit")
+            screenshot(driver, f"05d_verkeerde_speler_{achternaam}")
+            return False
+
+        log.error(f"  ❌ Kon spelerslijst niet vinden om '{speler}' te verifieren "
+                  f"({check_result.get('tekst') if check_result else 'geen result'})")
         screenshot(driver, f"05d_niet_geverifieerd_{achternaam}")
         return False
 
