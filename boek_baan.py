@@ -409,63 +409,111 @@ def _zoek_veld_spelers(driver: uc.Chrome):
 
 def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
     """
-    Selecteer EXCLUSIEF de opgegeven speler via het typeahead-zoekveld.
+    Selecteer EXCLUSIEF de opgegeven speler — definitieve implementatie
+    gebaseerd op echte ETV/KNLTB.Club HTML.
 
-    HARDE GARANTIE: het script klikt ALLEEN op een element waarvan de
-    genormaliseerde tekst EXACT gelijk is aan één van de geaccepteerde
-    naamvormen van deze speler:
-      - de volledige naam ("Chris van Waardenburg")
-      - voornaam + achternaam zonder tussenvoegsel ("Chris Waardenburg")
+    HTML-structuur:
 
-    Een container-element met meerdere namen, of een fuzzy 'bevat-achternaam'
-    match, wordt geweigerd. Reden: op 28-05 vanochtend selecteerde het script
-    per ongeluk 'Christel Beckmann Asselman' ipv 'Chris van Waardenburg' omdat
-    een container met meerdere namen matchte op 'Waardenburg'.
+      <!-- zoekresultaten -->
+      <div class="col-12 players searchresults">
+        <div class="card mb-3">
+          <div class="card-body addPlayer" data-id="UUID">
+            Chris van Waardenburg
+          </div>
+        </div>
+      </div>
 
-    Daarnaast: na de klik wordt geverifieerd dat de doelnaam zichtbaar is op
-    de pagina (= in het geselecteerde-spelers paneel). Lukt dat niet → return
-    False zodat de hele reservering faalt — beter mislukken dan een verkeerde
-    speler reserveren.
+      <!-- Recent mee gespeeld -->
+      <div class="col-12 col-md-6 recentplayers">
+        <div class="card-body addPlayer" data-id="UUID2">
+          Peter Nijhof
+        </div>
+      </div>
 
-    De vroegere 'Recent mee gespeeld'-shortcut is verwijderd: die gebruikte
-    een 'contains(.,achternaam)' XPath wat exact hetzelfde risico had.
+      <!-- Na succesvolle add: -->
+      <div id="youPlayWith">
+        <li class="list-group-item">
+          <h6>Chris van Waardenburg</h6>
+          <a class="removePlayer" data-id="UUID">×</a>     ← zelfde UUID
+        </li>
+      </div>
+
+    Werkwijze:
+    1. Type zoekterm
+    2. Vind .addPlayer[data-id] card waarvan innerText exact gelijk is aan
+       een geaccepteerde naamvorm. data-id wordt onthouden.
+    3. Klik die card via ActionChains
+    4. Verifieer dat #youPlayWith een element met DIE SPECIFIEKE data-id
+       bevat. Niet alleen op naam, maar op de exacte UUID die we klikten.
+       Zo voorkomen we ELKE vorm van verkeerde selectie — ook als ETV
+       ooit een naam dubbel zou tonen.
     """
     woorden    = speler.split()
     achternaam = woorden[-1]
 
-    # GEACCEPTEERDE EXACTE TEKSTVORMEN — nooit alleen achternaam
+    # Acceptabele exacte naamvormen
     accepted = [speler]
     if len(woorden) >= 3:
         accepted.append(f"{woorden[0]} {achternaam}")
 
-    def _norm(s: str) -> str:
-        return ' '.join((s or '').split()).strip()
+    def _vind_addplayer_card():
+        """
+        Vind in .searchresults OF .recentplayers een .addPlayer[data-id]
+        waarvan innerText (whitespace-genormaliseerd) EXACT gelijk is aan
+        één van de geaccepteerde naamvormen.
+        Returns dict {element, data_id, tekst} of None.
+        """
+        return driver.execute_script("""
+            var accepted = arguments[0];
+            // Zoek in searchresults én recentplayers — beide bevatten
+            // .addPlayer[data-id] kaarten met dezelfde server-handler.
+            var containers = document.querySelectorAll(
+                '.searchresults, .recentplayers'
+            );
+            for (var c = 0; c < containers.length; c++) {
+                var cards = containers[c].querySelectorAll('.addPlayer[data-id]');
+                for (var i = 0; i < cards.length; i++) {
+                    var card = cards[i];
+                    if (!card.offsetParent) continue;
+                    var t = (card.innerText || '').replace(/\\s+/g, ' ').trim();
+                    for (var j = 0; j < accepted.length; j++) {
+                        if (t === accepted[j]) {
+                            return {
+                                element: card,
+                                dataId:  card.getAttribute('data-id'),
+                                tekst:   t
+                            };
+                        }
+                    }
+                }
+            }
+            return null;
+        """, accepted)
 
-    def _is_exact_doel(tekst: str) -> bool:
-        return _norm(tekst) in accepted
-
-    def _action_klik(el):
-        """Klik via ActionChains (isTrusted=true) met JS-click als fallback."""
+    def _is_in_youplaywith(data_id: str) -> bool:
+        """Check of #youPlayWith een element bevat met deze data-id."""
         try:
-            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
-            time.sleep(0.2)
-            ActionChains(driver).move_to_element(el).click().perform()
-            return True
-        except Exception as e:
-            log.warning(f"  ActionChains klik mislukt ({e}), probeer JS click")
-            try:
-                driver.execute_script("arguments[0].click();", el)
-                return True
-            except Exception:
-                return False
+            return bool(driver.execute_script("""
+                var doelId = arguments[0];
+                var container = document.getElementById('youPlayWith');
+                if (!container) return false;
+                var els = container.querySelectorAll('[data-id]');
+                for (var i = 0; i < els.length; i++) {
+                    if (els[i].getAttribute('data-id') === doelId) return true;
+                }
+                return false;
+            """, data_id))
+        except Exception:
+            return False
 
     zoek_veld = _zoek_veld_spelers(driver)
     if not zoek_veld:
         log.error(f"  ❌ Zoekveld niet gevonden voor '{speler}'")
         return False
 
-    # Zoektermen van specifiek naar breder. Achternaam-only is laatste redmiddel
-    # (de strikte match-check voorkomt dat een verkeerde speler wordt geklikt).
+    # Zoektermen van specifiek naar breder. De data-id verificatie achteraf
+    # garandeert dat we nooit een verkeerde speler boeken, zelfs als de
+    # typeahead onverwacht reageert.
     zoektermen = [speler]
     if len(woorden) >= 3:
         zoektermen.append(f"{woorden[0]} {achternaam}")
@@ -479,242 +527,80 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             zoek_veld.send_keys(Keys.DELETE)
             time.sleep(0.3)
             zoek_veld.send_keys(zoekterm)
-            log.info(f"  Zoekterm ingevuld: '{zoekterm}'")
+            log.info(f"  Zoekterm: '{zoekterm}'")
         except Exception as e:
-            log.warning(f"  Zoekveld input faalde ({e}), refetch en volgende term")
+            log.warning(f"  Zoekveld input faalde ({e}), volgende term")
             zoek_veld = _zoek_veld_spelers(driver)
             if not zoek_veld:
                 continue
             continue
         screenshot(driver, f"05b_zoek_{index}_{achternaam}")
 
-        # ── Helper: vind alle zichtbare typeahead-suggestie-rijen ────────────
-        # ALLEEN specifieke suggestie-containers (role=option, <li>, of <div>
-        # met class player/suggestion/result/item). De vorige brede fallback
-        # `//*[contains(...)]` matchte ook elementen in het "Recent mee gespeeld"
-        # paneel — die hebben een andere click-handler die UI-only werkt en de
-        # speler NIET server-side registreert. Vandaar dat reserveringen UI-side
-        # 'verified' leken maar bij bevestig "niet genoeg spelers" gaven.
-        #
-        # Mocht ETV's typeahead in een onbekende container renderen waar deze
-        # selectors niet op matchen, dan faalt deze speler-add expliciet. Beter
-        # dan stilletjes een verkeerd element klikken.
-        def _vind_exacte_kandidaten():
-            selectors = [
-                "//*[@role='option']",
-                f"//li[contains(.,'{achternaam}')]",
-                f"//div[contains(@class,'player') or contains(@class,'suggestion')"
-                f"      or contains(@class,'result') or contains(@class,'item')]"
-                f"[contains(.,'{achternaam}')]",
-            ]
-            result = []
-            seen_ids = set()
-            driver.implicitly_wait(0)
-            try:
-                for sel in selectors:
-                    try:
-                        for el in driver.find_elements(By.XPATH, sel):
-                            if not el.is_displayed():
-                                continue
-                            if not _is_exact_doel(el.text):
-                                continue
-                            eid = el.id
-                            if eid in seen_ids:
-                                continue
-                            seen_ids.add(eid)
-                            result.append((el, _norm(el.text), sel))
-                    except Exception:
-                        pass
-            finally:
-                driver.implicitly_wait(5)
-
-            # Filter wrapper-elementen: als een element exact-match heeft EN een
-            # child dat ook exact-match heeft, is dit een wrapper. Click op een
-            # wrapper triggert geen specifieke speler-add-handler.
-            # Voorbeeld run #60: matched class='players searchresults' was de
-            # outer container van zoekresultaten; binnenin zaten .card mb-3
-            # rows met de echte add-handlers.
-            leaf_result = []
-            for el, tekst, sel in result:
-                try:
-                    has_matching_child = driver.execute_script("""
-                        var el = arguments[0];
-                        var accepted = arguments[1];
-                        var alleKinderen = el.querySelectorAll('*');
-                        for (var i = 0; i < alleKinderen.length; i++) {
-                            var c = alleKinderen[i];
-                            var ct = (c.innerText || '').replace(/\\s+/g, ' ').trim();
-                            for (var j = 0; j < accepted.length; j++) {
-                                if (ct === accepted[j]) return true;
-                            }
-                        }
-                        return false;
-                    """, el, accepted)
-                    if not has_matching_child:
-                        leaf_result.append((el, tekst, sel))
-                except Exception:
-                    leaf_result.append((el, tekst, sel))
-            return leaf_result if leaf_result else result
-
-        # Wacht tot er minstens één EXACTE kandidaat is (max 8s)
+        # Wacht tot er een .addPlayer[data-id] card verschijnt met EXACTE
+        # naam-match (in .searchresults of .recentplayers)
         try:
-            WebDriverWait(driver, 8).until(lambda d: bool(_vind_exacte_kandidaten()))
+            WebDriverWait(driver, 8).until(lambda d: _vind_addplayer_card() is not None)
         except TimeoutException:
-            log.info(f"  Geen exacte match na 8s voor '{zoekterm}', volgende term")
-            # Sluit typeahead-dropdown via Escape om ETV's DOM-hergebruik te
-            # dwingen tot een vers gerenderde row bij de volgende zoekterm.
-            # Symptoom in run #59: 2e zoekterm gaf visible text 'Chris van
-            # Waardenburg' maar onderliggende data-id verwees nog naar
-            # Christel Beckmann Asselman uit de 1e poging.
+            log.info(f"  Geen .addPlayer card met exacte naam-match na 8s")
             try:
                 zoek_veld.send_keys(Keys.ESCAPE)
                 time.sleep(0.3)
-                zoek_veld.send_keys(Keys.CONTROL + "a")
-                zoek_veld.send_keys(Keys.DELETE)
             except Exception:
                 pass
-            time.sleep(1.5)
+            time.sleep(1.0)
             continue
 
-        kandidaten = _vind_exacte_kandidaten()
-
-        if not kandidaten:
-            log.warning(f"  ⚠️ Geen EXACTE match voor '{speler}' bij zoekterm '{zoekterm}'")
+        card = _vind_addplayer_card()
+        if not card:
             continue
 
-        el, tekst, sel = kandidaten[0]
-        log.info(f"  ✓ Exacte match (initieel): '{tekst}' via '{sel[:60]}'")
+        el       = card.get('element')
+        data_id  = card.get('dataId')
+        tekst    = card.get('tekst')
+        log.info(f"  ✓ Card gevonden: data-id={data_id}, tekst='{tekst}'")
 
-        # DIAGNOSE: dump alle attributen + outerHTML van het te klikken
-        # element. Run #59 onthulde dat ETV's typeahead het element-DOM
-        # hergebruikt: visible text 'Chris van Waardenburg' maar onderliggend
-        # data-id verwees nog naar Christel Beckmann Asselman → server boekt
-        # de verkeerde speler. Met dit log zien we exact welke data we klikken.
+        # Klik via ActionChains (isTrusted=true) — ETV's jQuery handler
+        # filtert synthetische events weg
         try:
-            el_diag = driver.execute_script("""
-                var el = arguments[0];
-                var attrs = {};
-                for (var i = 0; i < el.attributes.length; i++) {
-                    attrs[el.attributes[i].name] = el.attributes[i].value;
-                }
-                return {
-                    tag:  el.tagName,
-                    attrs: attrs,
-                    html: el.outerHTML.slice(0, 400)
-                };
-            """, el)
-            log.info(f"  🔍 Element-attrs: {el_diag.get('attrs')}")
-            log.info(f"  🔍 Element-html: {el_diag.get('html')}")
+            driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
+            time.sleep(0.3)
+            ActionChains(driver).move_to_element(el).click().perform()
         except Exception as e:
-            log.warning(f"  Element-diagnose mislukt: {e}")
-
-        # ── RE-VERIFICATIE vlak vóór klik ──────────────────────────────────
-        try:
-            huidige = _norm(el.text)
-        except Exception:
-            huidige = ""
-        if not _is_exact_doel(huidige):
-            log.warning(f"  ⚠️ Element-tekst veranderde tussen detectie en klik: "
-                        f"was '{tekst}' → nu '{huidige[:80]}'. Skip om verkeerde "
-                        f"speler te voorkomen — volgende zoekterm.")
-            time.sleep(0.5)
-            continue
-
-        if not _action_klik(el):
-            log.warning(f"  Klik faalde op exacte match — volgende zoekterm")
-            continue
-        # Wacht langer (2.5s ipv 1.5s) zodat de AJAX-call die de speler
-        # server-side registreert tijd heeft om te voltooien voordat we
-        # de volgende speler gaan klikken.
-        time.sleep(2.5)
-
-        # Wis zoekveld zodat input-tekst niet als 'gevonden' meetelt
-        try:
-            zoek_veld_na = _zoek_veld_spelers(driver)
-            if zoek_veld_na:
-                zoek_veld_na.click()
-                zoek_veld_na.send_keys(Keys.CONTROL + "a")
-                zoek_veld_na.send_keys(Keys.DELETE)
-        except Exception:
-            pass
-        time.sleep(0.5)
-
-        # ── POST-KLIK VERIFICATIE: ECHTE check ──────────────────────────────
-        # Joris is altijd speler 1 (hardcoded). ETV toont geselecteerde
-        # spelers samen in dezelfde container (kleinste container met Joris
-        # erin = de "Je gaat spelen met"-lijst).
-        #
-        # Echte check: zit onze DOELSPELER samen met Joris in die kleinste
-        # container? Zo nee → ETV registreerde een verkeerde speler (zoals
-        # in run #59 waar Christel werd toegevoegd ipv Chris). Abort.
-        #
-        # Vroegere "naam staat ergens op de pagina"-check werd hier door
-        # misleid: Chris stond ook in het Recent-paneel → verificatie passte
-        # ondanks dat de SERVER Christel had geregistreerd.
-        def _check_in_spelerslijst():
+            log.warning(f"  ActionChains click faalde ({e}), JS fallback")
             try:
-                return driver.execute_script("""
-                    var accepted = arguments[0];
-                    var joris = 'Joris van den Broek';
-                    var alle = document.querySelectorAll('body *');
-                    var beste = null, bestLen = Infinity;
-                    for (var i = 0; i < alle.length; i++) {
-                        var el = alle[i];
-                        if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') continue;
-                        if (!el.offsetParent) continue;
-                        var t = (el.innerText || '').trim();
-                        if (!t || t.length > 600) continue;
-                        if (t.indexOf(joris) < 0) continue;
-                        // Kleinste element dat Joris bevat = de spelerslijst
-                        if (t.length < bestLen) {
-                            beste = t.replace(/\\s+/g, ' ').trim();
-                            bestLen = t.length;
-                        }
-                    }
-                    if (!beste) return { ok: null, tekst: '(geen container met Joris)' };
-                    for (var j = 0; j < accepted.length; j++) {
-                        if (beste.indexOf(accepted[j]) >= 0) {
-                            return { ok: true, tekst: beste };
-                        }
-                    }
-                    return { ok: false, tekst: beste };
-                """, accepted)
-            except Exception as e:
-                return {"ok": None, "tekst": f"(exception: {e})"}
+                driver.execute_script("arguments[0].click();", el)
+            except Exception as e2:
+                log.warning(f"  JS click ook mislukt: {e2}")
+                continue
+        time.sleep(2.0)   # geef AJAX tijd om speler server-side te registreren
 
-        check_result = None
+        # VERIFICATIE: #youPlayWith MOET een element bevatten met deze data-id.
+        # Niet alleen op naam, maar op de exacte UUID die we klikten. Zo
+        # detecteren we elke vorm van fout-toevoeging — ook als de visible
+        # naam toevallig zou kloppen maar onderliggende ID anders zou zijn.
+        verified = False
         for verif_poging in range(1, 5):
-            check_result = _check_in_spelerslijst()
-            if check_result.get('ok') is True:
+            if _is_in_youplaywith(data_id):
+                verified = True
                 if verif_poging > 1:
-                    log.info(f"  Speler verschenen in spelerslijst na verificatie-poging {verif_poging}")
-                break
-            if check_result.get('ok') is False:
-                # Definitieve mismatch — wachten heeft geen zin, ETV heeft
-                # iets anders geregistreerd
+                    log.info(f"  Speler verschenen in youPlayWith na poging {verif_poging}")
                 break
             time.sleep(1.5)
 
-        if check_result and check_result.get('ok') is True:
-            log.info(f"  ✅ {speler} ECHT geselecteerd in spelerslijst "
-                     f"(zoekterm '{zoekterm}')")
-            log.info(f"     Spelerslijst-inhoud: '{check_result.get('tekst', '')[:200]}'")
+        if verified:
+            log.info(f"  ✅ {speler} ECHT geselecteerd (data-id={data_id}, "
+                     f"zoekterm '{zoekterm}')")
             return True
 
-        if check_result and check_result.get('ok') is False:
-            log.error(f"  ❌ VERKEERDE SPELER GESELECTEERD! Spelerslijst bevat: "
-                      f"'{check_result.get('tekst', '')[:300]}'")
-            log.error(f"     Verwacht: een van {accepted}")
-            log.error(f"     → Niet doorgaan met deze speler — abort voor data-integriteit")
-            screenshot(driver, f"05d_verkeerde_speler_{achternaam}")
-            return False
-
-        log.error(f"  ❌ Kon spelerslijst niet vinden om '{speler}' te verifieren "
-                  f"({check_result.get('tekst') if check_result else 'geen result'})")
-        screenshot(driver, f"05d_niet_geverifieerd_{achternaam}")
+        # data-id niet in youPlayWith → speler niet toegevoegd. ABORT.
+        log.error(f"  ❌ Speler NIET in 'Je gaat spelen met' na 4 verifieer-pogingen "
+                  f"— data-id {data_id} niet aanwezig. ETV heeft de selectie "
+                  f"geweigerd of de click landde verkeerd.")
+        screenshot(driver, f"05d_niet_in_youplaywith_{achternaam}")
         return False
 
-    log.error(f"  ❌ Geen exacte match voor '{speler}' (geprobeerd: {zoektermen})")
+    log.error(f"  ❌ Geen .addPlayer card met exacte match voor '{speler}' "
+              f"(geprobeerd: {zoektermen})")
     try:
         zichtbaar_tekst = driver.find_element(By.TAG_NAME, "body").text
         log.error(f"  Paginatekst (500 tekens): {zichtbaar_tekst[:500]}")
