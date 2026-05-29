@@ -1,6 +1,6 @@
 {
-  "name": "Padelbaan Boeken",
-  "short_name": "Padel Boeken",
+  "name": "Padelbaan Reserveren",
+  "short_name": "Padel Reserveren",
   "description": "ETV Volley padelbaan automatisch reserveren",
   "start_url": ".",
   "display": "standalone",

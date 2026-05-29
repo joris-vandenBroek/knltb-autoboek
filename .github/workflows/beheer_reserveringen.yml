@@ -2,9 +2,9 @@ name: Beheer Reserveringen
 
 # Workflow_dispatch met optionele cancel_id input.
 # - Zonder cancel_id: scrape reserveringen en update reserveringen.json
-# - Met cancel_id (formaat YYYY-MM-DD_HHMM_baan-slug): annuleer die boeking,
+# - Met cancel_id (formaat YYYY-MM-DD_HHMM_baan-slug): annuleer die reservering,
 #   dan scrape opnieuw en update reserveringen.json.
-# Wordt aangeroepen door de PWA (verversen-knop + prullenbakje per boeking).
+# Wordt aangeroepen door de PWA (verversen-knop + prullenbakje per reservering).
 
 on:
   workflow_dispatch:

@@ -1,7 +1,7 @@
 """
 ETV Volley Padelbaan Auto-Reservering
 Automatisch een padelbaan reserveren via etv-volley.nl/mijn
-Na een succesvolle boeking wordt de afspraak direct in Google Agenda gezet.
+Na een succesvolle reservering wordt de afspraak direct in Google Agenda gezet.
 
 Omgevingsvariabelen (GitHub Secrets):
   KNLTB_BONDSNUMMER              - Jouw bondsnummer / gebruikersnaam
@@ -410,8 +410,8 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
 
     Daarnaast: na de klik wordt geverifieerd dat de doelnaam zichtbaar is op
     de pagina (= in het geselecteerde-spelers paneel). Lukt dat niet → return
-    False zodat de hele boeking faalt — beter mislukken dan een verkeerde
-    speler boeken.
+    False zodat de hele reservering faalt — beter mislukken dan een verkeerde
+    speler reserveren.
 
     De vroegere 'Recent mee gespeeld'-shortcut is verwijderd: die gebruikte
     een 'contains(.,achternaam)' XPath wat exact hetzelfde risico had.
@@ -479,7 +479,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
         # met class player/suggestion/result/item). De vorige brede fallback
         # `//*[contains(...)]` matchte ook elementen in het "Recent mee gespeeld"
         # paneel — die hebben een andere click-handler die UI-only werkt en de
-        # speler NIET server-side registreert. Vandaar dat boekingen UI-side
+        # speler NIET server-side registreert. Vandaar dat reserveringen UI-side
         # 'verified' leken maar bij bevestig "niet genoeg spelers" gaven.
         #
         # Mocht ETV's typeahead in een onbekende container renderen waar deze
@@ -1272,7 +1272,7 @@ def bevestig(driver: uc.Chrome) -> bool:
             return False
 
         # ── Stap 3A: Intercept jQuery handler → haal POST-params op ─────────
-        # De site's jQuery click-handler op de bevestig-knop stuurt de boeking-
+        # De site's jQuery click-handler op de bevestig-knop stuurt de reservering-
         # data (court-id, datum, spelers) mee als POST-body. We:
         #   1. Overschrijven jQuery.ajax tijdelijk om de params te onderscheppen.
         #   2. Triggeren de knop via jQuery .trigger('click').
@@ -1331,13 +1331,13 @@ def bevestig(driver: uc.Chrome) -> bool:
         log.info(f"  Onderschept: called={intercepted_called} data={intercepted_data}")
         log.info(f"  AJAX response: status={ajax_status} body={ajax_response}")
 
-        # Controleer op server-side fout: "Niet gevonden" = boeking afgewezen
+        # Controleer op server-side fout: "Niet gevonden" = reservering afgewezen
         if ajax_response and (
             "niet gevonden" in ajax_response.lower()
             or "not found" in ajax_response.lower()
         ):
-            log.error(f"  ❌ Server wees boeking af (Poging A): '{ajax_response}' — "
-                      f"boeking NIET aangemaakt. Controleer of je al een actieve reservering hebt.")
+            log.error(f"  ❌ Server wees reservering af (Poging A): '{ajax_response}' — "
+                      f"reservering NIET aangemaakt. Controleer of je al een actieve reservering hebt.")
             screenshot(driver, "bevestig_server_fout")
             return False
 
@@ -1434,8 +1434,8 @@ def bevestig(driver: uc.Chrome) -> bool:
                     or "not found" in b_fout.lower()
                 )
             ):
-                log.error(f"  ❌ Server wees boeking ook af (Poging B): '{b_fout or b_resp}' — "
-                          f"boeking NIET aangemaakt.")
+                log.error(f"  ❌ Server wees reservering ook af (Poging B): '{b_fout or b_resp}' — "
+                          f"reservering NIET aangemaakt.")
                 screenshot(driver, "bevestig_server_fout_b")
                 return False
 
@@ -1463,20 +1463,20 @@ def bevestig(driver: uc.Chrome) -> bool:
 
 
 # ── STAP 7: Verificatie ───────────────────────────────────────────────────────
-def verifieer_boeking(driver: uc.Chrome, datum: str, tijd: str) -> str:
+def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
     """
-    Controleer of de boeking zichtbaar is op de reserveringspagina.
+    Controleer of de reservering zichtbaar is op de reserveringspagina.
     Probeert zowel /mijn/Reservations als /me/Reservations.
-    Geeft de naam van de geboekte baan terug (bijv. 'Padel 1'), of '' als niet gevonden.
+    Geeft de naam van de gereserveerde baan terug (bijv. 'Padel 1'), of '' als niet gevonden.
     """
-    log.info("Boeking verifiëren...")
+    log.info("Reservering verifiëren...")
 
     datum_obj  = datetime.strptime(datum, "%Y-%m-%d")
     datum_nl   = f"{datum_obj.day}-{datum_obj.month}"   # bijv. "29-5"
     datum_nl2  = f"{datum_obj.day} mei"                  # bijv. "29 mei"
     datum_nl3  = f"{datum_obj.day:02d}-{datum_obj.month:02d}-{datum_obj.year}"  # "29-05-2026"
-    # Let op: gebruik GEEN losse tijdstring als zoekterm — die matcht ook op boekingen
-    # van andere datums (bijv. een bestaande boeking op een andere dag om 15:00).
+    # Let op: gebruik GEEN losse tijdstring als zoekterm — die matcht ook op reserveringen
+    # van andere datums (bijv. een bestaande reservering op een andere dag om 15:00).
     # Vereiste: datum ÉN tijd moeten allebei aanwezig zijn op de pagina.
     datum_tekens = [datum, datum_nl, datum_nl2, datum_nl3]
 
@@ -1493,10 +1493,10 @@ def verifieer_boeking(driver: uc.Chrome, datum: str, tijd: str) -> str:
             tijd_ok  = tijd in body
             if datum_ok and tijd_ok:
                 baan_naam = next((b for b in PADEL_BANEN if b in body), "")
-                log.info(f"✅ Boeking BEVESTIGD op {url}! baan={baan_naam or '(onbekend)'}")
+                log.info(f"✅ Reservering BEVESTIGD op {url}! baan={baan_naam or '(onbekend)'}")
                 return baan_naam or "Padel"
 
-            log.info(f"  Boeking NIET gevonden op {url} "
+            log.info(f"  Reservering NIET gevonden op {url} "
                      f"(datum_ok={datum_ok} tijd_ok={tijd_ok} "
                      f"datum_tekens={datum_tekens} tijd='{tijd}')")
             return ""
@@ -1504,19 +1504,19 @@ def verifieer_boeking(driver: uc.Chrome, datum: str, tijd: str) -> str:
             log.warning(f"  Verificatie fout op {url}: {e}")
             return ""
 
-    # Probeer eerst /mijn/Reservations (Mijn Boekingen-overzicht)
+    # Probeer eerst /mijn/Reservations (Mijn Reserveringen-overzicht)
     baan = _check_pagina("https://www.etv-volley.nl/mijn/Reservations",
                          "13_mijn_reserveringen")
     if baan:
         return baan
 
-    # Probeer /me/Reservations (wizard-startpagina, toont ook huidige boeking)
+    # Probeer /me/Reservations (wizard-startpagina, toont ook huidige reservering)
     baan = _check_pagina("https://www.etv-volley.nl/me/Reservations",
                          "13b_me_reserveringen")
     if baan:
         return baan
 
-    log.error(f"❌ Boeking NIET zichtbaar op beide reserveringspagina's!")
+    log.error(f"❌ Reservering NIET zichtbaar op beide reserveringspagina's!")
     log.error(f"   Gezocht op: {boek_tekens}")
     return ""
 
@@ -1526,7 +1526,7 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
     """
     Schrijf een wachtrij-bestand voor latere verwerking en push naar de repo.
     Wordt gebruikt als de speeldatum nog meer dan 2 dagen weg ligt — de
-    verwerk_wachtrij.yml workflow pikt het bestand op om 07:00 NL op de boekingsdatum
+    verwerk_wachtrij.yml workflow pikt het bestand op om 07:00 NL op de reserveringsdatum
     en triggert boek.yml opnieuw met deze inputs.
     """
     import subprocess
@@ -1584,26 +1584,26 @@ def main():
         log.error("❌ Datum moet YYYY-MM-DD zijn")
         sys.exit(1)
 
-    # Boekingsstrategie: vanaf 07:00 op (speeldatum - 2 kalenderdagen) mag worden geboekt.
+    # Reserveringsstrategie: vanaf 07:00 op (speeldatum - 2 kalenderdagen) mag worden gereserveerd.
     # Dat geldt voor alle dagdelen van dag 0, dag+1 en dag+2.
     nu            = datetime.now()
-    boekingsdatum = speeldatum - timedelta(days=2)
+    reserveringsdatum = speeldatum - timedelta(days=2)
     dag_verschil  = (speeldatum.date() - nu.date()).days
-    log.info(f"📅 Speeldatum dag+{dag_verschil} | boekingsdatum: {boekingsdatum.strftime('%d-%m-%Y')} om 07:00")
+    log.info(f"📅 Speeldatum dag+{dag_verschil} | reserveringsdatum: {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00")
 
-    if nu.date() < boekingsdatum.date():
-        log.info(f"⏳ Te vroeg om direct te boeken — speeldatum is over {dag_verschil} dagen. "
-                 f"Boekingsdatum: {boekingsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
-        log.info("📥 Zet in wachtrij voor automatische boeking op de boekingsdatum.")
+    if nu.date() < reserveringsdatum.date():
+        log.info(f"⏳ Te vroeg om direct te reserveren — speeldatum is over {dag_verschil} dagen. "
+                 f"Reserveringsdatum: {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
+        log.info("📥 Zet in wachtrij voor automatische reservering op de reserveringsdatum.")
         if _zet_in_wachtrij(args.datum, args.tijd, args.speler2, args.speler3, args.speler4):
-            log.info(f"✅ In wachtrij gezet — verwerk_wachtrij workflow start de boeking "
-                     f"automatisch op {boekingsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
+            log.info(f"✅ In wachtrij gezet — verwerk_wachtrij workflow start de reservering "
+                     f"automatisch op {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
             sys.exit(0)
-        log.error("❌ Kon wachtrij-bestand niet opslaan — boeking NIET ingepland")
+        log.error("❌ Kon wachtrij-bestand niet opslaan — reservering NIET ingepland")
         sys.exit(1)
     else:
-        log.info(f"✅ Boeken! (dag+{dag_verschil}, boekingsdatum bereikt)")
-        if nu.date() == boekingsdatum.date() and (nu.hour < 7 or (nu.hour == 7 and nu.minute < 1)):
+        log.info(f"✅ Reserveren! (dag+{dag_verschil}, reserveringsdatum bereikt)")
+        if nu.date() == reserveringsdatum.date() and (nu.hour < 7 or (nu.hour == 7 and nu.minute < 1)):
             log.info(f"   Cron is vroeg gestart — login/spelers/dag/baan worden NU al "
                      f"voorbereid, bevestig-klik volgt pas op 07:01 NL.")
 
@@ -1615,7 +1615,7 @@ def main():
     log.info("=" * 50)
 
     driver = maak_driver()
-    baan, geboekte_tijd = "", ""
+    baan, gereserveerde_tijd = "", ""
 
     try:
         if not login(driver):
@@ -1641,7 +1641,7 @@ def main():
         _log_zichtbare_spelers(driver, alle_spelers,
             "na kies_dag (baan-grid; spelers mogelijk niet meer zichtbaar)")
 
-        baan, geboekte_tijd = kies_baan_en_tijd(driver, args.tijd)
+        baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd)
         if not baan:
             log.error(f"🚫 Geen padelbaan beschikbaar op {args.datum} rondom {args.tijd}")
             sys.exit(1)
@@ -1655,8 +1655,8 @@ def main():
         # daadwerkelijke bevestig-klik gedaan, zodat de ETV-server het slot
         # gegarandeerd geopend heeft. Voorkomt klok-skew-issues.
         nu_pre_bevestig = datetime.now()
-        doel_bevestig   = boekingsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
-        if nu_pre_bevestig.date() == boekingsdatum.date() and nu_pre_bevestig < doel_bevestig:
+        doel_bevestig   = reserveringsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
+        if nu_pre_bevestig.date() == reserveringsdatum.date() and nu_pre_bevestig < doel_bevestig:
             wacht_sec = int((doel_bevestig - nu_pre_bevestig).total_seconds())
             log.info(f"⏳ Wacht {wacht_sec} sec tot 07:01 NL vóór bevestig-klik...")
             time.sleep(wacht_sec)
@@ -1666,10 +1666,10 @@ def main():
             log.error("🚫 Bevestigen mislukt")
             sys.exit(1)
 
-        # ── Verificeer dat boeking zichtbaar is op Mijn Reserveringen ────────
-        geverifieerde_baan = verifieer_boeking(driver, args.datum, geboekte_tijd)
+        # ── Verificeer dat reservering zichtbaar is op Mijn Reserveringen ────────
+        geverifieerde_baan = verifieer_reservering(driver, args.datum, gereserveerde_tijd)
         if not geverifieerde_baan:
-            log.error("🚫 Boeking niet zichtbaar op reserveringspagina — agenda NIET bijgewerkt")
+            log.error("🚫 Reservering niet zichtbaar op reserveringspagina — agenda NIET bijgewerkt")
             sys.exit(1)
 
         # Gebruik geverifieerde baan-naam (betrouwbaarder dan detectie tijdens grid-klik)
@@ -1681,14 +1681,14 @@ def main():
     # ── Succes: Google Agenda bijwerken ───────────────────────────────────────
     spelers = [SPELER1, args.speler2, args.speler3, args.speler4]
     datum_nl = speeldatum.strftime("%d-%m-%Y")
-    tijdsverschil = f" (voorkeur was {args.tijd})" if geboekte_tijd != args.tijd else ""
+    tijdsverschil = f" (voorkeur was {args.tijd})" if gereserveerde_tijd != args.tijd else ""
 
     log.info("=" * 50)
-    log.info(f"✅ GEBOEKT: {baan} op {datum_nl} om {geboekte_tijd}{tijdsverschil}")
+    log.info(f"✅ GERESERVEERD: {baan} op {datum_nl} om {gereserveerde_tijd}{tijdsverschil}")
     log.info(f"   Spelers: {', '.join(spelers)}")
     log.info("=" * 50)
 
-    voeg_toe_aan_agenda(baan, args.datum, geboekte_tijd, spelers)
+    voeg_toe_aan_agenda(baan, args.datum, gereserveerde_tijd, spelers)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 """
 Beheer actieve ETV-Volley reserveringen:
 - Zonder argumenten: scrape /mijn/Reservations en schrijf reserveringen.json
-- Met --cancel ID: annuleer de boeking met die ID, dan scrape opnieuw
+- Met --cancel ID: annuleer de reservering met die ID, dan scrape opnieuw
 
 ID-format: "{YYYY-MM-DD}_{HHMM}_{baan_slug}" zoals "2026-05-31_1500_padel-1"
 
@@ -10,7 +10,7 @@ Strategie:
    haal_leden_op.py en boek_baan.py
 2. Navigeer naar /mijn/Reservations
 3. Scrape booking rows met heuristieken (tabel-rijen + class-based)
-4. (optioneel) Annuleer specifieke boeking
+4. (optioneel) Annuleer specifieke reservering
 5. Schrijf reserveringen.json + commit/push naar repo
 """
 
@@ -243,7 +243,7 @@ def scrape_reserveringen(driver) -> list:
         });
 
         // 2) Divs/articles/sections met booking-related class
-        var classKeywords = ['booking','reservation','reservering','boeking','my-bookings','my-reservations'];
+        var classKeywords = ['booking','reservation','reservering','reservering','my-bookings','my-reservations'];
         document.querySelectorAll('div, article, section, li').forEach(function(el) {
             var cls = (el.className || '').toString().toLowerCase();
             var match = false;
@@ -300,7 +300,7 @@ def scrape_reserveringen(driver) -> list:
     for r in raw[:20]:
         log.info(f"  [{r.get('type')}] tekst='{r.get('tekst', r.get('btnTekst', ''))[:120]}'")
 
-    # Parse naar gestructureerde boekingen
+    # Parse naar gestructureerde reserveringen
     reserveringen = []
     seen_ids = set()
 
@@ -353,10 +353,10 @@ def scrape_reserveringen(driver) -> list:
 
 def annuleer(driver, target_id: str) -> bool:
     """
-    Vind en klik de annuleer-knop voor de boeking met deze ID.
-    Returnt True als de boeking is verdwenen van de pagina.
+    Vind en klik de annuleer-knop voor de reservering met deze ID.
+    Returnt True als de reservering is verdwenen van de pagina.
     """
-    log.info(f"Annuleren van boeking: {target_id}")
+    log.info(f"Annuleren van reservering: {target_id}")
 
     # Parse target_id terug naar datum/tijd
     m = re.match(r"(\d{4}-\d{2}-\d{2})_(\d{4})_", target_id)
@@ -375,10 +375,10 @@ def annuleer(driver, target_id: str) -> bool:
         except Exception:
             body = ""
         if doel_datum in body or doel_tijd in body:
-            log.info(f"Boeking lijkt zichtbaar op {url}")
+            log.info(f"Reservering lijkt zichtbaar op {url}")
             break
     else:
-        log.warning("Boeking niet zichtbaar op een van de URLs — mogelijk al geannuleerd")
+        log.warning("Reservering niet zichtbaar op een van de URLs — mogelijk al geannuleerd")
         return True
 
     # Zoek cancel-knop binnen rij/container die datum+tijd bevat
@@ -446,7 +446,7 @@ def annuleer(driver, target_id: str) -> bool:
     time.sleep(3)
     screenshot(driver, "annuleer_na_klik")
 
-    # Verifieer: ververs pagina en kijk of boeking weg is
+    # Verifieer: ververs pagina en kijk of reservering weg is
     driver.get(RESERVERINGEN_URLS[0])
     time.sleep(4)
     try:
@@ -455,9 +455,9 @@ def annuleer(driver, target_id: str) -> bool:
         body_na = ""
     weg = (doel_datum not in body_na) and (doel_tijd not in body_na)
     if weg:
-        log.info(f"✅ Boeking {target_id} succesvol geannuleerd")
+        log.info(f"✅ Reservering {target_id} succesvol geannuleerd")
     else:
-        log.warning(f"⚠️ Boeking {target_id} mogelijk nog aanwezig (datum/tijd nog zichtbaar)")
+        log.warning(f"⚠️ Reservering {target_id} mogelijk nog aanwezig (datum/tijd nog zichtbaar)")
     return weg
 
 

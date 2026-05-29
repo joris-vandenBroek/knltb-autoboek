@@ -1,7 +1,7 @@
 # knltb-autoboek — Volledige documentatie
 
 **GitHub-repository:** `joris-vandenBroek/knltb-autoboek`  
-**Doel:** Automatisch een padelbaan reserveren bij ETV Volley via de KNLTB-ledenportal, aangestuurd via een PWA op de telefoon, inclusief Google Agenda-integratie en wachtrij voor toekomstige boekingen.
+**Doel:** Automatisch een padelbaan reserveren bij ETV Volley via de KNLTB-ledenportal, aangestuurd via een PWA op de telefoon, inclusief Google Agenda-integratie en wachtrij voor toekomstige reserveringen.
 
 ---
 
@@ -26,7 +26,7 @@
 
 ```
 Gebruiker (telefoon)
-        │  tikt op "Baan boeken" in de PWA
+        │  tikt op "Baan reserveren" in de PWA
         ▼
 docs/index.html (GitHub Pages PWA)
         │  POST naar GitHub Actions API (met PAT-token)
@@ -52,7 +52,7 @@ Klaar — e-mail van ETV Volley + agenda-event
 ║     ▼                                                    ║
 ║ verwerk_wachtrij.yml                                     ║
 ║     │  Voor elk wachtrij-bestand met                     ║
-║     │  boekingsdatum == vandaag:                         ║
+║     │  reserveringsdatum == vandaag:                         ║
 ║     │     → triggert boek.yml met die inputs             ║
 ║     ▼                                                    ║
 ║ boek.yml → boek_baan.py → bevestig om 07:01 NL ✓         ║
@@ -69,21 +69,21 @@ De **actieve reserveringen** (`reserveringen.json`) worden bijgehouden via `lees
 
 ```
 knltb-autoboek/
-├── boek_baan.py                 # Hoofdscript: Selenium-boeking + wachtrij
+├── boek_baan.py                 # Hoofdscript: Selenium-reservering + wachtrij
 ├── lees_reserveringen.py        # Scrape + annuleer actieve reserveringen
 ├── haal_leden_op.py             # Scrape de ledenlijst → leden.json
 ├── leden.json                   # Cache van alle ETV-leden (~970 namen)
 ├── reserveringen.json           # Cache van actieve reserveringen
-├── wachtrij/                    # Boekingen voor speeldatums > dag+2
+├── wachtrij/                    # Reserveringen voor speeldatums > dag+2
 │   ├── .gitkeep
-│   └── YYYY-MM-DD_HHMM.json     # Per ingeplande boeking
+│   └── YYYY-MM-DD_HHMM.json     # Per ingeplande reservering
 ├── docs/                        # PWA (GitHub Pages source)
 │   ├── index.html               # Single-page app
 │   ├── sw.js                    # Service Worker (cache versioning)
 │   ├── manifest.json            # PWA-manifest
 │   ├── logo.png + icon-192/512.png
 └── .github/workflows/
-    ├── boek.yml                 # Voer een boeking uit
+    ├── boek.yml                 # Voer een reservering uit
     ├── verwerk_wachtrij.yml     # Verwerk wachtrij (door cron-job.org getriggerd)
     ├── beheer_reserveringen.yml # Scrape of annuleer reservering (vanuit PWA)
     └── haal_leden_op.yml        # Ledenlijst-refresh (maandag 07:00)
@@ -151,9 +151,9 @@ Eén HTML-bestand zonder frameworks. Werkt als installeerbare PWA op iPhone en A
 1. **Header** met ETV Volley-logo + ⚙️-knop voor PAT
 2. **Wanneer** — datumkiezer + tijdkeuze (08:00–21:30, stappen van 30 min, standaard 15:00)
 3. **Medespelers** — 3 dropdowns met zoekfilter (PrimeFaces-stijl)
-4. **📅 Mijn boekingen** — actieve reserveringen + 🗑️ annuleren per item
+4. **📅 Mijn reserveringen** — actieve reserveringen + 🗑️ annuleren per item
 5. **🕒 Ingeplande reserveringen** — wachtrij + 🗑️ verwijderen per item
-6. **🎾 Baan boeken** — vast onderaan, triggert workflow
+6. **🎾 Baan reserveren** — vast onderaan, triggert workflow
 
 ### Mobile sizing
 
@@ -163,7 +163,7 @@ Basis font-size `22px` (op viewport < 380px: `20px`). Velden minimaal 58px hoog,
 
 De native `<input type="date">` ligt als transparante overlay op de visuele knop. CSS-regel `pointer-events: none` op `.date-native` zorgt dat het hele veld klikbaar is (niet alleen het smalle kalender-icoon-gebied dat sommige browsers default geven). De JS-handler op `.date-picker-btn` roept `showPicker()` aan.
 
-### Mijn boekingen (PWA-card)
+### Mijn reserveringen (PWA-card)
 
 ```javascript
 const RESERV_URL = `https://raw.githubusercontent.com/${REPO}/main/reserveringen.json`;
@@ -180,7 +180,7 @@ const WACHTRIJ_API = `https://api.github.com/repos/${REPO}/contents/wachtrij`;
 ```
 
 - Leest direct via Contents API (geen tussenstap nodig — alleen files in `wachtrij/`).
-- Toont per item: speeldatum, tijd, spelers, boekingsdatum.
+- Toont per item: speeldatum, tijd, spelers, reserveringsdatum.
 - 🔄 Verversen herlaadt de Contents API.
 - 🗑️ verwijdert het JSON-bestand via Contents API DELETE (geen workflow nodig).
 
@@ -190,7 +190,7 @@ Verschijnt automatisch als `localStorage.knltb_pat` leeg is. PAT opgeslagen loka
 
 ### Validatie
 
-Velden krijgen rode rand bij leeg laten bij druk op "Baan boeken". Hidden `<input>` per speler-slot wordt alleen ingevuld als dropdown-keuze gemaakt is.
+Velden krijgen rode rand bij leeg laten bij druk op "Baan reserveren". Hidden `<input>` per speler-slot wordt alleen ingevuld als dropdown-keuze gemaakt is.
 
 ### XSS-bescherming
 
@@ -258,8 +258,8 @@ on:
 
 **Wat het doet:**
 1. Lees `wachtrij/*.json`
-2. Per bestand: bereken `boekingsdatum = speeldatum - 2 dagen`
-3. Als `boekingsdatum == today` (NL-tijd):
+2. Per bestand: bereken `reserveringsdatum = speeldatum - 2 dagen`
+3. Als `reserveringsdatum == today` (NL-tijd):
    - `gh workflow run boek.yml --field datum=... --field tijd=... --field speler2=... etc.`
    - Verwijder het wachtrij-bestand
 4. Commit + push de verwijderingen (retry-loop met rebase)
@@ -301,9 +301,9 @@ PADEL_BANEN   = ["Padel 1", ..., "Padel 6"]
 ### Wachtrij-pad
 
 ```python
-boekingsdatum = speeldatum - timedelta(days=2)
+reserveringsdatum = speeldatum - timedelta(days=2)
 
-if nu.date() < boekingsdatum.date():
+if nu.date() < reserveringsdatum.date():
     _zet_in_wachtrij(args.datum, args.tijd, args.speler2, args.speler3, args.speler4)
     sys.exit(0)
 ```
@@ -339,7 +339,7 @@ Een element wordt **alleen** geklikt als zijn genormaliseerde innerText EXACT ge
 
 **Géén brede `//*` fallback** — die matchte het "Recent mee gespeeld" paneel en koppelde een verkeerde click-handler. Zie [valkuilen](#114-recent-mee-gespeeld-race-condition).
 
-**Post-klik verificatie:** na elke speler-click moet de doelnaam zichtbaar zijn op de pagina in een non-input element. Zo niet → `return False`, hele boeking faalt. Beter falen dan een verkeerde speler boeken.
+**Post-klik verificatie:** na elke speler-click moet de doelnaam zichtbaar zijn op de pagina in een non-input element. Zo niet → `return False`, hele reservering faalt. Beter falen dan een verkeerde speler reserveren.
 
 ### kies_dag retry-loop
 
@@ -357,8 +357,8 @@ Een element wordt **alleen** geklikt als zijn genormaliseerde innerText EXACT ge
 
 ```python
 # Vlak vóór bevestig:
-doel = boekingsdatum.replace(hour=7, minute=1, second=0)
-if nu.date() == boekingsdatum.date() and nu < doel:
+doel = reserveringsdatum.replace(hour=7, minute=1, second=0)
+if nu.date() == reserveringsdatum.date() and nu < doel:
     time.sleep(int((doel - nu).total_seconds()))
 
 bevestig(driver)
@@ -385,7 +385,7 @@ Bij "MIST 3 van 4" weten we direct waar in de wizard de server-side state verlor
 
 Zonder argumenten: scrape `/mijn/Reservations`, schrijf `reserveringen.json`, commit/push.
 
-Met `--cancel <id>`: annuleer die boeking (klik Annuleren-knop in rij met matching datum+tijd), bevestig dialoog, dan opnieuw scrape. Plus: verwijder matching Google Agenda-event (zoekt 'Padel'-events in window -1u tot +2u rond het slot, matcht op start-datetime + 'Padel' in summary).
+Met `--cancel <id>`: annuleer die reservering (klik Annuleren-knop in rij met matching datum+tijd), bevestig dialoog, dan opnieuw scrape. Plus: verwijder matching Google Agenda-event (zoekt 'Padel'-events in window -1u tot +2u rond het slot, matcht op start-datetime + 'Padel' in summary).
 
 ### ID-format
 
@@ -395,7 +395,7 @@ Met `--cancel <id>`: annuleer die boeking (klik Annuleren-knop in rij met matchi
 
 Drie strategieën:
 1. **Tabel-rijen** — alle `<tr>` met ≥2 `<td>` cellen
-2. **Class-based divs** — `[class*="booking|reservation|reservering|boeking"]`
+2. **Class-based divs** — `[class*="booking|reservation|reservering|reservering"]`
 3. **Cancel-buttons** — `<button|a|[role=button]>` met tekst/class/title/aria-label bevattend `annuleer|cancel|verwijder|delete|prullenbak`
 
 Per kandidaat: regex op `datum`, `tijd`, `baan` (Padel/Tennis N). Cancel-button wordt gekoppeld aan rij via parent-tekst-match.
@@ -455,7 +455,7 @@ Documented limitation: scheduled workflows kunnen volledig overgeslagen worden b
 
 ### 11.4 Recent mee gespeeld race condition
 
-De `_voeg_speler_toe()` had ooit een brede XPath-fallback `//*[contains(., 'achternaam') and not(self::input)...]`. Die matchte ook elementen in het "Recent mee gespeeld" paneel — voor spelers die je recent had geboekt stond hun naam alay zichtbaar op de spelers-pagina vóór de typeahead überhaupt loaded.
+De `_voeg_speler_toe()` had ooit een brede XPath-fallback `//*[contains(., 'achternaam') and not(self::input)...]`. Die matchte ook elementen in het "Recent mee gespeeld" paneel — voor spelers die je recent had gereserveerd stond hun naam alay zichtbaar op de spelers-pagina vóór de typeahead überhaupt loaded.
 
 Resultaat: WebDriverWait zag direct een "match", kandidaten-loop pakte het Recent-element, ActionChains klikte de naam-`<span>` — en omdat dat element een ANDERE click-handler heeft (UI-only update zonder server-AJAX) registreerde de speler nooit server-side. Bij bevestig zei de server dan terecht "Joris niet genoeg spelers".
 
@@ -520,7 +520,7 @@ laatst  = datetime.strptime("22:00", "%H:%M")
 
 In `boek_baan.py`, in `main()`:
 ```python
-doel_bevestig = boekingsdatum.replace(hour=7, minute=1, ...)
+doel_bevestig = reserveringsdatum.replace(hour=7, minute=1, ...)
                                               ↑
 ```
 

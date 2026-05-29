@@ -5,7 +5,7 @@ name: Verwerk Wachtrij
 # controleert of de NL-tijd binnen het venster 06:55-07:30 valt en slaat anders
 # over. Effectief: één run per dag om 06:55 NL — met buffer voor cold-start delay
 # (GitHub Actions cron kan tot ~15 min vertraagd worden).
-# boek_baan.py wacht vervolgens zelf tot 07:01 NL voor de daadwerkelijke boeking.
+# boek_baan.py wacht vervolgens zelf tot 07:01 NL voor de daadwerkelijke reservering.
 
 on:
   schedule:
@@ -60,8 +60,8 @@ jobs:
             speler2=$(jq -r '.spelers[1]' "$f")
             speler3=$(jq -r '.spelers[2]' "$f")
             speler4=$(jq -r '.spelers[3]' "$f")
-            boekingsdatum=$(date -d "$datum - 2 days" +%Y-%m-%d)
-            if [ "$boekingsdatum" = "$today" ]; then
+            reserveringsdatum=$(date -d "$datum - 2 days" +%Y-%m-%d)
+            if [ "$reserveringsdatum" = "$today" ]; then
               echo "📤 Trigger boek.yml: $datum om $tijd ($f)"
               gh workflow run boek.yml \
                 --field datum="$datum" \
@@ -72,7 +72,7 @@ jobs:
               rm "$f"
               processed=$((processed + 1))
             else
-              echo "⏭️  Skip $f (boekingsdatum $boekingsdatum, niet vandaag $today)"
+              echo "⏭️  Skip $f (reserveringsdatum $reserveringsdatum, niet vandaag $today)"
             fi
           done
           echo "Aantal verwerkt: $processed"
@@ -87,7 +87,7 @@ jobs:
             exit 0
           fi
           git add wachtrij/
-          git commit -m "wachtrij: verwerk boekingen voor $(date +%Y-%m-%d)"
+          git commit -m "wachtrij: verwerk reserveringen voor $(date +%Y-%m-%d)"
           # Retry-lus voor race condities met andere bots/commits op main.
           for i in 1 2 3 4 5; do
             git pull --rebase origin main || true

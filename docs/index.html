@@ -6,10 +6,10 @@
   <meta name="theme-color" content="#1a5c2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Padel Boeken">
+  <meta name="apple-mobile-web-app-title" content="Padel Reserveren">
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <title>Padel Boeken</title>
+  <title>Padel Reserveren</title>
   <style>
     :root {
       --groen:       #1a5c2e;
@@ -467,7 +467,7 @@
   <div class="header-inner">
     <img src="logo.png" alt="ETV Volley" class="header-logo">
     <div>
-      <h1>Padelbaan Boeken</h1>
+      <h1>Padelbaan Reserveren</h1>
       <p>ETV Volley — automatische reservering</p>
     </div>
   </div>
@@ -579,14 +579,14 @@
   </div>
 </div>
 
-<!-- ── Mijn boekingen ──────────────────────────────────── -->
+<!-- ── Mijn reserveringen ──────────────────────────────────── -->
 <div class="card">
   <div class="card-header-row">
-    <div class="card-header">📅 Mijn boekingen</div>
+    <div class="card-header">📅 Mijn reserveringen</div>
     <button class="btn-refresh-mini" id="reservVerversBtn" onclick="verversReserveringen()">🔄&nbsp;Verversen</button>
   </div>
   <div class="wachtrij-list" id="reservList">
-    <div class="wachtrij-leeg">Boekingen laden…</div>
+    <div class="wachtrij-leeg">Reserveringen laden…</div>
   </div>
 </div>
 
@@ -604,7 +604,7 @@
 <!-- Boek-knop -->
 <div class="btn-wrap">
   <button class="btn-boek" id="boekBtn" onclick="boekBaan()">
-    <span id="btnTekst">🎾&nbsp; Baan boeken</span>
+    <span id="btnTekst">🎾&nbsp; Baan reserveren</span>
   </button>
 </div>
 
@@ -825,7 +825,7 @@
         const boekDatum = minusDagen(item.datum, 2);
         const spelers   = escapeHtml(item.spelers.join(', '));
         const datum     = escapeHtml(`${formatNL(item.datum)} om ${item.tijd}`);
-        const boekt     = escapeHtml(`Boekt automatisch op ${formatNL(boekDatum)} om 07:00`);
+        const boekt     = escapeHtml(`Reserveert automatisch op ${formatNL(boekDatum)} om 07:00`);
         const path      = escapeHtml(e.file.path);
         const sha       = escapeHtml(e.file.sha);
         return `
@@ -893,7 +893,7 @@
 
   laadWachtrij();
 
-  /* ─── Mijn boekingen (actieve ETV-reserveringen) ───────── */
+  /* ─── Mijn reserveringen (actieve ETV-reserveringen) ───────── */
   const RESERV_URL      = `https://raw.githubusercontent.com/${REPO}/main/reserveringen.json`;
   const BEHEER_WORKFLOW = 'beheer_reserveringen.yml';
 
@@ -902,11 +902,11 @@
     try {
       const r = await fetch(RESERV_URL + '?t=' + Date.now());
       if (r.status === 404) {
-        lijst.innerHTML = '<div class="wachtrij-leeg">Nog geen lijst — tik 🔄 Verversen om je boekingen op te halen.</div>';
+        lijst.innerHTML = '<div class="wachtrij-leeg">Nog geen lijst — tik 🔄 Verversen om je reserveringen op te halen.</div>';
         return;
       }
       if (!r.ok) {
-        lijst.innerHTML = '<div class="wachtrij-leeg">Kon boekingen niet laden.</div>';
+        lijst.innerHTML = '<div class="wachtrij-leeg">Kon reserveringen niet laden.</div>';
         return;
       }
       const data = await r.json();
@@ -927,12 +927,12 @@
               <div class="wachtrij-datum">🎾 ${datum}</div>
               <div class="wachtrij-spelers">${baan}</div>
             </div>
-            <button class="wachtrij-del" title="Annuleer deze boeking"
+            <button class="wachtrij-del" title="Annuleer deze reservering"
                     onclick="annuleerReservering(this,'${id}','${escapeHtml(rv.datum)}','${escapeHtml(rv.tijd)}')">🗑️</button>
           </div>`;
       }).join('');
     } catch (e) {
-      lijst.innerHTML = '<div class="wachtrij-leeg">Kon boekingen niet laden.</div>';
+      lijst.innerHTML = '<div class="wachtrij-leeg">Kon reserveringen niet laden.</div>';
     }
   }
 
@@ -951,7 +951,7 @@
           body: JSON.stringify({ ref: 'main', inputs: { cancel_id: '' } }) }
       );
       if (r.status === 204) {
-        toonToast('success', '🔄 Boekingen worden opgehaald (~1.5 min).\nLijst ververst zelf zodra klaar.');
+        toonToast('success', '🔄 Reserveringen worden opgehaald (~1.5 min).\nLijst ververst zelf zodra klaar.');
         // Probeer 4× met oplopende interval te herladen
         setTimeout(laadReserveringen, 90000);
         setTimeout(laadReserveringen, 120000);
@@ -970,7 +970,7 @@
   async function annuleerReservering(btn, id, datum, tijd) {
     const pat = getPat();
     if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
-    if (!confirm(`Deze boeking annuleren?\n\n${formatNL(datum)} om ${tijd}`)) return;
+    if (!confirm(`Deze reservering annuleren?\n\n${formatNL(datum)} om ${tijd}`)) return;
     btn.disabled = true;
     btn.textContent = '⏳';
     try {
@@ -1146,7 +1146,7 @@
     toastTimer = setTimeout(() => el.classList.remove('show'), type === 'success' ? 6000 : 8000);
   }
 
-  /* ─── Baan boeken ──────────────────────────────────────── */
+  /* ─── Baan reserveren ──────────────────────────────────────── */
   async function boekBaan() {
     sluitAlles(null);
     if (!valideer()) return;
@@ -1167,7 +1167,7 @@
     const [_y, _m, _d] = datum.split('-');
     const datumNL = `${_d}-${_m}-${_y}`;
 
-    // Bepaal of dit een directe boeking is of een ingeplande (dag+3 of verder).
+    // Bepaal of dit een directe reservering is of een ingeplande (dag+3 of verder).
     const vandaag = new Date(); vandaag.setHours(0, 0, 0, 0);
     const speelDt = new Date(Number(_y), Number(_m) - 1, Number(_d));
     const dagVerschil = Math.round((speelDt - vandaag) / 86400000);
@@ -1188,10 +1188,10 @@
       if (resp.status === 204) {
         if (wordtIngepland) {
           toonToast('success',
-            `🕒 Boeking ingepland!\n📅 ${datumNL} om ${tijd}\n👥 ${speler2}, ${speler3}, ${speler4}\n\nWordt automatisch geboekt op ${boekDatumNL} om 07:00. Verschijnt zo onderaan in de lijst.`);
+            `🕒 Reservering ingepland!\n📅 ${datumNL} om ${tijd}\n👥 ${speler2}, ${speler3}, ${speler4}\n\nWordt automatisch gereserveerd op ${boekDatumNL} om 07:00. Verschijnt zo onderaan in de lijst.`);
         } else {
           toonToast('success',
-            `✅ Reservering gestart!\n📅 ${datumNL} om ${tijd}\n👥 ${speler2}, ${speler3}, ${speler4}\n\nJe ontvangt een e-mail zodra de baan geboekt is.`);
+            `✅ Reservering gestart!\n📅 ${datumNL} om ${tijd}\n👥 ${speler2}, ${speler3}, ${speler4}\n\nJe ontvangt een e-mail zodra de baan gereserveerd is.`);
         }
         // Ververs de wachtrij-lijst na ~25 sec — workflow heeft dan tijd gehad om te committen.
         if (wordtIngepland) setTimeout(laadWachtrij, 25000);
@@ -1203,7 +1203,7 @@
     }
 
     btn.disabled = false;
-    document.getElementById('btnTekst').textContent = '🎾  Baan boeken';
+    document.getElementById('btnTekst').textContent = '🎾  Baan reserveren';
   }
 
   /* ─── Service worker ───────────────────────────────────── */

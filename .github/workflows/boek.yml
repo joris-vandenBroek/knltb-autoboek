@@ -1,4 +1,4 @@
-name: Boek Padelbaan
+name: Reserveer Padelbaan
 
 on:
   workflow_dispatch:
