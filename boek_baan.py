@@ -189,10 +189,20 @@ def screenshot(driver, naam):
 def _log_zichtbare_spelers(driver, spelers, label: str):
     """
     Diagnose: log of de verwachte spelers visueel op de huidige pagina staan.
-    Telt hoe vaak elke volledige naam in body.innerText voorkomt. Belangrijk
-    voor het opsporen van het scenario waarin spelers UI-zichtbaar lijken
-    maar bij bevestig server-side verdwenen zijn.
+
+    LET OP: ETV toont de spelerslijst ALLEEN op ReservationsPlayers en
+    ReservationsConfirm. Op ReservationsDay/Court is 0/4 zichtbaar = normaal,
+    geen reden tot paniek. Daarom: WARNING-level alleen op pagina's waar de
+    spelers daadwerkelijk zichtbaar moeten zijn.
     """
+    url = driver.current_url or ""
+    spelers_zichtbaar_pagina = (
+        "ReservationsPlayers" in url
+        or "ReservationsConfirm" in url
+        or "/mijn/Reservations" in url
+        or "/me/Reservations" in url and "ReservationsCourt" not in url and "ReservationsDay" not in url
+    )
+
     try:
         body = driver.find_element(By.TAG_NAME, "body").text
     except Exception:
@@ -200,10 +210,14 @@ def _log_zichtbare_spelers(driver, spelers, label: str):
     counts = {s: body.count(s) for s in spelers}
     aanwezig = [s for s, c in counts.items() if c > 0]
     missend  = [s for s, c in counts.items() if c == 0]
-    log.info(f"📊 SPELERS-CHECK [{label}] URL={driver.current_url}")
+    log.info(f"📊 SPELERS-CHECK [{label}] URL={url}")
     log.info(f"   ✓ Aanwezig ({len(aanwezig)}/{len(spelers)}): {aanwezig}")
     if missend:
-        log.warning(f"   ✗ MIST ({len(missend)}): {missend}")
+        if spelers_zichtbaar_pagina:
+            log.warning(f"   ✗ MIST ({len(missend)}): {missend}")
+        else:
+            log.info(f"   (deze pagina toont geen spelerslijst — "
+                     f"{len(missend)} 'missend' is verwacht)")
 
 
 # ── STAP 1: Inloggen ──────────────────────────────────────────────────────────
@@ -533,7 +547,24 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             continue
 
         el, tekst, sel = kandidaten[0]
-        log.info(f"  ✓ Exacte match: '{tekst}' via '{sel[:60]}'")
+        log.info(f"  ✓ Exacte match (initieel): '{tekst}' via '{sel[:60]}'")
+
+        # ── RE-VERIFICATIE vlak vóór klik ──────────────────────────────────
+        # Tussen kandidaten-collectie en click kan ETV's typeahead-AJAX een
+        # extra suggestie aan hetzelfde container-element hebben toegevoegd.
+        # Voorbeeld run #55: element had eerst tekst 'Toine Aanraad', AJAX
+        # voegde 'Toine van Gils' eronder toe → element heeft nu tekst
+        # 'Toine Aanraad Toine van Gils' → click landt op verkeerde row.
+        try:
+            huidige = _norm(el.text)
+        except Exception:
+            huidige = ""
+        if not _is_exact_doel(huidige):
+            log.warning(f"  ⚠️ Element-tekst veranderde tussen detectie en klik: "
+                        f"was '{tekst}' → nu '{huidige[:80]}'. Skip om verkeerde "
+                        f"speler te voorkomen — volgende zoekterm.")
+            time.sleep(0.5)
+            continue
 
         if not _action_klik(el):
             log.warning(f"  Klik faalde op exacte match — volgende zoekterm")
