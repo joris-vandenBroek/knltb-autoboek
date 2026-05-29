@@ -44,9 +44,11 @@ RESERVERINGEN_URLS = [
     "https://www.etv-volley.nl/me/Reservations",
 ]
 
-BONDSNUMMER = os.environ.get("KNLTB_BONDSNUMMER", "")
-WACHTWOORD  = os.environ.get("KNLTB_WACHTWOORD", "")
-TIMEOUT     = 20
+BONDSNUMMER         = os.environ.get("KNLTB_BONDSNUMMER", "")
+WACHTWOORD          = os.environ.get("KNLTB_WACHTWOORD", "")
+GOOGLE_CREDENTIALS  = os.environ.get("GOOGLE_CALENDAR_CREDENTIALS", "")
+GOOGLE_CALENDAR_ID  = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
+TIMEOUT             = 20
 
 
 def screenshot(driver, naam: str):
@@ -459,6 +461,67 @@ def annuleer(driver, target_id: str) -> bool:
     return weg
 
 
+def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
+    """Verwijder de matching Padel-event uit Google Agenda voor (datum, tijd)."""
+    if not GOOGLE_CREDENTIALS:
+        log.warning("⚠️ GOOGLE_CALENDAR_CREDENTIALS niet ingesteld — agenda-verwijdering overgeslagen")
+        return False
+    try:
+        from datetime import timedelta
+        from google.oauth2.service_account import Credentials
+        from googleapiclient.discovery import build
+
+        creds = Credentials.from_service_account_info(
+            json.loads(GOOGLE_CREDENTIALS),
+            scopes=["https://www.googleapis.com/auth/calendar"]
+        )
+        service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+
+        start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M")
+        # Zoek events in een window van -1 uur tot +2 uur rondom het slot
+        time_min = (start_dt - timedelta(hours=1)).isoformat() + "Z"
+        time_max = (start_dt + timedelta(hours=2)).isoformat() + "Z"
+
+        events_result = service.events().list(
+            calendarId=GOOGLE_CALENDAR_ID,
+            timeMin=time_min,
+            timeMax=time_max,
+            q="Padel",
+            singleEvents=True,
+        ).execute()
+        events = events_result.get('items', [])
+        log.info(f"  Agenda-zoekvenster {time_min} → {time_max}: {len(events)} 'Padel'-event(s) gevonden")
+
+        target_dt_local = start_dt.strftime("%Y-%m-%dT%H:%M")
+        verwijderd = 0
+        for ev in events:
+            ev_start = ev.get('start', {}).get('dateTime', '')
+            ev_summary = ev.get('summary', '')
+            # Match op start-datetime prefix (negeer tz-suffix) en 'Padel' in summary
+            if target_dt_local in ev_start and 'Padel' in ev_summary:
+                ev_id = ev.get('id')
+                log.info(f"  Verwijder: '{ev_summary}' (start {ev_start})")
+                service.events().delete(
+                    calendarId=GOOGLE_CALENDAR_ID, eventId=ev_id
+                ).execute()
+                verwijderd += 1
+
+        if verwijderd > 0:
+            log.info(f"✅ {verwijderd} agenda-event(s) verwijderd")
+            return True
+        log.warning(f"⚠️ Geen matching Padel-event in agenda voor {datum} {tijd}")
+        return False
+    except ImportError:
+        log.error("❌ google-api-python-client niet geïnstalleerd")
+        return False
+    except json.JSONDecodeError:
+        log.error("❌ GOOGLE_CALENDAR_CREDENTIALS is geen geldig JSON")
+        return False
+    except Exception as e:
+        log.error(f"❌ Agenda-verwijdering mislukt: {e}")
+        return False
+
+
 def commit_en_push(bestanden: list, message: str):
     """Commit en push de gegeven bestanden, met retry op race conditions."""
     import subprocess
@@ -501,9 +564,14 @@ def main():
             sys.exit(1)
 
         if args.cancel:
-            if not annuleer(driver, args.cancel):
-                log.error("❌ Annuleren mislukt")
-                # Toch nog reserveringen.json bijwerken zodat PWA actuele state krijgt
+            etv_ok = annuleer(driver, args.cancel)
+            if not etv_ok:
+                log.error("❌ Annuleren op ETV-site mislukt")
+            # Ook agenda-event verwijderen (zelfs als ETV-cancel mislukte, beter
+            # een lege agenda dan een spookafspraak)
+            m = re.match(r"(\d{4}-\d{2}-\d{2})_(\d{4})_", args.cancel)
+            if m:
+                verwijder_uit_agenda(m.group(1), f"{m.group(2)[:2]}:{m.group(2)[2:]}")
         # Always scrape (na annuleren is dit de bijgewerkte lijst)
         reserveringen = scrape_reserveringen(driver)
 
