@@ -1795,7 +1795,10 @@ def main():
                             f"verdwijnen na de refresh, dus volgende padelbaan wordt vanzelf gekozen.")
                 try:
                     driver.get("https://www.etv-volley.nl/me/ReservationsCourt")
-                    time.sleep(3)
+                    time.sleep(2)
+                    log.info("⟳ Forceer expliciete refresh — garandeert verse DOM van ETV")
+                    driver.refresh()
+                    time.sleep(2)
                 except Exception as e:
                     log.error(f"🚫 Kon niet terug naar baan-keuze: {e}")
                     sys.exit(1)
