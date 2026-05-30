@@ -1,18 +1,4 @@
 {
-  "bijgewerkt": "2026-05-30T21:32:07",
-  "reserveringen": [
-    {
-      "id": "2026-05-31_1500_padel-1",
-      "datum": "2026-05-31",
-      "tijd": "15:00",
-      "baan": "Padel 1",
-      "tekst": "31-05-2026\t15:00 - 16:00\tPadel 1\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      }
-    }
-  ]
+  "bijgewerkt": "2026-05-30T21:40:49",
+  "reserveringen": []
 }
