@@ -994,22 +994,16 @@ def _sluit_cookie_banner(driver: uc.Chrome):
         driver.implicitly_wait(5)
 
 
-def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str,
-                       uitgesloten_banen: list = None) -> tuple:
+def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     """
     Kies een padelbaan + tijdslot.
-    uitgesloten_banen: lijst van baan-namen die NIET geprobeerd mogen worden
-    (bv. eerder geklikt + bij bevestig bezet bevonden). Default: alle banen toegestaan.
+
+    Doorloop-volgorde: voor elke kandidaat-tijd (voorkeur eerst, dan alternatieven)
+    pakt de JS-loop alle tijdcellen met die tijd uit de DOM en kiest degene die
+    Y-dichtstbij een Padel-label staat. ETV toont bezette tijdcellen niet op de
+    pagina, dus na een verse load is een door iemand anders zojuist geboekte
+    baan automatisch verdwenen — geen expliciete uitsluit-lijst nodig.
     """
-    if uitgesloten_banen is None:
-        uitgesloten_banen = []
-    beschikbare_banen = [b for b in PADEL_BANEN if b not in uitgesloten_banen]
-    if not beschikbare_banen:
-        log.error("❌ Alle padelbanen al geprobeerd — geen retry-opties meer")
-        return "", ""
-    if uitgesloten_banen:
-        log.info(f"Uitgesloten banen (al bezet bij bevestig): {uitgesloten_banen}")
-        log.info(f"Beschikbare banen voor deze poging: {beschikbare_banen}")
     log.info("Baankeuze pagina laden...")
 
     # Wacht tot de tijdslot-pagina geladen is
@@ -1064,7 +1058,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str,
             // Fallback: scroll naar 70% van paginahoogte
             window.scrollTo(0, document.body.scrollHeight * 0.7);
             return 'Fallback scroll 70%';
-        """, beschikbare_banen)
+        """, PADEL_BANEN)
         log.info(f"Scroll naar padel: {scroll_result}")
         time.sleep(0.8)
         _sluit_cookie_banner(driver)
@@ -1146,7 +1140,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str,
                 return { cel: beste, baan: bestePadel };
             }
             return null;
-        """, tijd, beschikbare_banen)
+        """, tijd, PADEL_BANEN)
 
         # Diagnose loggen (geen backslash in f-string: Python<3.12 compatibel)
         try:
@@ -1227,7 +1221,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str,
                 }
                 return { cls: cls, selected: selected, fout: foutTekst };
             } catch(e) { return { cls: 'error', selected: false, fout: e.message }; }
-        """, cel, beschikbare_banen, tijd)
+        """, cel, PADEL_BANEN, tijd)
         log.info(f"  Selectiestatus: cls='{selectie_ok.get('cls','')}' "
                  f"selected={selectie_ok.get('selected',False)} "
                  f"fout='{selectie_ok.get('fout','')}'")
@@ -1766,25 +1760,24 @@ def main():
             "na kies_dag (baan-grid; spelers mogelijk niet meer zichtbaar)")
 
         # ── Retry-loop: baan + tijd kiezen + bevestigen ─────────────────────
-        # Bij race-conditie (iemand anders boekt de baan tussen onze selectie
-        # en bevestig): server zegt "niet gevonden" / "al gereserveerd" →
-        # bevestig() returnt 'BEZET'. We gaan terug naar baan-keuze, sluiten
-        # die baan uit, en proberen de volgende beschikbare baan. Max 3
-        # pogingen — er zijn 6 padelbanen.
+        # Race-conditie: tussen kies_baan_en_tijd en bevestig kan iemand
+        # anders nét sneller zijn en dezelfde baan boeken. Server reageert
+        # dan met "niet gevonden" / "al gereserveerd" / etc. → bevestig()
+        # returnt 'BEZET'. We laden de baan-keuze pagina opnieuw (Vorige-
+        # equivalent); ETV toont de bezette tijdcel daarna niet meer, dus
+        # kies_baan_en_tijd pakt automatisch de volgende padelbaan voor
+        # dezelfde tijd — en pas als alle 6 padelbanen voor die tijd vol
+        # zijn, valt 'ie terug op alternatieve tijden. Max 6 pogingen als
+        # safety net tegen onverwachte loops.
         baan = ""
         gereserveerde_tijd = ""
-        uitgesloten_banen = []
-        MAX_BAAN_POGINGEN = 3
+        MAX_BAAN_POGINGEN = 6
 
         for baan_poging in range(1, MAX_BAAN_POGINGEN + 1):
-            log.info(f"━━━━ Baan-poging {baan_poging}/{MAX_BAAN_POGINGEN} "
-                     f"(uitgesloten: {uitgesloten_banen}) ━━━━")
-            baan, gereserveerde_tijd = kies_baan_en_tijd(
-                driver, args.tijd, uitgesloten_banen=uitgesloten_banen
-            )
+            log.info(f"━━━━ Baan-poging {baan_poging}/{MAX_BAAN_POGINGEN} ━━━━")
+            baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd)
             if not baan:
-                log.error(f"🚫 Geen padelbaan beschikbaar op {args.datum} rondom "
-                          f"{args.tijd} (uitgesloten: {uitgesloten_banen})")
+                log.error(f"🚫 Geen padelbaan beschikbaar op {args.datum} rondom {args.tijd}")
                 sys.exit(1)
 
             _log_zichtbare_spelers(driver, alle_spelers,
@@ -1798,9 +1791,8 @@ def main():
 
             if resultaat == 'BEZET':
                 log.warning(f"⚠️ {baan} om {gereserveerde_tijd} werd net door iemand anders "
-                            f"gereserveerd. Terug naar baan-keuze.")
-                uitgesloten_banen.append(baan)
-                # Navigeer terug naar baan-keuze pagina (Vorige-equivalent)
+                            f"gereserveerd. Terug naar baan-keuze pagina; bezette slots "
+                            f"verdwijnen na de refresh, dus volgende padelbaan wordt vanzelf gekozen.")
                 try:
                     driver.get("https://www.etv-volley.nl/me/ReservationsCourt")
                     time.sleep(3)
@@ -1813,8 +1805,7 @@ def main():
             log.error("🚫 Bevestigen mislukt — geen retry mogelijk")
             sys.exit(1)
         else:
-            log.error(f"🚫 Na {MAX_BAAN_POGINGEN} pogingen nog geen baan kunnen "
-                      f"bevestigen. Alle gepoogde banen waren bezet: {uitgesloten_banen}")
+            log.error(f"🚫 Na {MAX_BAAN_POGINGEN} pogingen nog geen baan kunnen bevestigen")
             sys.exit(1)
 
         # ── Verificeer dat reservering zichtbaar is op Mijn Reserveringen ────────
