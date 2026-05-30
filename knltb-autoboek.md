@@ -19,6 +19,7 @@
 10. [haal_leden_op.py — ledenlijst scrapen](#10-haal_leden_oppy--ledenlijst-scrapen)
 11. [Technische valkuilen en beslissingen](#11-technische-valkuilen-en-beslissingen)
 12. [Wijzigingen aanbrengen](#12-wijzigingen-aanbrengen)
+13. [Toekomstige features — multi-user setup](#13-toekomstige-features--multi-user-setup)
 
 ---
 
@@ -626,3 +627,126 @@ pip install undetected-chromedriver selenium \
 ```
 
 Geen `requirements.txt` — pip kiest de versies. Bij Chrome-update kan UC tijdelijk breken; check de `version_main`-detectie in `chrome_major_versie()`.
+
+---
+
+## 13. Toekomstige features — multi-user setup
+
+**Status: niet geïmplementeerd. Geplande feature voor wanneer meerdere ETV-leden de tool willen gebruiken.**
+
+Op dit moment is alle code gericht op één account (Joris's KNLTB-credentials in `secrets.KNLTB_BONDSNUMMER` + `SPELER1 = "Joris van den Broek"` hardcoded). Onderstaand plan maakt dezelfde repo bruikbaar voor meerdere ETV-leden zonder fork.
+
+### 13.1 Architectuur
+
+Per-user GitHub Secrets in dezelfde repo (`joris-vandenBroek/knltb-autoboek`):
+
+| Secret | Voor |
+|---|---|
+| `KNLTB_BONDSNUMMER_JORIS` / `KNLTB_WACHTWOORD_JORIS` | Joris's KNLTB-login |
+| `KNLTB_BONDSNUMMER_TOINE` / `KNLTB_WACHTWOORD_TOINE` | Toine's KNLTB-login |
+| `GOOGLE_CALENDAR_CREDENTIALS` | shared service-account JSON (één voor alle users) |
+| `GOOGLE_CALENDAR_ID_JORIS` | Joris's agenda-ID |
+| `GOOGLE_CALENDAR_ID_TOINE` | Toine's agenda-ID (optioneel) |
+
+Nieuwe gebruikers vertellen hun KNLTB-credentials éénmalig aan de repo-eigenaar. Na opslaan als GitHub Secret zijn ze write-only — niet meer terug te lezen via de UI.
+
+### 13.2 Workflow-wijzigingen
+
+`boek.yml`, `beheer_reserveringen.yml`, `verwerk_wachtrij.yml` krijgen een `gebruiker` input + conditional env-vars:
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      gebruiker:
+        description: 'Account-eigenaar (joris/toine)'
+        default: 'joris'
+        required: true
+      datum:    { required: true }
+      tijd:     { required: true }
+      speler2:  { required: true }
+      speler3:  { required: true }
+      speler4:  { required: true }
+
+jobs:
+  boek:
+    runs-on: ubuntu-latest
+    env:
+      KNLTB_BONDSNUMMER: ${{ inputs.gebruiker == 'toine' && secrets.KNLTB_BONDSNUMMER_TOINE || secrets.KNLTB_BONDSNUMMER_JORIS }}
+      KNLTB_WACHTWOORD:  ${{ inputs.gebruiker == 'toine' && secrets.KNLTB_WACHTWOORD_TOINE  || secrets.KNLTB_WACHTWOORD_JORIS }}
+      SPELER1_NAAM:      ${{ inputs.gebruiker == 'toine' && 'Toine Aanraad' || 'Joris van den Broek' }}
+      GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
+      GOOGLE_CALENDAR_ID: ${{ inputs.gebruiker == 'toine' && secrets.GOOGLE_CALENDAR_ID_TOINE || secrets.GOOGLE_CALENDAR_ID_JORIS }}
+```
+
+### 13.3 Python-scripts
+
+`boek_baan.py` en `lees_reserveringen.py` — één regel verandert:
+
+```python
+SPELER1 = os.environ.get("SPELER1_NAAM", "Joris van den Broek")
+```
+
+Rest van de logica is sinds de data-id refactor (commit 534fa39) volledig user-agnostic — geen hardcoded namen meer in verificatie of click-targeting.
+
+`_zet_in_wachtrij()` en alle plekken die naar `reserveringen.json` of `wachtrij/` schrijven moeten een gebruiker-arg meekrijgen — paden worden per-user.
+
+### 13.4 Data-isolatie
+
+| Was | Wordt |
+|---|---|
+| `reserveringen.json` | `reserveringen_joris.json` + `reserveringen_toine.json` |
+| `wachtrij/<datum>_<tijd>.json` | `wachtrij/joris/<datum>_<tijd>.json` + `wachtrij/toine/<datum>_<tijd>.json` |
+| `leden.json` | Houden zoals nu (één ledenlijst voor de hele club) |
+
+`verwerk_wachtrij.yml` cron-loopje moet door beide user-folders heen lopen en voor elk item de juiste `gebruiker` als input doorgeven aan `boek.yml`.
+
+### 13.5 PWA-aanpassingen
+
+- **Gebruiker-selector** (dropdown) bovenaan of in ⚙️
+- `localStorage.knltb_gebruiker` opslaan
+- `RESERV_URL` dynamisch: `reserveringen_${gebruiker}.json`
+- `WACHTRIJ_API` dynamisch: `contents/wachtrij/${gebruiker}`
+- `workflow_dispatch` body: voeg `inputs.gebruiker` toe
+- Per-user state behouden (spelers-presets in localStorage per user keyed)
+
+### 13.6 Google Calendar setup voor extra gebruiker (Optie A — shared service account, aanbevolen)
+
+Het bestaande service-account kan voor meerdere agendas tegelijk schrijven. Nieuwe gebruiker doet zelf:
+
+1. Google Agenda → naast eigen agenda ⋮ → **Instellingen en delen**
+2. Onder "Personen met toegang" → **Personen uitnodigen**
+3. Plak het service-account email (vind je in de JSON onder `"client_email"`, bv. `padel-boeker@xxx.iam.gserviceaccount.com`)
+4. Rol: **"Afspraken beheren"**
+5. Geef de eigen calendar-ID door aan repo-eigenaar (gmail-adres of `primary`)
+
+Repo-eigenaar voegt `GOOGLE_CALENDAR_ID_<USER>` als secret toe. Klaar.
+
+**Voordeel boven Optie B (eigen service account per user):** ~2 min ipv ~10 min setup; één Google Cloud project te onderhouden.
+
+### 13.7 Cron-job.org
+
+Eén PAT van repo-eigenaar (met `workflow` scope) is genoeg voor alle gebruikers. De cron triggert `verwerk_wachtrij` zonder gebruiker-arg; de workflow loopt zelf door beide user-folders en triggert de juiste `boek.yml`-runs.
+
+### 13.8 Effort-inschatting
+
+| Onderdeel | Tijd |
+|---|---|
+| 3 workflow-files (boek/beheer/verwerk_wachtrij) — input + conditional env | 15 min |
+| `boek_baan.py` + `lees_reserveringen.py` parametrize | 15 min |
+| `verwerk_wachtrij.yml` per-user loop | 10 min |
+| File-rename `reserveringen.json` → `reserveringen_joris.json` + nieuwe lege voor extra users | 5 min |
+| Wachtrij-folder restructure | 5 min |
+| PWA gebruiker-selector + dynamic URLs | 15 min |
+| Docs (README + knltb-autoboek.md) | 10 min |
+| Per nieuwe gebruiker: KNLTB-secrets + Google Calendar-deling | ~5 min |
+| **Totaal eenmalige refactor** | **~1.5 uur** |
+
+### 13.9 Privacy + trust-model
+
+- KNLTB-credentials: na opslaan als Secret zijn ze write-only. Zelfs de repo-eigenaar kan ze niet meer terug-lezen. Vertrouwen is alleen nodig bij eenmalige invoer.
+- Service-account heeft enkel toegang tot het delen-domein van iedere agenda (alleen padel-events maken/verwijderen), niet bredere agenda-leesrechten.
+- PAT voor cron-job.org: één pat van eigenaar volstaat. Geen per-user PAT nodig.
+- Workflows: gebruikt secrets via masking — credentials worden in Action-logs vervangen door `***`.
+
+Geen serieuze blast-radius bij compromittering (geen financiële koppeling, geen persoonlijke data buiten ETV-baanreserveringen).

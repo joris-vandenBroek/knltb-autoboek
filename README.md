@@ -167,3 +167,22 @@ De PWA toont onder het ledenaantal "Laatst ververst op DD-MM-YYYY".
 | Annuleren werkt niet | Check beheer_reserveringen log. Agenda-event blijft soms achter — handmatig weghalen |
 
 ---
+
+## 🔮 Toekomstige features
+
+### Multi-user support (één repo, meerdere ETV-leden)
+
+Op dit moment is `boek_baan.py` hardcoded op `SPELER1 = "Joris van den Broek"` en zijn de KNLTB-credentials enkelvoudig. Toekomstige refactor om meerdere clubgenoten te ondersteunen **zonder fork**:
+
+- **Per-user GitHub Secrets** (`KNLTB_BONDSNUMMER_JORIS`, `KNLTB_BONDSNUMMER_TOINE`, etc.)
+- **Workflows** krijgen extra input `gebruiker`; conditional env-vars selecteren de juiste secrets per run
+- **`SPELER1`** via env-var `SPELER1_NAAM` ipv hardcoded constante
+- **Data-isolatie**: `reserveringen_<user>.json` + `wachtrij/<user>/<datum>.json` (leden.json blijft shared — zelfde club)
+- **PWA** krijgt gebruiker-selector + dynamische URLs
+- **Google Agenda**: shared service-account werkt voor meerdere agendas — Toine deelt zijn agenda met het service-account email (~2 min setup ipv eigen Google Cloud project)
+
+Geraamd werk: ~1.5 uur engineering aan repo + ~5 min setup per extra gebruiker.
+
+Volledige technische uitwerking staat in [`knltb-autoboek.md` sectie "Multi-user setup"](knltb-autoboek.md#13-toekomstige-features-multi-user-setup).
+
+---
