@@ -571,34 +571,55 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             log.warning(f"  Element met data-id={data_id} niet gevonden: {e}")
             continue
 
-        # Klik via ActionChains — minimaliseer tijd tussen find en click
+        # ── Klik-strategie met 3 fallbacks ──────────────────────────────────
+        # Run #64 (30-05 manueel-retry) bewees dat ActionChains-click niet
+        # altijd ETV's jQuery-handler triggert: visible click, geen toevoeging
+        # aan #youPlayWith. Daarom 3 strategieën met tussentijdse checks:
+        #   1. ActionChains (echte muis-events, isTrusted=true)
+        #   2. jQuery .trigger('click') — invokes alle jQuery-handlers ongeacht binding
+        #   3. DOM element.click() — laatste redmiddel
+        # Tussen elke stap kijken we of #youPlayWith de data-id nu bevat;
+        # zo ja → klaar.
+
+        # Strategie 1: ActionChains
         try:
             ActionChains(driver).move_to_element(el).click().perform()
-            log.info(f"  Klik uitgevoerd op data-id={data_id}")
+            log.info(f"  ActionChains click op data-id={data_id}")
         except Exception as e:
-            log.warning(f"  ActionChains faalde ({type(e).__name__}), JS fallback")
+            log.warning(f"  ActionChains faalde ({type(e).__name__})")
+        time.sleep(1.0)
+
+        # Strategie 2 (als 1 niet werkte): jQuery trigger
+        if not _is_in_youplaywith(data_id):
+            log.info(f"  ActionChains registreerde niet — jQuery .trigger('click') fallback")
             try:
-                # Re-fetch + JS click op het element
+                driver.execute_script(
+                    'if (window.jQuery) '
+                    f'window.jQuery(\'.addPlayer[data-id="{data_id}"]\').trigger("click");'
+                )
+            except Exception as e:
+                log.warning(f"  jQuery trigger faalde: {e}")
+            time.sleep(1.5)
+
+        # Strategie 3 (als 1+2 niet werkten): DOM click
+        if not _is_in_youplaywith(data_id):
+            log.info(f"  jQuery trigger ook geen effect — DOM element.click() fallback")
+            try:
                 driver.execute_script(
                     f'var el=document.querySelector(\'.addPlayer[data-id="{data_id}"]\'); '
                     f'if(el)el.click();'
                 )
-                log.info(f"  JS click uitgevoerd op data-id={data_id}")
-            except Exception as e2:
-                log.warning(f"  JS click ook mislukt: {e2}")
-                continue
-        time.sleep(2.0)   # geef AJAX tijd om speler server-side te registreren
+            except Exception as e:
+                log.warning(f"  DOM click faalde: {e}")
+            time.sleep(1.5)
 
-        # VERIFICATIE: #youPlayWith MOET een element bevatten met deze data-id.
-        # Niet alleen op naam, maar op de exacte UUID die we klikten. Zo
-        # detecteren we elke vorm van fout-toevoeging — ook als de visible
-        # naam toevallig zou kloppen maar onderliggende ID anders zou zijn.
+        # ── VERIFICATIE: #youPlayWith MOET deze data-id bevatten ────────────
         verified = False
         for verif_poging in range(1, 5):
             if _is_in_youplaywith(data_id):
                 verified = True
                 if verif_poging > 1:
-                    log.info(f"  Speler verschenen in youPlayWith na poging {verif_poging}")
+                    log.info(f"  Speler verschenen in youPlayWith na verifieer-poging {verif_poging}")
                 break
             time.sleep(1.5)
 
