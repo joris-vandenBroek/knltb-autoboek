@@ -994,7 +994,22 @@ def _sluit_cookie_banner(driver: uc.Chrome):
         driver.implicitly_wait(5)
 
 
-def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
+def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str,
+                       uitgesloten_banen: list = None) -> tuple:
+    """
+    Kies een padelbaan + tijdslot.
+    uitgesloten_banen: lijst van baan-namen die NIET geprobeerd mogen worden
+    (bv. eerder geklikt + bij bevestig bezet bevonden). Default: alle banen toegestaan.
+    """
+    if uitgesloten_banen is None:
+        uitgesloten_banen = []
+    beschikbare_banen = [b for b in PADEL_BANEN if b not in uitgesloten_banen]
+    if not beschikbare_banen:
+        log.error("❌ Alle padelbanen al geprobeerd — geen retry-opties meer")
+        return "", ""
+    if uitgesloten_banen:
+        log.info(f"Uitgesloten banen (al bezet bij bevestig): {uitgesloten_banen}")
+        log.info(f"Beschikbare banen voor deze poging: {beschikbare_banen}")
     log.info("Baankeuze pagina laden...")
 
     # Wacht tot de tijdslot-pagina geladen is
@@ -1049,7 +1064,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
             // Fallback: scroll naar 70% van paginahoogte
             window.scrollTo(0, document.body.scrollHeight * 0.7);
             return 'Fallback scroll 70%';
-        """, PADEL_BANEN)
+        """, beschikbare_banen)
         log.info(f"Scroll naar padel: {scroll_result}")
         time.sleep(0.8)
         _sluit_cookie_banner(driver)
@@ -1131,7 +1146,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
                 return { cel: beste, baan: bestePadel };
             }
             return null;
-        """, tijd, PADEL_BANEN)
+        """, tijd, beschikbare_banen)
 
         # Diagnose loggen (geen backslash in f-string: Python<3.12 compatibel)
         try:
@@ -1212,7 +1227,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
                 }
                 return { cls: cls, selected: selected, fout: foutTekst };
             } catch(e) { return { cls: 'error', selected: false, fout: e.message }; }
-        """, cel, PADEL_BANEN, tijd)
+        """, cel, beschikbare_banen, tijd)
         log.info(f"  Selectiestatus: cls='{selectie_ok.get('cls','')}' "
                  f"selected={selectie_ok.get('selected',False)} "
                  f"fout='{selectie_ok.get('fout','')}'")
@@ -1257,18 +1272,20 @@ def _submit_knop(driver: uc.Chrome, knop) -> str:
         return 'js.click.fallback'
 
 
-def bevestig(driver: uc.Chrome) -> bool:
+def bevestig(driver: uc.Chrome) -> str:
     """
     Stap 6: klik Volgende → ga naar bevestigingspagina → klik 'Bevestigen'.
+
+    Returnt een string-code:
+      'OK'    — reservering succesvol gemaakt
+      'BEZET' — server zegt 'niet gevonden' (baan werd net door iemand anders
+                geboekt, of vergelijkbare race-conditie) — main() kan terug
+                naar baan-keuze en een andere baan proberen
+      'FOUT'  — andere fout, geen retry mogelijk
 
     De bevestigingsknop is een <a id="confirmReservationButton"
     data-url="/Ajax/Profile/SaveReservation" data-redirect="/me/Reservations">.
     Geen form — de knop triggert een AJAX-call via een jQuery click-handler.
-
-    Aanpak (volgorde):
-      A) ActionChains klik op de knop → triggert jQuery handler → AJAX → redirect
-      B) jQuery.ajax() direct aanroepen als A niet werkt
-    Na elke poging wacht we tot de URL weg is van ReservationsConfirm (max 25s).
     """
     log.info("Bevestigen...")
 
@@ -1413,15 +1430,19 @@ def bevestig(driver: uc.Chrome) -> bool:
         log.info(f"  Onderschept: called={intercepted_called} data={intercepted_data}")
         log.info(f"  AJAX response: status={ajax_status} body={ajax_response}")
 
-        # Controleer op server-side fout: "Niet gevonden" = reservering afgewezen
+        # Controleer op server-side fout: "Niet gevonden" = baan was net door
+        # iemand anders geboekt (race), of equivalente afwijzing
         if ajax_response and (
             "niet gevonden" in ajax_response.lower()
             or "not found" in ajax_response.lower()
+            or "al gereserveerd" in ajax_response.lower()
+            or "reeds geboekt" in ajax_response.lower()
+            or "niet meer beschikbaar" in ajax_response.lower()
         ):
-            log.error(f"  ❌ Server wees reservering af (Poging A): '{ajax_response}' — "
-                      f"reservering NIET aangemaakt. Controleer of je al een actieve reservering hebt.")
-            screenshot(driver, "bevestig_server_fout")
-            return False
+            log.warning(f"  ⚠️ Server wees reservering af (Poging A): '{ajax_response}' — "
+                        f"vermoedelijk net door iemand anders gereserveerd")
+            screenshot(driver, "bevestig_baan_bezet")
+            return 'BEZET'
 
         # Wacht op redirect (kan al gebeurd zijn via de site's eigen success-callback)
         if _wacht_op_redirect(5):
@@ -1433,7 +1454,7 @@ def bevestig(driver: uc.Chrome) -> bool:
                 pass
             log.info(f"✅ Bevestigd via jQuery-trigger! Redirect naar {url_na}")
             screenshot(driver, "12_na_bevestiging")
-            return True
+            return 'OK'
 
         url_na = driver.current_url
         log.warning(f"  Poging A geen redirect — URL: {url_na}")
@@ -1509,21 +1530,24 @@ def bevestig(driver: uc.Chrome) -> bool:
             except Exception:
                 pass
 
-            # Controleer of Poging B ook een fout terugkreeg
+            # Controleer of Poging B ook 'baan bezet' terugkreeg
             if b_status == 'error:not-found' or (
                 b_fout and (
                     "niet gevonden" in b_fout.lower()
                     or "not found" in b_fout.lower()
+                    or "al gereserveerd" in b_fout.lower()
+                    or "reeds geboekt" in b_fout.lower()
+                    or "niet meer beschikbaar" in b_fout.lower()
                 )
             ):
-                log.error(f"  ❌ Server wees reservering ook af (Poging B): '{b_fout or b_resp}' — "
-                          f"reservering NIET aangemaakt.")
-                screenshot(driver, "bevestig_server_fout_b")
-                return False
+                log.warning(f"  ⚠️ Server wees reservering ook af (Poging B): "
+                            f"'{b_fout or b_resp}' — vermoedelijk baan bezet")
+                screenshot(driver, "bevestig_baan_bezet_b")
+                return 'BEZET'
 
             log.info(f"✅ Bevestigd via jQuery.ajax+data! Redirect naar {url_na2}")
             screenshot(driver, "12_na_bevestiging")
-            return True
+            return 'OK'
 
         fout   = driver.execute_script("return window._bevestigFout || '(geen fout)';")
         status = driver.execute_script("return window._bevestigStatus || '(onbekend)';")
@@ -1536,12 +1560,12 @@ def bevestig(driver: uc.Chrome) -> bool:
                   f"status={status} fout={fout} url={url_na2}")
         log.error(f"   Body: {body_na2[:400]}")
         screenshot(driver, "bevestig_fout")
-        return False
+        return 'FOUT'
 
     except Exception as e:
         log.error(f"❌ Bevestigen mislukt (exception): {e}")
         screenshot(driver, "bevestig_fout")
-        return False
+        return 'FOUT'
 
 
 # ── STAP 7: Verificatie ───────────────────────────────────────────────────────
@@ -1741,16 +1765,56 @@ def main():
         _log_zichtbare_spelers(driver, alle_spelers,
             "na kies_dag (baan-grid; spelers mogelijk niet meer zichtbaar)")
 
-        baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd)
-        if not baan:
-            log.error(f"🚫 Geen padelbaan beschikbaar op {args.datum} rondom {args.tijd}")
+        # ── Retry-loop: baan + tijd kiezen + bevestigen ─────────────────────
+        # Bij race-conditie (iemand anders boekt de baan tussen onze selectie
+        # en bevestig): server zegt "niet gevonden" / "al gereserveerd" →
+        # bevestig() returnt 'BEZET'. We gaan terug naar baan-keuze, sluiten
+        # die baan uit, en proberen de volgende beschikbare baan. Max 3
+        # pogingen — er zijn 6 padelbanen.
+        baan = ""
+        gereserveerde_tijd = ""
+        uitgesloten_banen = []
+        MAX_BAAN_POGINGEN = 3
+
+        for baan_poging in range(1, MAX_BAAN_POGINGEN + 1):
+            log.info(f"━━━━ Baan-poging {baan_poging}/{MAX_BAAN_POGINGEN} "
+                     f"(uitgesloten: {uitgesloten_banen}) ━━━━")
+            baan, gereserveerde_tijd = kies_baan_en_tijd(
+                driver, args.tijd, uitgesloten_banen=uitgesloten_banen
+            )
+            if not baan:
+                log.error(f"🚫 Geen padelbaan beschikbaar op {args.datum} rondom "
+                          f"{args.tijd} (uitgesloten: {uitgesloten_banen})")
+                sys.exit(1)
+
+            _log_zichtbare_spelers(driver, alle_spelers,
+                "na kies_baan_en_tijd (Confirm-pagina; 4 spelers verwacht)")
+
+            resultaat = bevestig(driver)
+
+            if resultaat == 'OK':
+                log.info(f"✅ Bevestigd op poging {baan_poging}: {baan} om {gereserveerde_tijd}")
+                break
+
+            if resultaat == 'BEZET':
+                log.warning(f"⚠️ {baan} om {gereserveerde_tijd} werd net door iemand anders "
+                            f"gereserveerd. Terug naar baan-keuze.")
+                uitgesloten_banen.append(baan)
+                # Navigeer terug naar baan-keuze pagina (Vorige-equivalent)
+                try:
+                    driver.get("https://www.etv-volley.nl/me/ReservationsCourt")
+                    time.sleep(3)
+                except Exception as e:
+                    log.error(f"🚫 Kon niet terug naar baan-keuze: {e}")
+                    sys.exit(1)
+                continue
+
+            # resultaat == 'FOUT'
+            log.error("🚫 Bevestigen mislukt — geen retry mogelijk")
             sys.exit(1)
-
-        _log_zichtbare_spelers(driver, alle_spelers,
-            "na kies_baan_en_tijd (zou Confirm-pagina moeten zijn met 4 zichtbaar)")
-
-        if not bevestig(driver):
-            log.error("🚫 Bevestigen mislukt")
+        else:
+            log.error(f"🚫 Na {MAX_BAAN_POGINGEN} pogingen nog geen baan kunnen "
+                      f"bevestigen. Alle gepoogde banen waren bezet: {uitgesloten_banen}")
             sys.exit(1)
 
         # ── Verificeer dat reservering zichtbaar is op Mijn Reserveringen ────────
