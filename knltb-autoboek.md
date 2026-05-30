@@ -371,6 +371,44 @@ Cron-job.org triggert om **06:50 NL**. Login + spelers (~3-4 min) loopt tijdens 
 
 **Waarom de wait vóór kies_dag, niet vóór bevestig?** Run #63 bewees dat ETV's server de daypart-selectie zelf weigert vóór 07:00 — de Volgende-klik na het clicken van een daypart krijgt geen navigatie en het script faalt na 3 retries. De slot-opening om 07:00 geldt voor de **hele wizard vanaf dag-keuze**, niet alleen bevestig. Zie [valkuilen 11.9](#119-boekvenster-geldt-vanaf-dag-keuze-niet-alleen-bevestig).
 
+### bevestig + BEZET-retry (race-conditie tussen kies en bevestig)
+
+Vlak na 07:00 NL claimen meerdere clubleden tegelijk een padelbaan. Het venster tussen `kies_baan_en_tijd` (baan klikken → Volgende) en `bevestig` (Bevestig-knop) is ~1-2 seconden, en in die seconden kan iemand anders nét sneller dezelfde baan vastleggen. De server reageert dan op onze `SaveReservation`-POST met een melding als "niet gevonden", "al gereserveerd", "reeds geboekt" of "niet meer beschikbaar".
+
+**Detectie in `bevestig()`** — die functie retourneert sinds commit 1675acf een 3-state string:
+
+| Return | Betekenis |
+|---|---|
+| `'OK'`    | Reservering geslaagd |
+| `'BEZET'` | Server wees af met race-loss-patroon → main() doet retry met andere baan |
+| `'FOUT'`  | Andere fout → script stopt (geen retry zinvol) |
+
+**Retry-loop in main()** (max 6 pogingen, gelijk aan aantal padelbanen):
+
+```python
+for baan_poging in range(1, 7):
+    baan, tijd = kies_baan_en_tijd(driver, args.tijd)
+    if not baan: sys.exit(1)
+    resultaat = bevestig(driver)
+    if resultaat == 'OK':   break
+    if resultaat == 'BEZET':
+        driver.get("https://www.etv-volley.nl/me/ReservationsCourt")
+        time.sleep(2)
+        driver.refresh()   # garandeer verse DOM (geen browser-cache)
+        time.sleep(2)
+        continue
+    sys.exit(1)  # FOUT
+```
+
+**Waarom geen uitsluit-lijst van banen?** ETV's baan-keuze pagina toont bezette tijdcellen simpelweg niet meer in de DOM na een verse load. `kies_baan_en_tijd` itereert al per voorkeur-tijd over alle Padel 1-6 (kiest de tijdcel Y-dichtstbij een Padel-label) en valt pas terug op alternatieve tijden als alle padelbanen voor de voorkeur-tijd weg zijn. De pagina-refresh + DOM-state IS dus zelf de filter — geen aparte `uitgesloten_banen`-administratie nodig.
+
+**Gedrag bij race:**
+```
+Baan-poging 1/6 → Padel 1 om 15:00 → bevestig: BEZET
+  ⟳ /me/ReservationsCourt + driver.refresh()
+Baan-poging 2/6 → Padel 2 om 15:00 (Padel 1 weg uit DOM) → bevestig: OK ✅
+```
+
 ### Diagnose-logging
 
 Na elke wizard-stap dumpt het script welke spelers zichtbaar zijn op de huidige pagina:
@@ -544,6 +582,25 @@ Na succesvolle add:
 6. Verifieer: `#youPlayWith` MOET een element bevatten met DIE SPECIFIEKE data-id
 
 **Waarom data-id verificatie:** visible name kan misleiden (HTML toonde dubbele spaties zoals `"Christel  Beckmann Asselman"`), maar UUIDs liegen niet. Als de data-id na de click niet in `#youPlayWith` staat, weten we 100% zeker dat de juiste speler NIET is toegevoegd — abort dan ipv doorgaan.
+
+### 11.11 Race-conditie: andere boeker pakt de baan tussen kies en bevestig
+
+Vlak na 07:00 NL hangen meerdere clubleden tegelijk op de portal. Het venster tussen `kies_baan_en_tijd` en `bevestig` is ~1-2 sec, en ETV's server accepteert in die seconden gewoon de eerste boeker die een specifiek tijdslot claimt. De latere boeker krijgt op zijn `SaveReservation`-POST een melding zoals "niet gevonden" / "al gereserveerd" / "reeds geboekt" / "niet meer beschikbaar".
+
+**Tot commit 1675acf**: dit was een hard fail — script crashte met "❌ Bevestigen mislukt". Frustrerend want er waren typisch nog 5 andere padelbanen vrij op dezelfde tijd.
+
+**Sinds 1675acf / 679f0de**: `bevestig()` retourneert 3-state (`'OK'` / `'BEZET'` / `'FOUT'`) en `main()` heeft een retry-loop die bij BEZET terugnavigeert naar `/me/ReservationsCourt`, een `driver.refresh()` doet voor verse DOM, en `kies_baan_en_tijd` opnieuw aanroept. Volledige uitleg in [sectie 8 → bevestig + BEZET-retry](#bevestig--bezet-retry-race-conditie-tussen-kies-en-bevestig).
+
+**Belangrijk inzicht**: ETV's baan-keuze pagina toont een bezette tijdcel simpelweg niet meer na de refresh. Dat bespaart bookkeeping — geen aparte uitsluit-lijst van banen nodig. `kies_baan_en_tijd` itereert al voor elke voorkeur-tijd over alle padelbanen die op dat moment in de DOM staan en pakt de eerstvrije; pas als alle 6 padelbanen op die tijd weg zijn valt 'ie terug op alternatieve tijden (14:30, 15:30, etc.). De DOM IS de filter.
+
+**Detectie-patronen** (case-insensitive substring-match op AJAX-response):
+- `"niet gevonden"`
+- `"not found"`
+- `"al gereserveerd"`
+- `"reeds geboekt"`
+- `"niet meer beschikbaar"`
+
+Komt een nieuwe ETV-versie met andere formulering: voeg het patroon toe in beide checks in `bevestig()` (Poging A en Poging B).
 
 ---
 

@@ -8,6 +8,7 @@ Volledig automatische padelbaan-reservering bij ETV Volley via de KNLTB-portal �
 - 📥 Wachtrij voor reserveringen die nog te ver in de toekomst liggen
 - 📅 Overzicht van actieve reserveringen + 🗑️ annuleren vanuit de app
 - 🗓️ Automatische Google Agenda-events (toegevoegd bij reserveren, verwijderd bij annuleren)
+- 🔁 Race-conditie-bestendig: als iemand anders nét sneller dezelfde baan claimt, probeert het script automatisch de volgende vrije padelbaan (max 6 pogingen)
 
 ---
 
@@ -132,6 +133,8 @@ De reserveringsdatum is **(speeldatum − 2 kalenderdagen)**. ETV opent het slot
 
 Login + spelers gebeurt tijdens de wachttijd vóór 07:00. Pas vanaf 07:01 (1 min buffer voor klok-skew) wordt de dag-keuze geprobeerd — ETV's server weigert daypart-selectie vóór 07:00 (geen navigatie na Volgende). De rest van de wizard volgt direct erna.
 
+**Race-conditie afhandeling.** Als iemand anders nét sneller dezelfde baan + tijd claimt (~1-2 sec venster tussen kies en bevestig), reageert ETV met "niet gevonden" / "al gereserveerd". Het script detecteert dit, navigeert terug naar de baan-keuze pagina + forceert een refresh (ETV toont bezette tijdcellen daarna niet meer), en probeert de volgende vrije padelbaan voor dezelfde tijd. Pas als alle 6 padelbanen op die tijd weg zijn, valt 'ie terug op alternatieve tijden. Max 6 pogingen totaal. Zie [knltb-autoboek.md sectie 11.11](knltb-autoboek.md#1111-race-conditie-andere-boeker-pakt-de-baan-tussen-kies-en-bevestig).
+
 ### Mijn reserveringen / annuleren
 
 In de PWA-kaart "📅 Mijn reserveringen":
@@ -160,6 +163,7 @@ De PWA toont onder het ledenaantal "Laatst ververst op DD-MM-YYYY".
 |----------|-----------|
 | Reservering mislukt | Actions → rode run → download `screenshots`-artifact voor foutdiagnose |
 | `Joris niet genoeg spelers` bij bevestig | Race in spelers-selectie. Code matcht nu strict op typeahead-row. Mocht het terugkomen: zie diagnose-logregels `📊 SPELERS-CHECK` per stap |
+| Log toont `⚠️ Padel X was bezet door iemand anders` | Klopt — race-conditie, script probeert automatisch volgende vrije baan. Eindigt 'ie alsnog met ✅: alles goed. Eindigt 'ie met ❌ na 6 pogingen: alle padelbanen op alle alternatieve tijden waren bezet (zeldzaam) |
 | Wachtrij-item niet verwerkt | Check Actions → Verwerk Wachtrij. Cron-job.org kan ook 401 geven → PAT-scope checken |
 | Afspraak niet in agenda | Controleer `GOOGLE_CALENDAR_CREDENTIALS` en of agenda gedeeld is met serviceaccount |
 | Naam niet gevonden in autocomplete | Tik 🔄 Verversen om de ledenlijst bij te werken |
