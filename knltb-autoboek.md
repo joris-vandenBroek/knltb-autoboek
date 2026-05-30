@@ -38,7 +38,7 @@ boek_baan.py
         │  IF speeldatum > dag+2:
         │     → schrijf wachtrij/<datum>_<tijd>.json + commit/push
         │  ELSE:
-        │     → login + spelers + dag + baan + (wacht tot 07:01 NL) + bevestig
+        │     → login + spelers + (wacht tot 07:01 NL) + dag + baan + bevestig
         ▼
 Google Agenda  (via Service Account, optioneel)
         ▼
@@ -55,7 +55,7 @@ Klaar — e-mail van ETV Volley + agenda-event
 ║     │  reserveringsdatum == vandaag:                         ║
 ║     │     → triggert boek.yml met die inputs             ║
 ║     ▼                                                    ║
-║ boek.yml → boek_baan.py → bevestig om 07:01 NL ✓         ║
+║ boek.yml → boek_baan.py → dag-keuze vanaf 07:01 NL ✓     ║
 ╚══════════════════════════════════════════════════════════╝
 ```
 
@@ -317,9 +317,9 @@ if nu.date() < reserveringsdatum.date():
 1. **Login** — Cloudflare-wait, cookie-banner, JS-property setter voor bondsnummer + wachtwoord (triggert React/Vue input/change events), submit
 2. **Klik "Baan afhangen"** op de Reserveringen-pagina
 3. **Voeg 3 spelers toe** — zie volgende sectie
-4. **Kies dag + dagdeel** — retry-loop met back-redirect recovery (max 3 pogingen)
-5. **Kies tijdslot** — zoekt `.timeincourt` of `[data-hour]` cellen in de padel-rij via absolute Y-positie
-6. **Wacht tot 07:01 NL** als nodig (zie [bevestig-timing](#bevestig-timing-op-0701-nl))
+4. **Wacht tot 07:01 NL** als nodig (zie [boekvenster-timing](#boekvenster-timing-op-0701-nl))
+5. **Kies dag + dagdeel** — retry-loop met back-redirect recovery (max 3 pogingen)
+6. **Kies tijdslot** — zoekt `.timeincourt` of `[data-hour]` cellen in de padel-rij via absolute Y-positie
 7. **Bevestig** — intercepteert jQuery.ajax POST naar `/Ajax/Profile/SaveReservation`
 8. **Verifieer** — bezoek `/mijn/Reservations` en `/me/Reservations`, check op datum + tijd in body
 9. **Google Agenda-event** — Service Account API call, kleur groen, popup-herinnering 60 min
@@ -353,18 +353,22 @@ Een element wordt **alleen** geklikt als zijn genormaliseerde innerText EXACT ge
   3. URL = `ReservationsPlayers` → server weigerde dagdeel → retry
   4. Onbekend → retry
 
-### Bevestig-timing op 07:01 NL
+### Boekvenster-timing op 07:01 NL
 
 ```python
-# Vlak vóór bevestig:
+# Vlak vóór kies_dag:
 doel = reserveringsdatum.replace(hour=7, minute=1, second=0)
 if nu.date() == reserveringsdatum.date() and nu < doel:
     time.sleep(int((doel - nu).total_seconds()))
 
+kies_dag(driver, ...)
+kies_baan_en_tijd(driver, ...)
 bevestig(driver)
 ```
 
-Cron-job.org triggert om **06:50 NL**. De prep (login + spelers + dag + baan) duurt ~5-6 min — eindigt rond 06:56. Dan sleep ~5 min tot **07:01 NL**, dan bevestig-klik. 1 min buffer na slot-opening (07:00) compenseert server-klok-skew.
+Cron-job.org triggert om **06:50 NL**. Login + spelers (~3-4 min) loopt tijdens de wachttijd vóór 07:00 — die stappen hebben geen slot-validatie. **Vanaf 07:01 NL** (1 min buffer voor klok-skew) doet het script kies_dag → kies_baan_en_tijd → bevestig in één doorloop. Bevestig valt rond 07:02-03.
+
+**Waarom de wait vóór kies_dag, niet vóór bevestig?** Run #63 bewees dat ETV's server de daypart-selectie zelf weigert vóór 07:00 — de Volgende-klik na het clicken van een daypart krijgt geen navigatie en het script faalt na 3 retries. De slot-opening om 07:00 geldt voor de **hele wizard vanaf dag-keuze**, niet alleen bevestig. Zie [valkuilen 11.9](#119-boekvenster-geldt-vanaf-dag-keuze-niet-alleen-bevestig).
 
 ### Diagnose-logging
 
@@ -482,15 +486,63 @@ for i in 1 2 3 4 5; do
 done
 ```
 
-### 11.7 Cron-vroege start vs bevestig-timing
+### 11.7 Cron-vroege start vs boekvenster-timing
 
-Probleem: cron triggert om 06:50, prep duurt 5 min, dan wacht_at_top tot 07:01, dan bevestig om 07:04 — te laat, slot mogelijk al weg.
+Probleem (oorspronkelijk): cron triggert om 06:50, prep duurt 5 min, dan wait-at-top tot 07:01, dan bevestig om 07:04 — te laat, slot mogelijk al weg.
 
-**Fix (commit 103493b):** wait-at-top verwijderd; sleep verschoven naar VLAK VOOR bevestig-klik. Prep loopt tijdens de wachttijd, bevestig valt nu op 07:01 NL precies.
+**Fix v1 (commit 103493b):** wait-at-top verwijderd; sleep verschoven naar VLAK VOOR bevestig-klik. Prep loopt tijdens de wachttijd.
 
-### 11.8 ETV "1 actieve reservering"-rule (vermoeden, niet definitief bewezen)
+### 11.8 Boekvenster geldt vanaf dag-keuze, niet alleen bevestig
+
+Vervolg op 11.7. Run #63 (cron 30-05 06:50 NL voor 01-06) bewees dat ETV's server al de **daypart-selectie zelf** weigert vóór 07:00:
+
+```
+06:52:17 Volgende methode: requestSubmit
+06:52:32 WARNING Geen herkenbare navigatie binnen 15s
+06:52:32 WARNING Geen navigatie. URL: ReservationsDay
+```
+
+3× kies_dag retry, allemaal hetzelfde patroon. Mijn aanname dat alleen `bevestig` na 07:00 hoeft was fout — het hele blok kies_dag → kies_baan_en_tijd → bevestig moet ná de slot-opening lopen.
+
+**Fix v2 (commit 6744516):** sleep verschoven naar VLAK VOOR kies_dag. Login + spelers gebeurt tijdens de wachttijd (geen slot-validatie daar). Vanaf 07:01 NL doet het script kies_dag → kies_baan_en_tijd → bevestig in één doorloop. Bevestig valt nu rond 07:02-03 — iets later dan 07:01 sharp, maar wel werkend.
+
+### 11.9 ETV "1 actieve reservering"-rule (vermoeden, niet definitief bewezen)
 
 ETV lijkt impliciet geen 2e actieve reservering toe te staan per lid. Symptoom: bij booking-attempt terwijl een andere reservering actief is, kreeg het script terug-redirect naar spelers-pagina. Niet 100% gevalideerd; de Recent-paneel-bug verklaarde mogelijk een aantal van die failures.
+
+### 11.10 Spelers selecteren via UUID (data-id)
+
+Niet eigenlijk een valkuil maar een sleutel-inzicht uit een lange dag debugging (29-05).
+
+**De juiste manier om een speler te selecteren** is via het `data-id` attribuut van het `.addPlayer`-element. ETV's HTML:
+
+```html
+<div class="card-body addPlayer" data-id="4f14518b-3003-4573-ac95-b4ec0346fa20">
+  Chris van Waardenburg
+</div>
+```
+
+Na succesvolle add:
+
+```html
+<div id="youPlayWith">
+  <li>
+    <h6>Chris van Waardenburg</h6>
+    <a class="removePlayer" data-id="4f14518b-3003-4573-ac95-b4ec0346fa20">×</a>
+  </li>
+</div>
+```
+
+**Werkwijze (commit 534fa39 / cf31c3c):**
+
+1. Type zoekterm
+2. Vind `.addPlayer[data-id]` waarvan innerText EXACT gelijk is aan een geaccepteerde naamvorm
+3. Onthoud de `data-id` (string), NIET het element-ref
+4. Vind het element vers via `driver.find_element(By.CSS_SELECTOR, '.addPlayer[data-id="UUID"]')` — ETV's typeahead refresht de DOM binnen ~300ms, dus refs uit `execute_script` verstaleren onmiddellijk
+5. ActionChains click
+6. Verifieer: `#youPlayWith` MOET een element bevatten met DIE SPECIFIEKE data-id
+
+**Waarom data-id verificatie:** visible name kan misleiden (HTML toonde dubbele spaties zoals `"Christel  Beckmann Asselman"`), maar UUIDs liegen niet. Als de data-id na de click niet in `#youPlayWith` staat, weten we 100% zeker dat de juiste speler NIET is toegevoegd — abort dan ipv doorgaan.
 
 ---
 
@@ -516,12 +568,12 @@ vroegst = datetime.strptime("08:00", "%H:%M")
 laatst  = datetime.strptime("22:00", "%H:%M")
 ```
 
-### Bevestig-timing wijzigen (bv. 07:00 ipv 07:01)
+### Boekvenster-timing wijzigen (bv. 07:00 ipv 07:01)
 
-In `boek_baan.py`, in `main()`:
+In `boek_baan.py`, in `main()` net voor de `kies_dag` call:
 ```python
-doel_bevestig = reserveringsdatum.replace(hour=7, minute=1, ...)
-                                              ↑
+doel_window_open = reserveringsdatum.replace(hour=7, minute=1, ...)
+                                                  ↑
 ```
 
 ### Cron-tijd wijzigen

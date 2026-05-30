@@ -4,7 +4,7 @@ Volledig automatische padelbaan-reservering bij ETV Volley via de KNLTB-portal �
 
 **Highlights:**
 - 📱 Mobiele PWA voor 1-tik-reserveren
-- 🤖 Auto-boekt om 07:01 NL op de reserveringsdatum (precies 1 min na slot-opening)
+- 🤖 Auto-reserveert vanaf 07:01 NL op de reserveringsdatum (1 min na slot-opening tegen klok-skew)
 - 📥 Wachtrij voor reserveringen die nog te ver in de toekomst liggen
 - 📅 Overzicht van actieve reserveringen + 🗑️ annuleren vanuit de app
 - 🗓️ Automatische Google Agenda-events (toegevoegd bij reserveren, verwijderd bij annuleren)
@@ -122,13 +122,15 @@ De reserveringsdatum is **(speeldatum − 2 kalenderdagen)**. ETV opent het slot
 ```
 06:50:00  cron-job.org POST → verwerk_wachtrij start
 06:51:00  triggert boek.yml
-06:52:00  boek_baan.py: login + spelers + dag + baan
-06:57:30  ✓ klaar voor bevestig, sleep tot 07:01
-07:01:00  ✅ BEVESTIG-KLIK
-07:01:30  Verificatie + agenda-event
+06:52:00  boek_baan.py: login + spelers (~3-4 min)
+06:55:00  ✓ klaar voor dag-keuze, sleep tot 07:01
+07:01:00  Dag-selectie + Volgende
+07:01:30  Baan/tijd-selectie + Volgende
+07:02:00  ✅ BEVESTIG-KLIK
+07:02:30  Verificatie + agenda-event
 ```
 
-Bevestig valt op **07:01 NL precies** — 1 min buffer na slot-opening tegen server-klok-skew, maximaliseert kans dat Padel 1 nog vrij is.
+Login + spelers gebeurt tijdens de wachttijd vóór 07:00. Pas vanaf 07:01 (1 min buffer voor klok-skew) wordt de dag-keuze geprobeerd — ETV's server weigert daypart-selectie vóór 07:00 (geen navigatie na Volgende). De rest van de wizard volgt direct erna.
 
 ### Mijn reserveringen / annuleren
 
