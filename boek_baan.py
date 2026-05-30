@@ -558,6 +558,14 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
             continue
         log.info(f"  ✓ Card gevonden: data-id={data_id}, tekst='{tekst}'")
 
+        # Pre-klik check: staat deze speler AL in #youPlayWith? Dan was
+        # 'ie in een vorige booking-poging al toegevoegd en blijft hangen
+        # in ETV's session-state. Beschouw als success en ga door.
+        if _is_in_youplaywith(data_id):
+            log.info(f"  ℹ️ {speler} stond al in 'Je gaat spelen met' "
+                     f"(leftover van eerdere booking-poging) — skip click")
+            return True
+
         # Vind het element VERS via Selenium met de stabiele data-id.
         # JS-returns van execute_script verstalen meteen wanneer ETV's
         # typeahead de DOM ververst (gebeurt binnen ~300ms — bewezen in
@@ -649,7 +657,31 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
 def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str) -> bool:
     log.info("Spelers toevoegen...")
     time.sleep(2)
+
+    # Defensieve refresh: forceer ETV om de ReservationsPlayers pagina vers
+    # te renderen. Eventuele stale state uit een vorige gefaalde booking-
+    # poging wordt zo zichtbaar (= we kunnen detecteren of spelers al in
+    # #youPlayWith staan voordat we ze opnieuw proberen toe te voegen).
+    try:
+        driver.refresh()
+        time.sleep(3)
+        log.info(f"  🔄 ReservationsPlayers ververst — URL: {driver.current_url}")
+    except Exception as e:
+        log.warning(f"  Refresh mislukt ({e}), doorgaan op huidige page state")
+
     screenshot(driver, "05_spelers_pagina")
+
+    # Log wie er al in #youPlayWith staat (eventueel leftover van een
+    # eerder gecrashte booking-poging). Joris staat er altijd in als speler 1.
+    try:
+        bestaand = driver.execute_script("""
+            var c = document.getElementById('youPlayWith');
+            if (!c) return [];
+            return Array.from(c.querySelectorAll('h6')).map(h => h.innerText.trim());
+        """)
+        log.info(f"  Al in 'Je gaat spelen met' bij start: {bestaand}")
+    except Exception:
+        pass
 
     for i, speler in enumerate([speler2, speler3, speler4], start=2):
         log.info(f"Speler {i} toevoegen: '{speler}'")
