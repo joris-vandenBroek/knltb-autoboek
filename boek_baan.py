@@ -1663,6 +1663,24 @@ def main():
         _log_zichtbare_spelers(driver, alle_spelers,
             "na voeg_spelers_toe (4 verwacht)")
 
+        # ── Klok-buffer: wacht tot 07:01 NL vóór kies_dag ───────────────────
+        # Run #63 (cron 30-05 06:50 NL) bewees dat ETV's server de daypart-
+        # selectie ZELF al weigert vóór 07:00 NL. Het script kreeg 'geen
+        # navigatie' na elke Volgende-klik op de dag-pagina.
+        #
+        # Cron-job.org triggert om 06:50; login + spelers werken al wel
+        # vóór 07:00 (geen slot-validatie daar). Maar kies_dag, kies_baan,
+        # bevestig moeten ALLE drie ná 07:00 lopen. Daarom: wacht hier,
+        # niet later.
+        nu_pre_dag = datetime.now()
+        doel_window_open = reserveringsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
+        if nu_pre_dag.date() == reserveringsdatum.date() and nu_pre_dag < doel_window_open:
+            wacht_sec = int((doel_window_open - nu_pre_dag).total_seconds())
+            log.info(f"⏳ Wacht {wacht_sec} sec tot 07:01 NL vóór dag-selectie "
+                     f"(ETV opent het slot om 07:00, buffer voor klok-skew)...")
+            time.sleep(wacht_sec)
+            log.info(f"⏰ {datetime.now().strftime('%H:%M:%S')} NL — boekvenster open.")
+
         if not kies_dag(driver, args.datum, args.tijd):
             log.error(f"🚫 Dag {args.datum} kon niet worden geselecteerd")
             sys.exit(1)
@@ -1677,19 +1695,6 @@ def main():
 
         _log_zichtbare_spelers(driver, alle_spelers,
             "na kies_baan_en_tijd (zou Confirm-pagina moeten zijn met 4 zichtbaar)")
-
-        # ── Klok-buffer: wacht tot 07:01 NL als we nog vroeg zijn ──────────
-        # Cron-job.org triggert om 06:50 zodat login + spelers + dag + baan
-        # alvast klaar staan tijdens de wachttijd. Pas op 07:01 wordt de
-        # daadwerkelijke bevestig-klik gedaan, zodat de ETV-server het slot
-        # gegarandeerd geopend heeft. Voorkomt klok-skew-issues.
-        nu_pre_bevestig = datetime.now()
-        doel_bevestig   = reserveringsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
-        if nu_pre_bevestig.date() == reserveringsdatum.date() and nu_pre_bevestig < doel_bevestig:
-            wacht_sec = int((doel_bevestig - nu_pre_bevestig).total_seconds())
-            log.info(f"⏳ Wacht {wacht_sec} sec tot 07:01 NL vóór bevestig-klik...")
-            time.sleep(wacht_sec)
-            log.info(f"⏰ {datetime.now().strftime('%H:%M:%S')} NL — bevestig-venster open, klikken nu.")
 
         if not bevestig(driver):
             log.error("🚫 Bevestigen mislukt")
