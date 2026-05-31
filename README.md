@@ -30,7 +30,7 @@ Gehost als Progressive Web App op GitHub Pages.
 
 1. **Wanneer** — datumkiezer + tijdkeuze (08:00–21:30, stappen van 30 min)
 2. **Medespelers** — 3 dropdowns met zoekfilter op de ledenlijst
-3. **📅 Mijn reserveringen** — actieve ETV-reserveringen, met 🗑️ knop per item om te annuleren (haalt ook agenda-event weg). Toont direct de laatste cache; bij data >15 min oud wordt op de achtergrond automatisch ververst (pill "🔄 Vernieuwen…"). Ook bij elke tab-terugkomst
+3. **📅 Mijn reserveringen** — actieve ETV-reserveringen, met 🗑️ knop per item om te annuleren (haalt ook agenda-event weg). Toont direct de laatste cache; bij data >15 min oud wordt op de achtergrond automatisch ververst (status-pill "🔄 Aan het verversen…"). Ook bij elke tab-terugkomst
 4. **🕒 Ingeplande reserveringen** — wachtrij voor toekomstige reserveringen, met 🗑️ knop om te verwijderen
 5. **🎾 Baan reserveren** — knop vast onderaan, triggert direct of zet in wachtrij
 

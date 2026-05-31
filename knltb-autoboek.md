@@ -919,7 +919,7 @@ op Verversen klikken.
    en PAT is aanwezig: `autoVerversReserveringen()`
 4. Achtergrondrefresh:
    - Triggert `beheer_reserveringen.yml` via workflow_dispatch
-   - Toont kleine blauwe pill onder de lijst: '🔄 Vernieuwen…'
+   - Toont kleine blauwe pill onder de lijst: '🔄 Aan het verversen…'
    - Pol elke 30s vanaf t+60s: vergelijk `data.bijgewerkt` met
      timestamp van vóór de trigger; bij verschil → re-render + pill weg
    - Time-out na 3 min als de workflow nooit completion-signaal geeft
