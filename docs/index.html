@@ -197,6 +197,20 @@
     }
     .pf-trigger.invalid { border-color: var(--fout); }
 
+    /* Speler 1 readonly output — visueel consistent met .pf-trigger maar
+       niet interactief. Subtiel grijze achtergrond signaleert read-only. */
+    .speler1-veld {
+      display: flex; align-items: center;
+      padding: 15px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      font-size: 1.15rem;
+      color: #2d3748;
+      background: #f7fafc;
+      min-height: 58px;
+      user-select: text;
+    }
+
     .pf-arrow {
       color: var(--grijs);
       font-size: 0.85rem;
@@ -543,9 +557,14 @@
   </div>
 </div>
 
-<!-- ── Medespelers ────────────────────────────────────── -->
+<!-- ── Spelers ────────────────────────────────────────── -->
 <div class="card">
-  <div class="card-header">Medespelers</div>
+  <div class="card-header">Spelers</div>
+
+  <div class="field-group">
+    <label class="field-label">Speler 1</label>
+    <div class="speler1-veld" id="speler1Veld">Joris van den Broek</div>
+  </div>
 
   <div class="field-group">
     <label class="field-label">Speler 2 <span class="req">*</span></label>
