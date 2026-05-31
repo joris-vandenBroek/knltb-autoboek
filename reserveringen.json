@@ -1,5 +1,5 @@
 {
-  "bijgewerkt": "2026-05-31T12:00:41",
+  "bijgewerkt": "2026-05-31T12:09:46",
   "reserveringen": [
     {
       "id": "2026-06-02_2030_padel-5",
@@ -13,7 +13,11 @@
         "btnDataUrl": null,
         "btnDataId": null
       },
-      "wijzigUrl": null
+      "spelers": [
+        "Johan Janssen",
+        "Daniel Enderink",
+        "Toine Aanraad"
+      ]
     }
   ]
 }
