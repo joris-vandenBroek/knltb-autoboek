@@ -1,9 +1,9 @@
-const CACHE = 'padel-v25';
+const CACHE = 'padel-v26';
 // index.html en manifest altijd network-first zodat updates direct zichtbaar zijn
 const NETWORK_FIRST = ['/', '/index.html', '/manifest.json'];
 const CACHE_FIRST   = ['/sw.js', '/logo.png', '/icon-192.png', '/icon-512.png'];
 // JSON-payloads die altijd vers moeten zijn (worden ge-cache-bust via ?t=)
-const ALTIJD_VERS_JSON = ['leden.json', 'reserveringen.json'];
+const ALTIJD_VERS_JSON = ['leden.json', 'reserveringen.json', 'reserveringen_spelers.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(

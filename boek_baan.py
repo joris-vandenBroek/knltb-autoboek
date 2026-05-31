@@ -1764,6 +1764,66 @@ def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
+def _bewaar_spelers_per_reservering(datum: str, tijd: str, baan: str, spelers: list) -> bool:
+    """
+    Schrijf de spelers van een zojuist-gemaakte reservering naar
+    reserveringen_spelers.json — een side-file die de PWA leest om
+    'Padel 5 — met X, Y, Z' achter de baan te tonen.
+
+    ID-format moet exact matchen met lees_reserveringen.py.maak_id():
+        {YYYY-MM-DD}_{HHMM}_{baan-slug}
+    Voorbeeld: 2026-06-02_2030_padel-5
+
+    Side-file is een dict {id: [Joris, S2, S3, S4]}. Bestaande entries
+    blijven behouden; alleen het nieuwe id wordt toegevoegd/overschreven.
+    Bij commit-fail: log warning maar laat het boekproces verder slagen
+    (agenda + ETV-reservering zijn al klaar; dit is alleen UI-data).
+    """
+    path = "reserveringen_spelers.json"
+    tijd_slug = (tijd or "").replace(":", "")
+    baan_slug = (baan or "onbekend").lower().replace(" ", "-")
+    rid = f"{datum}_{tijd_slug}_{baan_slug}"
+
+    data = {}
+    if os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except Exception as e:
+            log.warning(f"Kon bestaande {path} niet lezen ({e}) — start met lege map")
+
+    data[rid] = spelers
+    try:
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, ensure_ascii=False, indent=2, sort_keys=True)
+            fh.write("\n")
+        log.info(f"📝 {path} bijgewerkt voor reservering {rid}")
+    except Exception as e:
+        log.warning(f"Kon {path} niet schrijven ({e}) — PWA toont enkel baan zonder spelers")
+        return False
+
+    # Commit + push met retry (zelfde patroon als _zet_in_wachtrij)
+    try:
+        subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
+        subprocess.run(["git", "config", "user.name",  "knltb-autoboek-bot"], check=True)
+        subprocess.run(["git", "add", path], check=True)
+        subprocess.run(["git", "commit", "-m",
+                       f"reserveringen-spelers: {datum} {tijd} {baan}"], check=True)
+    except subprocess.CalledProcessError as e:
+        log.warning(f"Git commit voor {path} mislukt ({e}) — geen blocker, PWA-only feature")
+        return False
+
+    for poging in range(1, 6):
+        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=False)
+        if subprocess.run(["git", "push"]).returncode == 0:
+            log.info(f"✅ {path} gecommit + gepusht (poging {poging})")
+            return True
+        log.warning(f"⚠️ Push {path} poging {poging} mislukt — retry na {poging}s")
+        time.sleep(poging)
+    log.warning(f"Push voor {path} faalde na 5 pogingen — PWA toont enkel baan zonder spelers")
+    return False
+
+
 def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4: str) -> bool:
     """
     Schrijf een wachtrij-bestand voor latere verwerking en push naar de repo.
@@ -1985,6 +2045,11 @@ def main():
     log.info(f"✅ GERESERVEERD: {baan} op {datum_nl} om {gereserveerde_tijd}{tijdsverschil}")
     log.info(f"   Spelers: {', '.join(spelers)}")
     log.info("=" * 50)
+
+    # Bewaar spelers in side-file zodat de PWA ze achter de baan kan tonen
+    # (lees_reserveringen.py scrapet geen spelers — die staan alleen op de
+    # detail-pagina, te risicovol om elke scrape te doen).
+    _bewaar_spelers_per_reservering(args.datum, gereserveerde_tijd, baan, spelers)
 
     voeg_toe_aan_agenda(baan, args.datum, gereserveerde_tijd, spelers)
 

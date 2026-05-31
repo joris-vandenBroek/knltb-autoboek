@@ -46,6 +46,7 @@ Gehost als Progressive Web App op GitHub Pages.
 | `haal_leden_op.py` | Scrape de ledenlijst → `leden.json` |
 | `leden.json` | Cache van alle ETV-leden (autocomplete bron voor PWA) |
 | `reserveringen.json` | Cache van actieve reserveringen (door PWA gelezen) |
+| `reserveringen_spelers.json` | Side-file met spelers per PWA-boeking, voor "met X, Y, Z" weergave |
 | `wachtrij/*.json` | Reserveringen voor speeldatums verder dan dag+2 weg |
 | `docs/` | PWA-bronbestanden (index.html, sw.js, manifest.json, icons) |
 | `.github/workflows/boek.yml` | Voert een reservering uit (getriggerd door PWA of wachtrij) |
