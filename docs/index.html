@@ -1234,9 +1234,18 @@
       );
       if (r.status === 204) {
         toonToast('success', '🗑️ Annulering wordt verwerkt (~1.5 min).\nLijst ververst zelf.');
-        setTimeout(laadReserveringen, 100000);
-        setTimeout(laadReserveringen, 140000);
-        setTimeout(laadReserveringen, 180000);
+        // Optimistic UI: verwijder het item direct uit de DOM zodat de
+        // gebruiker meteen visuele feedback krijgt. De polling overschrijft
+        // straks de hele lijst met de verse server-data (waarvan dit item
+        // dan ook echt weg is).
+        const item = btn.closest('.wachtrij-item');
+        if (item) {
+          item.style.opacity = '0.4';
+          item.style.pointerEvents = 'none';
+          setTimeout(() => item.remove(), 400);
+        }
+        // Polling tot verse data binnen is (beheer ~90s + jitter)
+        [90, 120, 150, 180, 210].forEach(s => setTimeout(laadReserveringen, s * 1000));
       } else {
         toonToast('error', `❌ Workflow-trigger faalde (${r.status})`);
         btn.disabled = false;
