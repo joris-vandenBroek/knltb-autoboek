@@ -1803,6 +1803,7 @@ def _bewaar_spelers_per_reservering(datum: str, tijd: str, baan: str, spelers: l
         return False
 
     # Commit + push met retry (zelfde patroon als _zet_in_wachtrij)
+    import subprocess  # lokaal: zelfde patroon als chrome_major_versie / _zet_in_wachtrij
     try:
         subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
         subprocess.run(["git", "config", "user.name",  "knltb-autoboek-bot"], check=True)
@@ -2047,9 +2048,16 @@ def main():
     log.info("=" * 50)
 
     # Bewaar spelers in side-file zodat de PWA ze achter de baan kan tonen
-    # (lees_reserveringen.py scrapet geen spelers — die staan alleen op de
-    # detail-pagina, te risicovol om elke scrape te doen).
-    _bewaar_spelers_per_reservering(args.datum, gereserveerde_tijd, baan, spelers)
+    # (lees_reserveringen.py scrapet wel spelers via Wijzig-flow; dit is een
+    # snellere shortcut zodat de PWA direct na boeking de spelers toont
+    # zonder eerst Verversen-klik). Try/except om te voorkomen dat een bug
+    # in deze niet-kritieke UI-helper de agenda-update blokkeert (zoals
+    # gebeurde bij run #72 — NameError op subprocess).
+    try:
+        _bewaar_spelers_per_reservering(args.datum, gereserveerde_tijd, baan, spelers)
+    except Exception as e:
+        log.warning(f"_bewaar_spelers_per_reservering faalde ({type(e).__name__}: {e}) — "
+                    f"agenda-update gaat door, lees_reserveringen scrapet later alsnog spelers")
 
     voeg_toe_aan_agenda(baan, args.datum, gereserveerde_tijd, spelers)
 
