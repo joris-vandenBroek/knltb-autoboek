@@ -3,8 +3,9 @@ name: Opruimen oude Actions-runs
 # Handmatig trigger via Actions → "Opruimen oude Actions-runs" → "Run workflow".
 # Verwijdert oude workflow-runs (= alles uit Actions tab die jou irriteert).
 #
-# - Behoudt altijd de N nieuwste runs per workflow (default 10)
-# - Verwijdert runs ouder dan X dagen (default 30)
+# Defaults zijn aggressief:
+# - Behoudt altijd de 2 nieuwste runs per workflow
+# - Verwijdert runs ouder dan 0 dagen (= alles behalve keep_last_n)
 # - Werkt op ALLE workflows in deze repo (boek, beheer, verwerk_wachtrij,
 #   haal_leden_op + deze cleanup zelf)
 # - Dry-run modus om eerst te zien wat er weg zou gaan zonder echt te wissen
@@ -13,13 +14,13 @@ on:
   workflow_dispatch:
     inputs:
       max_age_days:
-        description: 'Verwijder runs ouder dan N dagen'
+        description: 'Verwijder runs ouder dan N dagen (0 = aggressief: alles weg behalve keep_last_n nieuwste)'
         required: false
-        default: '30'
+        default: '0'
       keep_last_n:
         description: 'Bewaar altijd minstens N nieuwste runs per workflow'
         required: false
-        default: '10'
+        default: '2'
       dry_run:
         description: 'Dry-run: toon wat er weg zou gaan, geen echte delete'
         required: false
