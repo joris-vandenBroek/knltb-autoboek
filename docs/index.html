@@ -497,13 +497,6 @@
     .btn-refresh-mini:active   { border-color: var(--groen-btn); color: var(--groen-btn); }
     .btn-refresh-mini:disabled { opacity: 0.4; cursor: default; }
 
-    .reserv-auto-pill {
-      margin: 8px 0 4px 0;
-      padding: 6px 10px;
-      background: #dbeafe; color: #1e3a8a;
-      border-radius: 8px; font-size: 0.85rem;
-      display: inline-block;
-    }
     .reserv-footer {
       padding: 8px 4px 0 4px;
       font-size: 0.82rem;
@@ -1139,21 +1132,11 @@
   /**
    * Stille achtergrond-ververs. Triggert beheer_reserveringen workflow
    * (~1.5 min) en herlaadt de lijst zodra reserveringen.json bijgewerkt is.
-   * Geen toast, alleen een 'Vernieuwen…' pill onder de lijst.
+   * Geen visuele indicatie — lijst springt vanzelf op verse data.
    */
   async function autoVerversReserveringen() {
     if (_autoVerversBezig) return;
     _autoVerversBezig = true;
-    const lijst = document.getElementById('reservList');
-    // Voeg pill toe ZONDER de cached lijst te overschrijven
-    const pillId = 'reservAutoPill';
-    if (!document.getElementById(pillId)) {
-      const pill = document.createElement('div');
-      pill.id = pillId;
-      pill.className = 'reserv-auto-pill';
-      pill.textContent = '🔄 Aan het verversen…';
-      lijst.parentElement.appendChild(pill);
-    }
     try {
       const r = await fetch(
         `https://api.github.com/repos/${REPO}/actions/workflows/${BEHEER_WORKFLOW}/dispatches`,
@@ -1163,8 +1146,6 @@
           body: JSON.stringify({ ref: 'main', inputs: { cancel_id: '' } }) }
       );
       if (r.status !== 204) {
-        const pill = document.getElementById(pillId);
-        if (pill) pill.remove();
         _autoVerversBezig = false;
         return;  // Stilletjes opgeven; gebruiker kan handmatig op 🔄 tikken
       }
@@ -1172,19 +1153,16 @@
       const startTs = Date.now();
       let oldTs = null;
       try {
-        const r0 = await fetch(RESERV_URL + '?t=' + Date.now());
+        const r0 = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
         if (r0.ok) { const d0 = await r0.json(); oldTs = d0.bijgewerkt || null; }
       } catch (_) {}
       const poll = async () => {
         try {
-          const rN = await fetch(RESERV_URL + '?t=' + Date.now());
+          const rN = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
           if (rN.ok) {
             const dN = await rN.json();
             if (dN.bijgewerkt && dN.bijgewerkt !== oldTs) {
-              // Vers — render meteen
               await laadReserveringen();
-              const pill = document.getElementById(pillId);
-              if (pill) pill.remove();
               _autoVerversBezig = false;
               return;
             }
@@ -1193,15 +1171,11 @@
         if (Date.now() - startTs < 180000) {
           setTimeout(poll, 30000);
         } else {
-          const pill = document.getElementById(pillId);
-          if (pill) pill.remove();
           _autoVerversBezig = false;
         }
       };
       setTimeout(poll, 60000);  // Eerste poll na 1 minuut
     } catch (e) {
-      const pill = document.getElementById(pillId);
-      if (pill) pill.remove();
       _autoVerversBezig = false;
     }
   }
