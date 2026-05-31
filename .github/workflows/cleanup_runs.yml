@@ -1,9 +1,10 @@
 name: Opruimen oude Actions-runs
 
-# Handmatig trigger via Actions → "Opruimen oude Actions-runs" → "Run workflow".
-# Verwijdert oude workflow-runs (= alles uit Actions tab die jou irriteert).
+# Twee triggers:
+# 1. Schedule: elke zondag 03:00 UTC (04:00/05:00 NL) — automatische cleanup
+# 2. Workflow_dispatch: handmatig via Actions → "Run workflow" voor ad-hoc
 #
-# Defaults zijn aggressief:
+# Defaults zijn aggressief (gebruikt door schedule + leeg-gelaten dispatch):
 # - Behoudt altijd de 2 nieuwste runs per workflow
 # - Verwijdert runs ouder dan 0 dagen (= alles behalve keep_last_n)
 # - Werkt op ALLE workflows in deze repo (boek, beheer, verwerk_wachtrij,
@@ -29,6 +30,12 @@ on:
         options:
           - 'false'
           - 'true'
+  schedule:
+    # Elke zondag 03:00 UTC = 04:00 NL CET (wintertijd) / 05:00 NL CEST
+    # (zomertijd). Rustig tijdstip, niet conflicterend met de 06:50 NL
+    # boek-cron. GitHub native cron is best-effort; bij gemiste week
+    # gebeurt 't volgende zondag alsnog — geen real-world impact.
+    - cron: '0 3 * * 0'
 
 permissions:
   actions: write
@@ -42,9 +49,10 @@ jobs:
       - name: Lijst + verwijder oude runs
         env:
           GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
-          MAX_AGE:     ${{ inputs.max_age_days }}
-          KEEP_LAST:   ${{ inputs.keep_last_n }}
-          DRY_RUN:     ${{ inputs.dry_run }}
+          # Defaults voor schedule-trigger (inputs.X is leeg buiten workflow_dispatch)
+          MAX_AGE:     ${{ inputs.max_age_days || '0' }}
+          KEEP_LAST:   ${{ inputs.keep_last_n  || '2' }}
+          DRY_RUN:     ${{ inputs.dry_run      || 'false' }}
           REPO:        ${{ github.repository }}
         run: |
           set -e
