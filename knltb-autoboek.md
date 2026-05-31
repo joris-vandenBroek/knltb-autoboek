@@ -901,3 +901,36 @@ Gebruikssituatie: één enkele netwerk-glitch of ETV-typeahead-vertraging crasht
 `etv_common.py` bevat de canonieke `login()` functie, gebruikt door `lees_reserveringen.py` en `haal_leden_op.py`. `boek_baan.py` heeft (voorlopig) nog z'n eigen `login()` — staat een TODO bij om over te zetten zodra de huidige cron-flow stabiel is bewezen.
 
 Vermijdt drift: een anti-bot fix in één script bleef voorheen achter in de andere twee.
+
+### 14.9 Stale-while-revalidate voor Mijn reserveringen
+
+Probleem dat dit oplost: `reserveringen.json` wordt alleen bijgewerkt door
+expliciete acties (Verversen-knop, annulering, auto-boeking). Handmatige
+boekingen op de ETV-site staan dus NIET in de cache tot iemand het script
+triggert. Gebruiker zag bij PWA-open een stale lijst en moest handmatig
+op Verversen klikken.
+
+**Patroon (in `docs/index.html`):**
+
+1. Bij PWA-open / tab-terugkomst: render de gecachte JSON direct
+   (zelfde markup als voorheen + 'Bijgewerkt: DD-MM-YYYY' footer)
+2. Bereken ouderdom via `data.bijgewerkt` timestamp
+3. Als ouderdom > **15 minuten** (constant `RESERV_STALE_MINUTES`)
+   en PAT is aanwezig: `autoVerversReserveringen()`
+4. Achtergrondrefresh:
+   - Triggert `beheer_reserveringen.yml` via workflow_dispatch
+   - Toont kleine blauwe pill onder de lijst: '🔄 Vernieuwen…'
+   - Pol elke 30s vanaf t+60s: vergelijk `data.bijgewerkt` met
+     timestamp van vóór de trigger; bij verschil → re-render + pill weg
+   - Time-out na 3 min als de workflow nooit completion-signaal geeft
+5. Concurrency: `_autoVerversBezig` flag voorkomt dubbele triggers
+   van back-to-back PWA-opens
+
+`visibilitychange` event-listener: wanneer de tab van hidden → visible
+gaat, opnieuw `laadReserveringen()` (en `laadWachtrij()`). Dekt mobile
+multitasking: app weer naar voren → vers data.
+
+**Trade-off:** ~1.5 min workflow draait elke 15 min dat je de PWA opent.
+Bij intensief PWA-gebruik kan dit oplopen, maar de concurrency-group
+('knltb-account-joris' uit 14.1) serialiseert runs zodat 't nooit
+parallel met een boeking loopt.
