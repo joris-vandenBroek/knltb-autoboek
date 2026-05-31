@@ -19,12 +19,21 @@ on:
         description: 'Naam medespeler 4'
         required: true
 
+# Voorkom dat parallelle PWA-taps of cron + handmatige retry twee Selenium-
+# sessies tegen hetzelfde ETV-account aanjagen (race op reserveringen.json
+# commit + ETV "1 actieve reservering"-rule). Groep is per-user — bij
+# toekomstige multi-user wordt 'joris' parameterized.
+concurrency:
+  group: knltb-account-joris
+  cancel-in-progress: false
+
 jobs:
   boek:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
       contents: write
+      issues:   write
     env:
       TZ: Europe/Amsterdam
     steps:
@@ -64,3 +73,25 @@ jobs:
           name: screenshots
           path: '*.png'
           retention-days: 3
+
+      - name: Open issue bij failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          titel="❌ boek.yml faalt: ${{ inputs.datum }} ${{ inputs.tijd }} (run #${{ github.run_number }})"
+          body=$(cat <<EOF
+          Run faalde — automatisch gemeld door boek.yml.
+
+          - **Speeldatum:** ${{ inputs.datum }}
+          - **Tijd:** ${{ inputs.tijd }}
+          - **Spelers:** ${{ inputs.speler2 }}, ${{ inputs.speler3 }}, ${{ inputs.speler4 }}
+          - **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - **Screenshots-artifact:** beschikbaar 3 dagen
+
+          Sluit dit issue zodra je 't bekeken hebt. Een nieuwe failure maakt een nieuw issue.
+          EOF
+          )
+          gh issue create --title "$titel" --body "$body" --label "auto-failure,boek" || \
+            gh issue create --title "$titel" --body "$body"

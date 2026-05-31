@@ -16,6 +16,14 @@ on:
 permissions:
   contents: write
   actions:  write
+  issues:   write
+
+# Voorkom dat 2 cron-firings (zomertijd + wintertijd, of cron-job.org + GitHub
+# native) tegelijk de wachtrij verwerken. Dezelfde groep als boek.yml om
+# parallel boeken op één account te voorkomen.
+concurrency:
+  group: knltb-account-joris
+  cancel-in-progress: false
 
 jobs:
   verwerk:
@@ -25,6 +33,16 @@ jobs:
       TZ: Europe/Amsterdam
     steps:
       - uses: actions/checkout@v4
+
+      - name: Healthcheck-ping (start)
+        if: env.HEALTHCHECK_PING_URL != ''
+        env:
+          HEALTHCHECK_PING_URL: ${{ secrets.HEALTHCHECK_PING_URL }}
+        run: |
+          # Pingen aan begin van een verwacht-getriggerde run. Healthchecks.io
+          # raakt alert als deze ping >24u uitblijft → dead-man's-switch voor
+          # cron-job.org / GitHub native cron / PAT-verloop.
+          curl -fsS --retry 3 -o /dev/null "${HEALTHCHECK_PING_URL}/start" || true
 
       - name: Skip als niet binnen 06:55-07:30 NL
         id: tijd_check
@@ -100,3 +118,37 @@ jobs:
           done
           echo "❌ Push faalde na 5 pogingen"
           exit 1
+
+      - name: Healthcheck-ping (succes)
+        if: success() && env.HEALTHCHECK_PING_URL != ''
+        env:
+          HEALTHCHECK_PING_URL: ${{ secrets.HEALTHCHECK_PING_URL }}
+        run: |
+          curl -fsS --retry 3 -o /dev/null "${HEALTHCHECK_PING_URL}" || true
+
+      - name: Healthcheck-ping (fail)
+        if: failure() && env.HEALTHCHECK_PING_URL != ''
+        env:
+          HEALTHCHECK_PING_URL: ${{ secrets.HEALTHCHECK_PING_URL }}
+        run: |
+          curl -fsS --retry 3 -o /dev/null "${HEALTHCHECK_PING_URL}/fail" || true
+
+      - name: Open issue bij failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          titel="❌ verwerk_wachtrij faalt (run #${{ github.run_number }})"
+          body=$(cat <<EOF
+          Wachtrij-verwerking gefaald.
+
+          - **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - **Trigger:** ${{ github.event_name }}
+
+          Eventuele boekingen zijn dus NIET getriggerd. Check wachtrij/ folder
+          om te zien welke items nog op verwerking wachten.
+          EOF
+          )
+          gh issue create --title "$titel" --body "$body" --label "auto-failure,wachtrij" || \
+            gh issue create --title "$titel" --body "$body"

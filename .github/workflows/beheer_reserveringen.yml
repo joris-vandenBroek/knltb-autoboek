@@ -14,12 +14,19 @@ on:
         required: false
         default: ''
 
+# Zelfde account-groep als boek.yml: 2 simultane Selenium-sessies op één
+# ETV-account is sowieso vragen om problemen.
+concurrency:
+  group: knltb-account-joris
+  cancel-in-progress: false
+
 jobs:
   beheer:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
+      issues:   write
     env:
       TZ: Europe/Amsterdam
     steps:
@@ -58,3 +65,24 @@ jobs:
           name: screenshots-reserveringen
           path: '*.png'
           retention-days: 3
+
+      - name: Open issue bij failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          actie="scrape"
+          if [ -n "${{ inputs.cancel_id }}" ]; then actie="annuleer ${{ inputs.cancel_id }}"; fi
+          titel="❌ beheer_reserveringen faalt: $actie (run #${{ github.run_number }})"
+          body=$(cat <<EOF
+          Beheer-actie gefaald.
+
+          - **Actie:** $actie
+          - **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+          reserveringen.json is mogelijk niet ge-update. Probeer 🔄 verversen in de PWA.
+          EOF
+          )
+          gh issue create --title "$titel" --body "$body" --label "auto-failure,beheer" || \
+            gh issue create --title "$titel" --body "$body"
