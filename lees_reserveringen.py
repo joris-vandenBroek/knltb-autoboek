@@ -393,20 +393,39 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
             except Exception as e:
                 log.warning(f"      driver.get faalde: {e}")
 
-        # Strategie B: XPATH-click op 'Wijzigen' in tr met deze datum+tijd.
-        # Datum-format ETV = DD-MM-YYYY; onze datum = YYYY-MM-DD.
+        # Strategie B: jQuery .trigger('click') op de Wijzig-button.
+        # ETV gebruikt jQuery event-delegation op .edit-reservation
+        # (onclick attribuut is leeg, de echte handler luistert via class).
+        # ActionChains werkte niet → jQuery-trigger is bewezen patroon
+        # (zie bevestig-knop in boek_baan.py).
         if not gelukt_navigeren:
             try:
                 datum_dmy = '-'.join(reversed(r['datum'].split('-')))
+                # Beperk tot <button> om nested <strong> mismatches te vermijden
                 xpath = (
                     f"//tr[contains(., '{datum_dmy}') and contains(., '{r['tijd']}')]"
-                    f"//*[normalize-space()='Wijzigen' or normalize-space()='Wijzig' or normalize-space()='Edit']"
+                    f"//button[contains(@class, 'edit-reservation')]"
                 )
                 elements = driver.find_elements(By.XPATH, xpath)
-                log.info(f"  [{idx}] {rid}: XPATH-fallback vond {len(elements)} element(en)")
+                # Fallback selector als 'edit-reservation' class niet gevonden
+                if not elements:
+                    xpath = (
+                        f"//tr[contains(., '{datum_dmy}') and contains(., '{r['tijd']}')]"
+                        f"//button[contains(normalize-space(), 'Wijzigen')]"
+                    )
+                    elements = driver.find_elements(By.XPATH, xpath)
+                log.info(f"  [{idx}] {rid}: XPATH-fallback vond {len(elements)} button(s)")
                 if elements:
-                    ActionChains(driver).move_to_element(elements[0]).click().perform()
-                    log.info(f"      ActionChains-klik uitgevoerd")
+                    klik_methode = driver.execute_script("""
+                        var el = arguments[0];
+                        if (window.jQuery) {
+                            window.jQuery(el).trigger('click');
+                            return 'jquery-trigger';
+                        }
+                        el.click();
+                        return 'dom-click';
+                    """, elements[0])
+                    log.info(f"      Klik uitgevoerd via {klik_methode}")
                     gelukt_navigeren = True
             except Exception as e:
                 log.warning(f"      XPATH-klik faalde: {e}")
@@ -416,10 +435,18 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
             continue
 
         try:
-            time.sleep(3)  # geef AJAX/navigatie tijd om spelers te renderen
+            time.sleep(5)  # geef AJAX-navigatie + modal-render tijd
 
             spelers_info = driver.execute_script("""
                 var resultaat = { medespelers: [], debug: {} };
+
+                // Detail-modal: ETV kan spelers in een Bootstrap-modal renderen
+                // ipv aparte page-navigatie. Check op visible modal eerst.
+                var modal = document.querySelector('.modal.show, .modal.in, [role="dialog"]:not([style*="display: none"])');
+                if (modal) {
+                    resultaat.debug.modalAanwezig = true;
+                    resultaat.debug.modalHtml600 = modal.outerHTML.slice(0, 600);
+                }
 
                 // Primaire route: #youPlayWith — zelfde structuur als de
                 // bevestig-stap bij een nieuwe boeking
@@ -446,9 +473,9 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
                     resultaat.debug.fallback1 = resultaat.medespelers.length;
                 }
 
-                // Body-tekst-dump voor diagnose
+                // Body-tekst-dump voor diagnose (eerste 800 voor modal-content)
                 try {
-                    resultaat.debug.body200 = document.body.innerText.slice(0, 200);
+                    resultaat.debug.body800 = document.body.innerText.slice(0, 800);
                 } catch(e) {}
                 resultaat.debug.url = location.href;
                 return resultaat;
