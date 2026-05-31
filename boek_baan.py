@@ -787,8 +787,28 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
     toegevoegde_data_ids = set()
     for i, speler in enumerate([speler2, speler3, speler4], start=2):
         log.info(f"Speler {i} toevoegen: '{speler}'")
-        nieuwe_id = _voeg_speler_toe(driver, speler, i, toegevoegde_data_ids)
+        # 2-poging retry. Bij fail (network glitch, ETV typeahead die niet laadt,
+        # of een onverwacht ETV-foutgeval): refresh + opnieuw. De defensieve
+        # cleanup uit commit ae2bfbd zorgt dat een halve eerdere poging geen
+        # state-vervuiling achterlaat — opnieuw beginnen is veilig.
+        nieuwe_id = ""
+        for spelers_poging in range(1, 3):
+            nieuwe_id = _voeg_speler_toe(driver, speler, i, toegevoegde_data_ids)
+            if nieuwe_id:
+                break
+            if spelers_poging < 2:
+                log.warning(f"  ⚠️ Speler {i} ('{speler}') faalde op poging {spelers_poging} — "
+                            f"refresh + retry...")
+                try:
+                    driver.refresh()
+                    time.sleep(3)
+                    # Na refresh: cleanup eventuele stale state opnieuw, en
+                    # check welke spelers nog OK in #youPlayWith staan.
+                    _ruim_onverwachte_spelers_op(driver, toegevoegde_data_ids)
+                except Exception as e:
+                    log.warning(f"  Refresh tussen pogingen faalde: {e}")
         if not nieuwe_id:
+            log.error(f"  ❌ Speler {i} ('{speler}') na 2 pogingen niet toegevoegd — abort")
             return False
         toegevoegde_data_ids.add(nieuwe_id)
 

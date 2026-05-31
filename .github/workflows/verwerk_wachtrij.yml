@@ -70,14 +70,35 @@ jobs:
           set -e
           mkdir -p wachtrij
           today=$(date +%Y-%m-%d)
+          today_epoch=$(date -d "$today" +%s)
+          # TTL: wachtrij-items met 'ingediend' ouder dan 60 dagen worden
+          # automatisch opgeruimd (zonder boek-trigger). Voorkomt dat een
+          # half-vergeten plan van maanden terug spontaan in actie komt.
+          MAX_LEEFTIJD_DAGEN=60
           processed=0
+          verlopen=0
           shopt -s nullglob
           for f in wachtrij/*.json; do
             datum=$(jq -r '.datum'      "$f")
             tijd=$(jq -r  '.tijd'       "$f")
+            ingediend=$(jq -r '.ingediend // empty' "$f")
             speler2=$(jq -r '.spelers[1]' "$f")
             speler3=$(jq -r '.spelers[2]' "$f")
             speler4=$(jq -r '.spelers[3]' "$f")
+
+            # TTL-check
+            if [ -n "$ingediend" ]; then
+              ingediend_date="${ingediend%%T*}"
+              ingediend_epoch=$(date -d "$ingediend_date" +%s 2>/dev/null || echo 0)
+              leeftijd_dagen=$(( (today_epoch - ingediend_epoch) / 86400 ))
+              if [ "$leeftijd_dagen" -gt "$MAX_LEEFTIJD_DAGEN" ]; then
+                echo "🗑️  Verlopen ($leeftijd_dagen dagen oud, > $MAX_LEEFTIJD_DAGEN): $f — verwijderen zonder triggeren"
+                rm "$f"
+                verlopen=$((verlopen + 1))
+                continue
+              fi
+            fi
+
             reserveringsdatum=$(date -d "$datum - 2 days" +%Y-%m-%d)
             if [ "$reserveringsdatum" = "$today" ]; then
               echo "📤 Trigger boek.yml: $datum om $tijd ($f)"
@@ -93,7 +114,7 @@ jobs:
               echo "⏭️  Skip $f (reserveringsdatum $reserveringsdatum, niet vandaag $today)"
             fi
           done
-          echo "Aantal verwerkt: $processed"
+          echo "Aantal verwerkt: $processed | Verlopen opgeruimd: $verlopen"
 
       - name: Commit verwijderde wachtrij-bestanden
         if: steps.tijd_check.outputs.skip != 'true'
