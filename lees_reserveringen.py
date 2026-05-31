@@ -181,10 +181,13 @@ def scrape_reserveringen(driver) -> list:
             var tekst = veiligTekst(tr);
             if (!tekst || tekst.length < 8 || tekst.length > 800) return;
 
-            // Vind 'Wijzigen' link in deze rij — wordt later gebruikt om
-            // de spelers per reservering te scrapen via de Wijzig-flow
-            // (zie scrape_spelers_per_reservering hieronder).
+            // Vind 'Wijzigen' link/knop in deze rij. Probeer in volgorde:
+            //  1. <a> met href + 'wijzig' in tekst
+            //  2. element met data-url + 'wijzig' in tekst
+            //  3. ANY element met 'wijzigen' in tekst → wijzigInfo voor
+            //     XPATH-click fallback in Python (zonder URL)
             var wijzigUrl = null;
+            var wijzigKlikHtml = null;
             tr.querySelectorAll('a').forEach(function(a) {
                 if (wijzigUrl) return;
                 var lt = (a.innerText || a.textContent || '').trim().toLowerCase();
@@ -192,13 +195,39 @@ def scrape_reserveringen(driver) -> list:
                     wijzigUrl = a.href || null;
                 }
             });
+            if (!wijzigUrl) {
+                // Probeer button/role=button met data-url of formaction
+                tr.querySelectorAll('button, [role="button"], [data-url]').forEach(function(b) {
+                    if (wijzigUrl) return;
+                    var lt = (b.innerText || b.textContent || '').trim().toLowerCase();
+                    if (lt.indexOf('wijzig') < 0 && lt.indexOf('edit') < 0) return;
+                    var du = b.getAttribute('data-url') || b.getAttribute('formaction');
+                    if (du) {
+                        wijzigUrl = du.indexOf('http') === 0 ? du : (location.origin + du);
+                    } else {
+                        wijzigKlikHtml = b.outerHTML.slice(0, 400);
+                    }
+                });
+            }
+            if (!wijzigUrl && !wijzigKlikHtml) {
+                // Laatste fallback: ANY element met exact tekst 'Wijzigen'
+                // — bewaar outerHTML voor diagnose + signaal XPATH-click flow
+                tr.querySelectorAll('*').forEach(function(el) {
+                    if (wijzigKlikHtml) return;
+                    var t = (el.innerText || el.textContent || '').trim();
+                    if (t === 'Wijzigen' || t === 'Wijzig' || t === 'Edit') {
+                        wijzigKlikHtml = el.outerHTML.slice(0, 400);
+                    }
+                });
+            }
 
             resultaat.push({
-                type:      'table-row',
-                tekst:     tekst,
-                tdCount:   tds.length,
-                html:      tr.outerHTML.slice(0, 800),
-                wijzigUrl: wijzigUrl
+                type:           'table-row',
+                tekst:          tekst,
+                tdCount:        tds.length,
+                html:           tr.outerHTML.slice(0, 1200),
+                wijzigUrl:      wijzigUrl,
+                wijzigKlikHtml: wijzigKlikHtml
             });
         });
 
@@ -296,13 +325,15 @@ def scrape_reserveringen(driver) -> list:
                 break
 
         reserveringen.append({
-            'id':        rid,
-            'datum':     datum,
-            'tijd':      tijd,
-            'baan':      baan,
-            'tekst':     tekst[:300],
-            'cancel':    cancel_info,
-            'wijzigUrl': r.get('wijzigUrl'),
+            'id':             rid,
+            'datum':          datum,
+            'tijd':           tijd,
+            'baan':           baan,
+            'tekst':          tekst[:300],
+            'cancel':         cancel_info,
+            'wijzigUrl':      r.get('wijzigUrl'),
+            '_wijzigKlikHtml': r.get('wijzigKlikHtml'),  # alleen voor scrape; niet in PWA
+            '_trHtml':         r.get('html'),
         })
 
     log.info(f"Geparseerde reserveringen: {len(reserveringen)}")
@@ -337,16 +368,55 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
         return reserveringen
     log.info(f"🔍 Spelers ophalen via Wijzig-flow voor {len(reserveringen)} reservering(en)...")
 
+    from selenium.webdriver.common.action_chains import ActionChains
+
     for idx, r in enumerate(reserveringen, start=1):
         wijzig_url = r.get('wijzigUrl')
         rid = r.get('id', '?')
+        url_voor = driver.current_url
+
+        # Diagnose-log: HTML van de tr + wijzig-element (eerste run)
         if not wijzig_url:
-            log.info(f"  [{idx}] {rid}: geen wijzigUrl in tr — skip")
+            klik_html = r.get('_wijzigKlikHtml')
+            tr_html_snippet = (r.get('_trHtml') or '')[:600]
+            log.info(f"  [{idx}] {rid}: geen wijzigUrl. wijzigKlikHtml={klik_html!r}")
+            log.info(f"      tr-HTML (600): {tr_html_snippet}")
+
+        gelukt_navigeren = False
+
+        # Strategie A: directe URL
+        if wijzig_url:
+            log.info(f"  [{idx}] {rid}: navigate {wijzig_url}")
+            try:
+                driver.get(wijzig_url)
+                gelukt_navigeren = True
+            except Exception as e:
+                log.warning(f"      driver.get faalde: {e}")
+
+        # Strategie B: XPATH-click op 'Wijzigen' in tr met deze datum+tijd.
+        # Datum-format ETV = DD-MM-YYYY; onze datum = YYYY-MM-DD.
+        if not gelukt_navigeren:
+            try:
+                datum_dmy = '-'.join(reversed(r['datum'].split('-')))
+                xpath = (
+                    f"//tr[contains(., '{datum_dmy}') and contains(., '{r['tijd']}')]"
+                    f"//*[normalize-space()='Wijzigen' or normalize-space()='Wijzig' or normalize-space()='Edit']"
+                )
+                elements = driver.find_elements(By.XPATH, xpath)
+                log.info(f"  [{idx}] {rid}: XPATH-fallback vond {len(elements)} element(en)")
+                if elements:
+                    ActionChains(driver).move_to_element(elements[0]).click().perform()
+                    log.info(f"      ActionChains-klik uitgevoerd")
+                    gelukt_navigeren = True
+            except Exception as e:
+                log.warning(f"      XPATH-klik faalde: {e}")
+
+        if not gelukt_navigeren:
+            log.info(f"  [{idx}] {rid}: spelers niet ophaalbaar — PWA toont alleen baan")
             continue
-        log.info(f"  [{idx}] {rid}: navigate {wijzig_url}")
+
         try:
-            driver.get(wijzig_url)
-            time.sleep(3)  # geef AJAX tijd om spelers te renderen
+            time.sleep(3)  # geef AJAX/navigatie tijd om spelers te renderen
 
             spelers_info = driver.execute_script("""
                 var resultaat = { medespelers: [], debug: {} };
@@ -656,6 +726,12 @@ def main():
         # Best-effort: faalt voor één item ⇒ blijft 'spelers' weg ⇒ PWA
         # toont alleen de baan (graceful degradation).
         reserveringen = scrape_spelers_per_reservering(driver, reserveringen)
+
+        # Diagnose-velden (beginnen met '_') strippen voor we naar JSON
+        # schrijven — die zijn alleen voor de scrape zelf bedoeld.
+        for r in reserveringen:
+            for k in [k for k in r if k.startswith('_')]:
+                del r[k]
 
         # Schrijf JSON
         with open("reserveringen.json", "w", encoding="utf-8") as fh:
