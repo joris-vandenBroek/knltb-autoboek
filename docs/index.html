@@ -506,7 +506,9 @@
     }
     .reserv-footer {
       padding: 8px 4px 0 4px;
-      opacity: 0.7; font-size: 0.85rem;
+      font-size: 0.82rem;
+      color: var(--grijs);
+      opacity: 0.85;
     }
   </style>
 </head>
@@ -999,7 +1001,7 @@
                     onclick="verwijderWachtrij(this,'${path}','${sha}')">🗑️</button>
           </div>`;
       }).join('') +
-      `<div class="reserv-footer"><small>Bijgewerkt: ${formatDDMMYYYY_HHMM(new Date().toISOString())}</small></div>`;
+      `<div class="reserv-footer">Bijgewerkt: ${formatDDMMYYYY_HHMM(new Date().toISOString())}</div>`;
     } catch (e) {
       lijst.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>';
     } finally {
@@ -1122,7 +1124,7 @@
       } else {
         // Toon meteen de cached lijst + footer met bijgewerkt-tijd
         lijst.innerHTML = _renderReservList(items) +
-          (bijTekst ? `<div class="reserv-footer"><small>${bijTekst}</small></div>` : '');
+          (bijTekst ? `<div class="reserv-footer">${bijTekst}</div>` : '');
       }
 
       // Achtergrond-refresh als data te oud is + we hebben een PAT
