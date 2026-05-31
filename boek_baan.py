@@ -407,10 +407,96 @@ def _zoek_veld_spelers(driver: uc.Chrome):
     return None
 
 
-def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
+def _ruim_onverwachte_spelers_op(driver: uc.Chrome, verwachte_data_ids: set) -> list:
+    """
+    Scan #youPlayWith. Elke entry met een data-id die NIET in
+    verwachte_data_ids zit, wordt verwijderd via een klik op de × knop
+    (`a.removePlayer[data-id=...]`).
+
+    Achtergrond: bij zoekterm "Daniel Enderink" toont ETV's typeahead óók
+    substring-matches zoals "Ellen Daniels" en "Danse Cleij". In runs #68
+    en #69 verschenen die OOK in #youPlayWith zonder dat het script erop
+    klikte — vermoedelijk via een hover-/focus-event in de typeahead-flow.
+    Resultaat: #youPlayWith zit vol (max 3) voor we onze 3 gewenste spelers
+    erin krijgen → volgende speler kan niet meer worden toegevoegd.
+
+    Deze helper draait NA elke succesvolle speler-add en ruimt eventuele
+    mystery-toevoegingen op. Werkt ook als startpunt-cleanup bij stale
+    state uit een vorige booking-poging.
+
+    Returns: lijst met namen die zijn verwijderd (voor logging).
+    """
+    verwijderd = []
+    try:
+        onverwachte = driver.execute_script("""
+            var verwacht = arguments[0];
+            var verwachtSet = {};
+            for (var i = 0; i < verwacht.length; i++) verwachtSet[verwacht[i]] = true;
+
+            var c = document.getElementById('youPlayWith');
+            if (!c) return [];
+            var rems = c.querySelectorAll('a.removePlayer[data-id], [data-id]');
+            var out = [];
+            for (var i = 0; i < rems.length; i++) {
+                var did = rems[i].getAttribute('data-id');
+                if (!did || verwachtSet[did]) continue;
+                // naam: dichtstbijzijnde h6, of innerText van parent li
+                var li = rems[i].closest('li') || rems[i].parentElement;
+                var h6 = li ? li.querySelector('h6') : null;
+                var naam = h6 ? h6.innerText.trim() : (li ? li.innerText.trim() : '?');
+                out.push({dataId: did, naam: naam});
+            }
+            return out;
+        """, list(verwachte_data_ids))
+
+        for item in onverwachte or []:
+            did = item.get('dataId')
+            naam = item.get('naam', '?')
+            log.warning(f"  ⚠️ Onverwachte speler in #youPlayWith: '{naam}' "
+                        f"(data-id={did}) — wordt verwijderd")
+            try:
+                # jQuery .trigger('click') werkt voor ETV's verwijder-handler;
+                # zelfde patroon als de speler-toevoegen fallback.
+                ok = driver.execute_script(f"""
+                    var sel = 'a.removePlayer[data-id="{did}"]';
+                    if (window.jQuery) {{
+                        var $el = window.jQuery(sel);
+                        if ($el.length) {{ $el.trigger('click'); return 'jquery'; }}
+                    }}
+                    var el = document.querySelector(sel);
+                    if (el) {{ el.click(); return 'dom'; }}
+                    return 'niet gevonden';
+                """)
+                time.sleep(0.8)
+                # Verifieer dat 'ie weg is
+                weg = driver.execute_script(f"""
+                    return !document.querySelector('a.removePlayer[data-id="{did}"]');
+                """)
+                if weg:
+                    log.info(f"  🗑️ Verwijderd via {ok}: '{naam}'")
+                    verwijderd.append(naam)
+                else:
+                    log.warning(f"  ⚠️ '{naam}' nog steeds aanwezig na {ok}-klik")
+            except Exception as e:
+                log.error(f"  Kon onverwachte speler '{naam}' niet verwijderen: {e}")
+    except Exception as e:
+        log.warning(f"  Scan onverwachte spelers faalde: {e}")
+    return verwijderd
+
+
+def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
+                      verwachte_data_ids: set) -> str:
     """
     Selecteer EXCLUSIEF de opgegeven speler — definitieve implementatie
     gebaseerd op echte ETV/KNLTB.Club HTML.
+
+    verwachte_data_ids: set van data-ids die OK zijn in #youPlayWith
+                        (eerder toegevoegde spelers). Na succesvolle add
+                        wordt #youPlayWith opgeruimd: alles dat NIET in
+                        (verwachte_data_ids ∪ {nieuwe data-id}) staat,
+                        wordt verwijderd.
+
+    Returns: data-id (string) bij success, "" bij fail.
 
     HTML-structuur:
 
@@ -511,7 +597,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
     zoek_veld = _zoek_veld_spelers(driver)
     if not zoek_veld:
         log.error(f"  ❌ Zoekveld niet gevonden voor '{speler}'")
-        return False
+        return ""
 
     # Zoektermen van specifiek naar breder. De data-id verificatie achteraf
     # garandeert dat we nooit een verkeerde speler boeken, zelfs als de
@@ -564,7 +650,9 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
         if _is_in_youplaywith(data_id):
             log.info(f"  ℹ️ {speler} stond al in 'Je gaat spelen met' "
                      f"(leftover van eerdere booking-poging) — skip click")
-            return True
+            # Ruim eventuele mystery-spelers op
+            _ruim_onverwachte_spelers_op(driver, verwachte_data_ids | {data_id})
+            return data_id
 
         # Vind het element VERS via Selenium met de stabiele data-id.
         # JS-returns van execute_script verstalen meteen wanneer ETV's
@@ -634,14 +722,17 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
         if verified:
             log.info(f"  ✅ {speler} ECHT geselecteerd (data-id={data_id}, "
                      f"zoekterm '{zoekterm}')")
-            return True
+            # Defensief: ruim mystery-toevoegingen op (Daniel → Ellen Daniels
+            # bug uit run #69). Onverwachte data-ids in #youPlayWith → ×-klik.
+            _ruim_onverwachte_spelers_op(driver, verwachte_data_ids | {data_id})
+            return data_id
 
         # data-id niet in youPlayWith → speler niet toegevoegd. ABORT.
         log.error(f"  ❌ Speler NIET in 'Je gaat spelen met' na 4 verifieer-pogingen "
                   f"— data-id {data_id} niet aanwezig. ETV heeft de selectie "
                   f"geweigerd of de click landde verkeerd.")
         screenshot(driver, f"05d_niet_in_youplaywith_{achternaam}")
-        return False
+        return ""
 
     log.error(f"  ❌ Geen .addPlayer card met exacte match voor '{speler}' "
               f"(geprobeerd: {zoektermen})")
@@ -651,7 +742,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int) -> bool:
     except Exception:
         pass
     screenshot(driver, f"05c_niet_gevonden_{achternaam}")
-    return False
+    return ""
 
 
 def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str) -> bool:
@@ -683,10 +774,23 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
     except Exception:
         pass
 
+    # Start cleanup: alles wat bij start in #youPlayWith staat is per definitie
+    # onverwacht (we hebben nog niemand toegevoegd). Verwijder leftover state.
+    leftover = _ruim_onverwachte_spelers_op(driver, set())
+    if leftover:
+        log.info(f"  🧹 Start-cleanup: {len(leftover)} leftover speler(s) verwijderd: {leftover}")
+
+    # Track data-ids van succesvol toegevoegde spelers. Wordt aan
+    # _voeg_speler_toe meegegeven zodat die de × kan klikken bij
+    # ELKE andere data-id in #youPlayWith (mystery-spelers uit
+    # ETV's typeahead-substring-matches — bug uit run #68/#69).
+    toegevoegde_data_ids = set()
     for i, speler in enumerate([speler2, speler3, speler4], start=2):
         log.info(f"Speler {i} toevoegen: '{speler}'")
-        if not _voeg_speler_toe(driver, speler, i):
+        nieuwe_id = _voeg_speler_toe(driver, speler, i, toegevoegde_data_ids)
+        if not nieuwe_id:
             return False
+        toegevoegde_data_ids.add(nieuwe_id)
 
     screenshot(driver, "06_spelers_toegevoegd")
 

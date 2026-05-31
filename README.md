@@ -163,6 +163,7 @@ De PWA toont onder het ledenaantal "Laatst ververst op DD-MM-YYYY".
 |----------|-----------|
 | Reservering mislukt | Actions → rode run → download `screenshots`-artifact voor foutdiagnose |
 | `Joris niet genoeg spelers` bij bevestig | Race in spelers-selectie. Code matcht nu strict op typeahead-row. Mocht het terugkomen: zie diagnose-logregels `📊 SPELERS-CHECK` per stap |
+| Log meldt `⚠️ Onverwachte speler in #youPlayWith` + `🗑️ Verwijderd` | Klopt — defensieve cleanup. ETV's typeahead voegde een speler met overlappende naam toe (bv. "Ellen Daniels" bij zoekterm "Daniel Enderink"). Het script ruimt die op en gaat door. Eindigt 'ie alsnog met ✅: alles goed |
 | Log toont `⚠️ Padel X was bezet door iemand anders` | Klopt — race-conditie, script probeert automatisch volgende vrije baan. Eindigt 'ie alsnog met ✅: alles goed. Eindigt 'ie met ❌ na 6 pogingen: alle padelbanen op alle alternatieve tijden waren bezet (zeldzaam) |
 | Wachtrij-item niet verwerkt | Check Actions → Verwerk Wachtrij. Cron-job.org kan ook 401 geven → PAT-scope checken |
 | Afspraak niet in agenda | Controleer `GOOGLE_CALENDAR_CREDENTIALS` en of agenda gedeeld is met serviceaccount |

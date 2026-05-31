@@ -602,6 +602,24 @@ Vlak na 07:00 NL hangen meerdere clubleden tegelijk op de portal. Het venster tu
 
 Komt een nieuwe ETV-versie met andere formulering: voeg het patroon toe in beide checks in `bevestig()` (Poging A en Poging B).
 
+### 11.12 Typeahead substring-matches voegen mystery-spelers toe (Daniel-bug)
+
+Run #68 + #69 (31-05) faalden allebei op het toevoegen van Johan Janssen. Diagnose:
+
+- Zoekterm voor speler 2 was **"Daniel Enderink"**
+- ETV's typeahead toonde meerdere cards in de dropdown: Daniel Enderink + andere namen met "Dan…"-prefix of "Daniel"-substring:
+  - Run #68 mystery-speler: **Danse Cleij** ("Dan…" prefix)
+  - Run #69 mystery-speler: **Ellen Daniels** ("…Daniel…" substring)
+- Het script vond Daniel correct via `innerText === 'Daniel Enderink'` (exact match) en klikte 'm via ActionChains. Daniel kwam netjes in `#youPlayWith`.
+- **MAAR**: óók de mystery-speler verscheen in `#youPlayWith` zonder dat het script ernaar verwijst (log bevat geen klik op die data-id). Vermoedelijk via een hover-event tijdens `ActionChains.move_to_element()` of via een focus-event in de `CTRL+A`/`DELETE` flow voor de volgende speler.
+- In run #69 was `#youPlayWith` daardoor al vol met **Daniel + Ellen + Toine** vóór Johan aan de beurt kwam. ETV weigerde toen Johan toe te voegen (max 4 spelers incl. Joris zelf).
+
+Bij Joris's handmatige boeking met dezelfde spelers waren er GEEN mystery-toevoegingen. Bevestiging dat de bug puur in de Selenium-flow zit, niet in ETV's gedrag.
+
+**Fix:** defensieve scan-en-verwijder. Na elke succesvolle speler-add scant `_ruim_onverwachte_spelers_op()` `#youPlayWith` op data-ids; alles wat NIET in de set `{eerder toegevoegde + huidige}` zit wordt verwijderd via een klik op `a.removePlayer[data-id="..."]`. Zelfde patroon als de toevoeg-klik: jQuery `.trigger('click')` met DOM-`.click()` als fallback.
+
+De fix wordt óók aan het begin van `voeg_spelers_toe()` aangeroepen met een lege set — dat ruimt stale leftover state uit een vorige gecrashte booking-poging op.
+
 ---
 
 ## 12. Wijzigingen aanbrengen
