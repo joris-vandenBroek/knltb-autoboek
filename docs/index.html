@@ -306,6 +306,24 @@
     }
     .btn-boek:active   { transform: scale(0.97); background: var(--groen-hover); }
     .btn-boek:disabled { opacity: 0.55; }
+    .btn-boek.dryrun-actief {
+      background: #f59e0b;  /* amber — duidelijk verschillend van groen */
+    }
+    .btn-boek.dryrun-actief:active { background: #d97706; }
+    .dryrun-toggle {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px;
+      margin-bottom: 10px;
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 10px;
+      font-size: 0.92rem;
+      color: #78350f;
+      cursor: pointer;
+      user-select: none;
+    }
+    .dryrun-toggle input { transform: scale(1.15); cursor: pointer; }
+    .dryrun-toggle.actief { background: #fcd34d; }
 
     .spinner {
       width: 24px; height: 24px;
@@ -603,6 +621,10 @@
 
 <!-- Boek-knop -->
 <div class="btn-wrap">
+  <label class="dryrun-toggle">
+    <input type="checkbox" id="dryRunToggle" onchange="updateDryRunUi()">
+    <span class="dryrun-label">🧪 Dry-run (test zonder echte reservering)</span>
+  </label>
   <button class="btn-boek" id="boekBtn" onclick="boekBaan()">
     <span id="btnTekst">🎾&nbsp; Baan reserveren</span>
   </button>
@@ -1156,6 +1178,7 @@
     const speler2 = document.getElementById('speler2').value;
     const speler3 = document.getElementById('speler3').value;
     const speler4 = document.getElementById('speler4').value;
+    const dryRun  = document.getElementById('dryRunToggle').checked;
     const pat     = getPat();
 
     if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
@@ -1183,10 +1206,16 @@
         { method: 'POST',
           headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
                      'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ref: 'main', inputs: { datum, tijd, speler2, speler3, speler4 } }) }
+          body: JSON.stringify({ ref: 'main', inputs: {
+            datum, tijd, speler2, speler3, speler4,
+            dry_run: dryRun ? 'true' : 'false'
+          }}) }
       );
       if (resp.status === 204) {
-        if (wordtIngepland) {
+        if (dryRun) {
+          toonToast('success',
+            `🧪 DRY-RUN gestart!\n📅 ${datumNL} om ${tijd}\n👥 ${speler2}, ${speler3}, ${speler4}\n\nLoopt door alle stappen behalve de Bevestig-klik. Geen echte reservering. Zie GitHub Actions voor de log.`);
+        } else if (wordtIngepland) {
           toonToast('success',
             `🕒 Reservering ingepland!\n📅 ${datumNL} om ${tijd}\n👥 ${speler2}, ${speler3}, ${speler4}\n\nWordt automatisch gereserveerd op ${boekDatumNL} om 07:00. Verschijnt zo onderaan in de lijst.`);
         } else {
@@ -1203,7 +1232,19 @@
     }
 
     btn.disabled = false;
-    document.getElementById('btnTekst').textContent = '🎾  Baan reserveren';
+    document.getElementById('btnTekst').textContent =
+      document.getElementById('dryRunToggle').checked ? '🧪  Dry-run baan reserveren' : '🎾  Baan reserveren';
+  }
+
+  /* ─── Dry-run toggle ──────────────────────────────────── */
+  function updateDryRunUi() {
+    const aan = document.getElementById('dryRunToggle').checked;
+    document.getElementById('boekBtn').classList.toggle('dryrun-actief', aan);
+    document.querySelector('.dryrun-toggle').classList.toggle('actief', aan);
+    document.getElementById('btnTekst').textContent =
+      aan ? '🧪  Dry-run baan reserveren' : '🎾  Baan reserveren';
+    // Bewust GEEN localStorage-persistence: dry-run is per-tap een bewuste keuze,
+    // niet een persistent setting. Bij refresh start je weer in de echte modus.
   }
 
   /* ─── Service worker ───────────────────────────────────── */

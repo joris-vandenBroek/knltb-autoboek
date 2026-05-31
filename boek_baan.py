@@ -1390,16 +1390,21 @@ def _submit_knop(driver: uc.Chrome, knop) -> str:
         return 'js.click.fallback'
 
 
-def bevestig(driver: uc.Chrome) -> str:
+def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
     """
     Stap 6: klik Volgende → ga naar bevestigingspagina → klik 'Bevestigen'.
 
     Returnt een string-code:
-      'OK'    — reservering succesvol gemaakt
+      'OK'    — reservering succesvol gemaakt (of bij dry_run=True: simulatie OK)
       'BEZET' — server zegt 'niet gevonden' (baan werd net door iemand anders
                 geboekt, of vergelijkbare race-conditie) — main() kan terug
                 naar baan-keuze en een andere baan proberen
       'FOUT'  — andere fout, geen retry mogelijk
+
+    dry_run=True: Loopt door alle stappen behalve de Bevestig-knop-klik.
+                  Logt 🧪 DRY-RUN-merker, maakt een screenshot 'dry_run_zou_klikken'
+                  en returnt 'OK'. Bedoeld voor end-to-end-testen zonder echte
+                  reservering bij ETV.
 
     De bevestigingsknop is een <a id="confirmReservationButton"
     data-url="/Ajax/Profile/SaveReservation" data-redirect="/me/Reservations">.
@@ -1487,6 +1492,14 @@ def bevestig(driver: uc.Chrome) -> str:
             log.error("❌ data-url attribuut ontbreekt op bevestig-knop")
             screenshot(driver, "bevestig_fout")
             return False
+
+        # ── DRY-RUN: stop hier, ga niet daadwerkelijk reserveren ────────────
+        if dry_run:
+            log.info("🧪 DRY-RUN: Bevestig-knop gevonden en klaar voor klik — STOP HIER")
+            log.info(f"🧪 Zou clicken: id={knop_info.get('id')} data-url={data_url}")
+            screenshot(driver, "dry_run_zou_klikken")
+            log.info("🧪 Geen echte reservering gemaakt. Returnt 'OK' (simulatie geslaagd).")
+            return 'OK'
 
         # ── Stap 3A: Intercept jQuery handler → haal POST-params op ─────────
         # De site's jQuery click-handler op de bevestig-knop stuurt de reservering-
@@ -1796,7 +1809,14 @@ def main():
     parser.add_argument("--speler2", required=True)
     parser.add_argument("--speler3", required=True)
     parser.add_argument("--speler4", required=True)
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Loop alle stappen door behalve de Bevestig-knop-klik. "
+                             "End-to-end test zonder echte reservering bij ETV.")
     args = parser.parse_args()
+    if args.dry_run:
+        log.info("=" * 50)
+        log.info("🧪 DRY-RUN MODE — er wordt GEEN echte reservering gemaakt.")
+        log.info("=" * 50)
 
     if not BONDSNUMMER or not WACHTWOORD:
         log.error("❌ Stel KNLTB_BONDSNUMMER en KNLTB_WACHTWOORD in als GitHub Secrets!")
@@ -1907,9 +1927,13 @@ def main():
             _log_zichtbare_spelers(driver, alle_spelers,
                 "na kies_baan_en_tijd (Confirm-pagina; 4 spelers verwacht)")
 
-            resultaat = bevestig(driver)
+            resultaat = bevestig(driver, dry_run=args.dry_run)
 
             if resultaat == 'OK':
+                if args.dry_run:
+                    log.info(f"🧪 DRY-RUN voltooid op poging {baan_poging}: {baan} om {gereserveerde_tijd}")
+                    log.info("🧪 Geen verdere stappen (verificatie/agenda/reserveringen.json overgeslagen).")
+                    sys.exit(0)
                 log.info(f"✅ Bevestigd op poging {baan_poging}: {baan} om {gereserveerde_tijd}")
                 break
 

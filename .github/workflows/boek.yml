@@ -18,6 +18,14 @@ on:
       speler4:
         description: 'Naam medespeler 4'
         required: true
+      dry_run:
+        description: 'Dry-run: loop flow door zonder echte reservering bij ETV'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 # Voorkom dat parallelle PWA-taps of cron + handmatige retry twee Selenium-
 # sessies tegen hetzelfde ETV-account aanjagen (race op reserveringen.json
@@ -59,12 +67,15 @@ jobs:
         run: |
           Xvfb :99 -screen 0 1280x900x24 &
           sleep 2
+          DRY_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then DRY_FLAG="--dry-run"; fi
           python boek_baan.py \
             --datum   "${{ inputs.datum }}" \
             --tijd    "${{ inputs.tijd }}" \
             --speler2 "${{ inputs.speler2 }}" \
             --speler3 "${{ inputs.speler3 }}" \
-            --speler4 "${{ inputs.speler4 }}"
+            --speler4 "${{ inputs.speler4 }}" \
+            $DRY_FLAG
 
       - name: Screenshots bij fout
         if: failure()
