@@ -38,7 +38,9 @@
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: var(--bg);
       min-height: 100vh;
-      padding-bottom: calc(120px + var(--safe-bottom));
+      /* Fallback voor pre-JS paint. JS overschrijft dit met exacte
+         .btn-wrap-hoogte zodat de laatste kaart-inhoud zichtbaar is. */
+      padding-bottom: calc(180px + var(--safe-bottom));
     }
 
     /* ── Header ─────────────────────────────────────────── */
@@ -1539,6 +1541,24 @@
     // Bewust GEEN localStorage-persistence: dry-run is per-tap een bewuste keuze,
     // niet een persistent setting. Bij refresh start je weer in de echte modus.
   }
+
+  /* ─── Bottom-padding sync ──────────────────────────────────
+   * Body's padding-bottom moet groot genoeg zijn om de fixed Reserveer-
+   * knop + dryrun-toggle niet over de laatste kaart-inhoud te laten
+   * vallen. Hard-coded in CSS is fragiel (verandert bij UI-wijzigingen).
+   * Hier meten we de echte hoogte van .btn-wrap en stellen die in.
+   */
+  function syncBottomPadding() {
+    const wrap = document.querySelector('.btn-wrap');
+    if (wrap) {
+      const h = wrap.offsetHeight + 16;  // 16px buffer voor visuele lucht
+      document.body.style.paddingBottom = `calc(${h}px + var(--safe-bottom))`;
+    }
+  }
+  window.addEventListener('load', syncBottomPadding);
+  window.addEventListener('resize', syncBottomPadding);
+  // Ook na korte vertraging — voor het geval fonts/icons nog binnenkomen
+  setTimeout(syncBottomPadding, 500);
 
   /* ─── Service worker ───────────────────────────────────── */
   if ('serviceWorker' in navigator) {
