@@ -61,6 +61,19 @@
       padding: 10px 14px; font-size: 1.25rem;
       cursor: pointer; color: white;
     }
+    .pat-badge {
+      position: absolute; top: 6px; right: 4px;
+      min-width: 16px; height: 16px;
+      border-radius: 8px;
+      font-size: 0.65rem; font-weight: 800;
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 0 4px;
+      color: white;
+    }
+    .pat-badge.warn    { background: #f59e0b; }   /* amber */
+    .pat-badge.urgent  { background: #ef4444; }   /* rood  */
+    .pat-badge.verlopen{ background: #991b1b; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.55 } }
 
     /* ── Kaart ───────────────────────────────────────────── */
     .card {
@@ -489,7 +502,10 @@
       <p>ETV Volley — automatische reservering</p>
     </div>
   </div>
-  <button class="gear-btn" onclick="openPatSheet()" title="GitHub Token instellen">⚙️</button>
+  <button class="gear-btn" onclick="openPatSheet()" title="GitHub Token instellen">
+    <span id="gearIcoon">⚙️</span>
+    <span class="pat-badge" id="patBadge" hidden></span>
+  </button>
 </div>
 
 <!-- PAT sheet -->
@@ -500,6 +516,9 @@
     <p class="sheet-hint">Voer je GitHub Personal Access Token in. Wordt alleen lokaal opgeslagen op jouw telefoon.</p>
     <input type="password" id="patInput" class="pat-input"
            placeholder="ghp_…" autocomplete="off" autocorrect="off" spellcheck="false">
+    <label class="field-label" for="patVerloopt" style="margin-top:14px">Verloopt op (optioneel)</label>
+    <input type="date" id="patVerloopt" class="pat-input">
+    <p class="sheet-hint" id="patVerloopHint" style="margin-top:6px"></p>
     <button class="btn-opslaan" onclick="slaPatOp()">Opslaan</button>
   </div>
 </div>
@@ -637,16 +656,20 @@
   const REPO        = 'joris-vandenBroek/knltb-autoboek';
   const WORKFLOW    = 'boek.yml';
   const LEDEN_URL   = `https://raw.githubusercontent.com/${REPO}/main/leden.json`;
-  const PAT_KEY     = 'knltb_pat';
-  const SPELERS_KEY = 'knltb_spelers';
+  const PAT_KEY          = 'knltb_pat';
+  const PAT_VERLOOPT_KEY = 'knltb_pat_verloopt';
+  const SPELERS_KEY      = 'knltb_spelers';
 
   let alleLedenLijst = [];
 
   /* ─── PAT ──────────────────────────────────────────────── */
-  const getPat = () => localStorage.getItem(PAT_KEY) || '';
+  const getPat         = () => localStorage.getItem(PAT_KEY) || '';
+  const getPatVerloopt = () => localStorage.getItem(PAT_VERLOOPT_KEY) || '';
 
   function openPatSheet() {
-    document.getElementById('patInput').value = getPat();
+    document.getElementById('patInput').value    = getPat();
+    document.getElementById('patVerloopt').value = getPatVerloopt();
+    updatePatVerloopHint();
     document.getElementById('patOverlay').classList.add('show');
     setTimeout(() => document.getElementById('patInput').focus(), 350);
   }
@@ -655,12 +678,77 @@
   }
   function slaPatOp() {
     const v = document.getElementById('patInput').value.trim();
+    const e = document.getElementById('patVerloopt').value;
     if (v) localStorage.setItem(PAT_KEY, v);
+    if (e) localStorage.setItem(PAT_VERLOOPT_KEY, e);
+    else   localStorage.removeItem(PAT_VERLOOPT_KEY);
     sluitPatSheet();
     toonToast('success', '✅ Token opgeslagen');
+    checkPatExpiry();
   }
 
+  /**
+   * Bereken dagen tot verloopdatum. Returnt null als geen datum gezet.
+   * Negatief = al verlopen.
+   */
+  function patDagenTotVerloop() {
+    const v = getPatVerloopt();
+    if (!v) return null;
+    const verloop = new Date(v + 'T23:59:59');
+    const nu = new Date();
+    return Math.floor((verloop - nu) / 86400000);
+  }
+
+  /** Update badge op ⚙️-icoon + log bij verlopen */
+  function checkPatExpiry() {
+    const badge = document.getElementById('patBadge');
+    const dagen = patDagenTotVerloop();
+    badge.classList.remove('warn', 'urgent', 'verlopen');
+    if (dagen === null) { badge.hidden = true; return; }
+    if (dagen < 0) {
+      badge.hidden = false;
+      badge.classList.add('verlopen');
+      badge.textContent = '!';
+      toonToast('error',
+        `⚠️ Je GitHub Token is ${-dagen} dag(en) geleden verlopen!\n` +
+        `Genereer een nieuwe via github.com/settings/tokens en update via ⚙️. ` +
+        `Tot dan werken reserveringen + ledenlijst-refresh niet.`);
+    } else if (dagen <= 7) {
+      badge.hidden = false;
+      badge.classList.add('urgent');
+      badge.textContent = dagen;
+    } else if (dagen <= 30) {
+      badge.hidden = false;
+      badge.classList.add('warn');
+      badge.textContent = dagen;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  /** Hint-tekst onder het verloopdatum-veld in de PAT-sheet */
+  function updatePatVerloopHint() {
+    const hint = document.getElementById('patVerloopHint');
+    const dagen = patDagenTotVerloop();
+    if (dagen === null) {
+      hint.textContent = '';
+      hint.style.color = '';
+    } else if (dagen < 0) {
+      hint.textContent = `⚠️ Verlopen ${-dagen} dag(en) geleden.`;
+      hint.style.color = '#991b1b';
+    } else if (dagen <= 30) {
+      hint.textContent = `⚠️ Verloopt over ${dagen} dag(en) — vernieuw bijtijds op github.com/settings/tokens`;
+      hint.style.color = dagen <= 7 ? '#991b1b' : '#92400e';
+    } else {
+      hint.textContent = `Verloopt over ${dagen} dagen.`;
+      hint.style.color = '';
+    }
+  }
+
+  document.getElementById('patVerloopt').addEventListener('change', updatePatVerloopHint);
+
   if (!getPat()) setTimeout(openPatSheet, 500);
+  checkPatExpiry();
 
   /* ─── Datum (native datepicker) ───────────────────────── */
   const datumInput = document.getElementById('datum');
