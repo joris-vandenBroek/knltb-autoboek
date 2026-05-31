@@ -1051,10 +1051,18 @@
       const baan  = rv.baan || 'baan onbekend';
       const id    = escapeHtml(rv.id || '');
 
-      // Spelers achter baan op 1 regel — alleen als bekend uit side-file
-      // (PWA-boekingen). Skip speler 1 (jij zelf), toon alleen medespelers.
-      const spelers = (rv.id && _reservSpelersData[rv.id]) || null;
-      const medespelers = spelers && spelers.length > 1 ? spelers.slice(1) : null;
+      // Spelers achter baan op 1 regel. Prioriteit:
+      //  1. rv.spelers — direct uit scrape (lees_reserveringen.py Wijzig-flow);
+      //     bevat alleen medespelers
+      //  2. _reservSpelersData[rv.id] — side-file na PWA-boeking;
+      //     bevat [Joris, S2, S3, S4] dus skip eerste
+      let medespelers = null;
+      if (Array.isArray(rv.spelers) && rv.spelers.length) {
+        medespelers = rv.spelers;
+      } else if (rv.id && _reservSpelersData[rv.id]) {
+        const arr = _reservSpelersData[rv.id];
+        if (arr.length > 1) medespelers = arr.slice(1);
+      }
       const baanRegel = medespelers
         ? `${escapeHtml(baan)} <span class="reserv-met">— met ${escapeHtml(medespelers.join(', '))}</span>`
         : escapeHtml(baan);

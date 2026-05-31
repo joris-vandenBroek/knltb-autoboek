@@ -180,11 +180,25 @@ def scrape_reserveringen(driver) -> list:
             if (tds.length < 2) return;
             var tekst = veiligTekst(tr);
             if (!tekst || tekst.length < 8 || tekst.length > 800) return;
+
+            // Vind 'Wijzigen' link in deze rij — wordt later gebruikt om
+            // de spelers per reservering te scrapen via de Wijzig-flow
+            // (zie scrape_spelers_per_reservering hieronder).
+            var wijzigUrl = null;
+            tr.querySelectorAll('a').forEach(function(a) {
+                if (wijzigUrl) return;
+                var lt = (a.innerText || a.textContent || '').trim().toLowerCase();
+                if (lt.indexOf('wijzig') >= 0 || lt.indexOf('edit') >= 0) {
+                    wijzigUrl = a.href || null;
+                }
+            });
+
             resultaat.push({
-                type:    'table-row',
-                tekst:   tekst,
-                tdCount: tds.length,
-                html:    tr.outerHTML.slice(0, 800)
+                type:      'table-row',
+                tekst:     tekst,
+                tdCount:   tds.length,
+                html:      tr.outerHTML.slice(0, 800),
+                wijzigUrl: wijzigUrl
             });
         });
 
@@ -282,18 +296,118 @@ def scrape_reserveringen(driver) -> list:
                 break
 
         reserveringen.append({
-            'id':     rid,
-            'datum':  datum,
-            'tijd':   tijd,
-            'baan':   baan,
-            'tekst':  tekst[:300],
-            'cancel': cancel_info,
+            'id':        rid,
+            'datum':     datum,
+            'tijd':      tijd,
+            'baan':      baan,
+            'tekst':     tekst[:300],
+            'cancel':    cancel_info,
+            'wijzigUrl': r.get('wijzigUrl'),
         })
 
     log.info(f"Geparseerde reserveringen: {len(reserveringen)}")
     for r in reserveringen:
         log.info(f"  ✓ {r['datum']} {r['tijd']} {r['baan']} (id={r['id']}, cancel={bool(r['cancel'])})")
 
+    return reserveringen
+
+
+def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
+    """
+    Voor elke reservering: navigeer naar de Wijzig-pagina, scrape de
+    spelers, navigeer terug. NIET op Bevestig/OK klikken — dat zou ETV
+    de reservering opnieuw laten opslaan met mogelijke side-effects.
+
+    Werkwijze:
+      1. driver.get(wijzigUrl) — leidt naar ReservationsConfirm of
+         vergelijkbare detail-pagina met de bestaande spelers ingevuld
+      2. Wacht kort op DOM
+      3. Probeer spelers te vinden via:
+         a. #youPlayWith li (zelfde structuur als nieuwe-boeking flow)
+         b. .player-row, .deelnemer-naam, vergelijkbare class-names
+         c. Tabel-rijen met 'speler' / 'partner' label
+      4. Sla op in r['spelers'] (lijst van strings, EXCL. de eigenaar Joris)
+      5. driver.get(/mijn/Reservations) om terug te keren — schoner dan
+         driver.back() (cache-gerelateerde gotchas)
+
+    Bij faal: r['spelers'] blijft leeg/ontbrekend. PWA toont dan
+    alleen de baan — graceful degradation, geen crash.
+    """
+    if not reserveringen:
+        return reserveringen
+    log.info(f"🔍 Spelers ophalen via Wijzig-flow voor {len(reserveringen)} reservering(en)...")
+
+    for idx, r in enumerate(reserveringen, start=1):
+        wijzig_url = r.get('wijzigUrl')
+        rid = r.get('id', '?')
+        if not wijzig_url:
+            log.info(f"  [{idx}] {rid}: geen wijzigUrl in tr — skip")
+            continue
+        log.info(f"  [{idx}] {rid}: navigate {wijzig_url}")
+        try:
+            driver.get(wijzig_url)
+            time.sleep(3)  # geef AJAX tijd om spelers te renderen
+
+            spelers_info = driver.execute_script("""
+                var resultaat = { medespelers: [], debug: {} };
+
+                // Primaire route: #youPlayWith — zelfde structuur als de
+                // bevestig-stap bij een nieuwe boeking
+                var ypw = document.getElementById('youPlayWith');
+                if (ypw) {
+                    var h6s = ypw.querySelectorAll('h6');
+                    h6s.forEach(function(h) {
+                        var t = (h.innerText || '').trim();
+                        if (t) resultaat.medespelers.push(t);
+                    });
+                    resultaat.debug.youPlayWith = h6s.length;
+                }
+
+                // Fallback 1: zoek elements met 'partner', 'speler',
+                // 'deelnemer', 'companion' in class-name
+                if (!resultaat.medespelers.length) {
+                    var keywords = ['partner','deelnemer','companion','medespeler'];
+                    document.querySelectorAll('[class*="partner"], [class*="deelnemer"], [class*="companion"], [class*="medespeler"]').forEach(function(el) {
+                        var t = (el.innerText || '').trim();
+                        if (t && t.length < 80 && t.length > 3) {
+                            resultaat.medespelers.push(t);
+                        }
+                    });
+                    resultaat.debug.fallback1 = resultaat.medespelers.length;
+                }
+
+                // Body-tekst-dump voor diagnose
+                try {
+                    resultaat.debug.body200 = document.body.innerText.slice(0, 200);
+                } catch(e) {}
+                resultaat.debug.url = location.href;
+                return resultaat;
+            """)
+
+            medespelers = spelers_info.get('medespelers', []) if spelers_info else []
+            log.info(f"      → debug: {spelers_info.get('debug') if spelers_info else 'no-result'}")
+
+            if medespelers:
+                # Dedup (in geval een speler dubbel matched op meerdere selectors)
+                seen = set()
+                unieke = []
+                for naam in medespelers:
+                    if naam not in seen:
+                        seen.add(naam)
+                        unieke.append(naam)
+                r['spelers'] = unieke
+                log.info(f"      ✅ Spelers: {unieke}")
+            else:
+                log.info(f"      ⚠️ Geen spelers gevonden — PWA toont alleen baan")
+        except Exception as e:
+            log.warning(f"  [{idx}] {rid}: spelers-scrape faalde ({e}) — skip")
+
+    # Terug naar de overzichtspagina (cleaner dan driver.back())
+    try:
+        driver.get("https://www.etv-volley.nl/mijn/Reservations")
+        time.sleep(2)
+    except Exception:
+        pass
     return reserveringen
 
 
@@ -538,6 +652,11 @@ def main():
         # Always scrape (na annuleren is dit de bijgewerkte lijst)
         reserveringen = scrape_reserveringen(driver)
 
+        # Per reservering de spelers ophalen via de Wijzig-flow.
+        # Best-effort: faalt voor één item ⇒ blijft 'spelers' weg ⇒ PWA
+        # toont alleen de baan (graceful degradation).
+        reserveringen = scrape_spelers_per_reservering(driver, reserveringen)
+
         # Schrijf JSON
         with open("reserveringen.json", "w", encoding="utf-8") as fh:
             json.dump({
@@ -547,11 +666,34 @@ def main():
             fh.write("\n")
         log.info(f"📄 reserveringen.json geschreven ({len(reserveringen)} items)")
 
+        # Side-file (reserveringen_spelers.json) opschonen: verwijder IDs
+        # die niet meer in reserveringen.json staan. Voorkomt onbegrensde
+        # groei + stale data zichtbaar in PWA na annulering.
+        try:
+            if os.path.exists("reserveringen_spelers.json"):
+                with open("reserveringen_spelers.json", encoding="utf-8") as fh:
+                    side = json.load(fh)
+                if isinstance(side, dict):
+                    actuele_ids = {r['id'] for r in reserveringen}
+                    overbodig = [k for k in side if k not in actuele_ids]
+                    if overbodig:
+                        for k in overbodig:
+                            del side[k]
+                        with open("reserveringen_spelers.json", "w", encoding="utf-8") as fh:
+                            json.dump(side, fh, ensure_ascii=False, indent=2, sort_keys=True)
+                            fh.write("\n")
+                        log.info(f"🧹 reserveringen_spelers.json: {len(overbodig)} verouderd id(s) opgeruimd")
+        except Exception as e:
+            log.warning(f"Side-file cleanup faalde ({e}) — geen blocker")
+
     finally:
         driver.quit()
 
     actie = f"annuleer {args.cancel}" if args.cancel else "lees lijst"
-    if not commit_en_push(["reserveringen.json"], f"reserveringen: {actie} ({len(reserveringen)} actief)"):
+    if not commit_en_push(
+        ["reserveringen.json", "reserveringen_spelers.json"],
+        f"reserveringen: {actie} ({len(reserveringen)} actief)"
+    ):
         log.error("❌ commit/push mislukt")
         sys.exit(1)
 
