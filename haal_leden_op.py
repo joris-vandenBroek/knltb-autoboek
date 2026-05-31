@@ -65,77 +65,17 @@ def maak_driver():
 
 
 def login(driver) -> bool:
-    log.info("Inloggen...")
-    driver.get(LOGIN_URL)
-    time.sleep(5)
-    screenshot(driver, "01_login")
-
-    # Cookie-banner wegklikken
-    for sel in [
-        "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accepteren')]",
-        "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'accept')]",
-    ]:
-        try:
-            knop = WebDriverWait(driver, 4).until(EC.element_to_be_clickable((By.XPATH, sel)))
-            knop.click()
-            time.sleep(1)
-            break
-        except Exception:
-            pass
-
-    try:
-        # Vul bondsnummer in
-        veld = WebDriverWait(driver, TIMEOUT).until(EC.element_to_be_clickable((By.XPATH,
-            "//input[@type='text' or @name='Login.MembershipNumber' or @id='membership-number']")))
-        driver.execute_script("""
-            var el = arguments[0], val = arguments[1];
-            Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')
-                  .set.call(el, val);
-            el.dispatchEvent(new Event('input',  {bubbles:true}));
-            el.dispatchEvent(new Event('change', {bubbles:true}));
-        """, veld, BONDSNUMMER)
-
-        # Vul wachtwoord in
-        ww = WebDriverWait(driver, TIMEOUT).until(EC.element_to_be_clickable((By.XPATH,
-            "//input[@type='password']")))
-        driver.execute_script("""
-            var el = arguments[0], val = arguments[1];
-            Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value')
-                  .set.call(el, val);
-            el.dispatchEvent(new Event('input',  {bubbles:true}));
-            el.dispatchEvent(new Event('change', {bubbles:true}));
-        """, ww, WACHTWOORD)
-        time.sleep(1)
-
-        # Submit
-        for sel in ["//button[@type='submit']",
-                    "//button[contains(.,'Inloggen')]"]:
-            try:
-                for knop in driver.find_elements(By.XPATH, sel):
-                    if knop.is_displayed():
-                        driver.execute_script("arguments[0].click();", knop)
-                        break
-            except Exception:
-                pass
-
-        time.sleep(6)
-        screenshot(driver, "02_na_login")
-
-        # Controleer of inloggen gelukt is
-        try:
-            driver.find_element(By.XPATH, "//input[@type='password']")
-            if driver.find_element(By.XPATH, "//input[@type='password']").is_displayed():
-                log.error("Login mislukt — wachtwoordveld nog zichtbaar")
-                return False
-        except Exception:
-            pass
-
-        log.info(f"Ingelogd — URL: {driver.current_url}")
-        return True
-
-    except TimeoutException as e:
-        log.error(f"Login timeout: {e}")
-        return False
+    """Dunne wrapper rond etv_common.login() — gedeelde flow met
+    lees_reserveringen.py (en op termijn ook boek_baan.py).
+    """
+    from etv_common import login as _common_login
+    return _common_login(
+        driver,
+        bondsnummer=BONDSNUMMER,
+        wachtwoord=WACHTWOORD,
+        login_url=LOGIN_URL,
+        screenshot=screenshot,
+    )
 
 
 def naar_ledenlijst(driver) -> bool:

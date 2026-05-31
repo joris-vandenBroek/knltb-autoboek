@@ -222,6 +222,11 @@ def _log_zichtbare_spelers(driver, spelers, label: str):
 
 # ── STAP 1: Inloggen ──────────────────────────────────────────────────────────
 def login(driver: uc.Chrome) -> bool:
+    # TODO: vervang door `from etv_common import login as _common_login` zodra
+    # de huidige cron-flow stabiel bewezen is (>3 succesvolle runs zonder
+    # spelers-mystery). lees_reserveringen.py en haal_leden_op.py gebruiken
+    # die shared versie al; deze functie blijft voorlopig staan om het
+    # kritieke booking-pad niet te raken vóór veld-validatie.
     log.info(f"Navigeer naar {LOGIN_URL}")
     driver.get(LOGIN_URL)
     time.sleep(4)
