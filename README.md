@@ -5,10 +5,12 @@ Volledig automatische padelbaan-reservering bij ETV Volley via de KNLTB-portal �
 **Highlights:**
 - 📱 Mobiele PWA voor 1-tik-reserveren
 - 🤖 Auto-reserveert vanaf 07:01 NL op de reserveringsdatum (1 min na slot-opening tegen klok-skew)
-- 📥 Wachtrij voor reserveringen die nog te ver in de toekomst liggen
+- 📥 Wachtrij voor reserveringen die nog te ver in de toekomst liggen (TTL 60 dagen)
 - 📅 Overzicht van actieve reserveringen + 🗑️ annuleren vanuit de app
 - 🗓️ Automatische Google Agenda-events (toegevoegd bij reserveren, verwijderd bij annuleren)
 - 🔁 Race-conditie-bestendig: als iemand anders nét sneller dezelfde baan claimt, probeert het script automatisch de volgende vrije padelbaan (max 6 pogingen)
+- 🧪 Dry-run modus: end-to-end test (login + spelers + dag + baan-keuze) zonder echte reservering bij ETV
+- 🚨 Auto-issue bij failure + dead-man's-switch (Healthchecks.io optioneel) + PAT-expiry badge in PWA
 
 ---
 
@@ -38,7 +40,8 @@ Gehost als Progressive Web App op GitHub Pages.
 
 | Bestand | Wat doet het? |
 |---------|---------------|
-| `boek_baan.py` | Hoofdscript — login, baan + tijd selecteren, bevestigen, agenda-event |
+| `boek_baan.py` | Hoofdscript — login, baan + tijd selecteren, bevestigen, agenda-event. Ondersteunt `--dry-run` |
+| `etv_common.py` | Gedeelde ETV-login flow (gebruikt door lees_reserveringen + haal_leden_op) |
 | `lees_reserveringen.py` | Scrape actieve reserveringen + annuleren (inclusief agenda-event) |
 | `haal_leden_op.py` | Scrape de ledenlijst → `leden.json` |
 | `leden.json` | Cache van alle ETV-leden (autocomplete bron voor PWA) |
@@ -64,6 +67,7 @@ Ga naar: **Settings → Secrets and variables → Actions → New repository sec
 | `KNLTB_WACHTWOORD` | Wachtwoord voor etv-volley.nl |
 | `GOOGLE_CALENDAR_CREDENTIALS` | Inhoud van het service-account JSON-bestand (zie hieronder) |
 | `GOOGLE_CALENDAR_ID` | Agenda-ID, bijv. `joris.vandenbroek@gmail.com` of `primary` |
+| `HEALTHCHECK_PING_URL` *(optioneel)* | Healthchecks.io check URL, bv. `https://hc-ping.com/<uuid>`. Verwerk_wachtrij pingt aan begin + succes + fail. Healthchecks.io stuurt alert na 24u stilte → dead-man's-switch tegen PAT-verloop / cron-job.org account-issues |
 
 ### 2. Google Calendar Service Account (eenmalig, ~10 min)
 
@@ -164,6 +168,8 @@ De PWA toont onder het ledenaantal "Laatst ververst op DD-MM-YYYY".
 | Reservering mislukt | Actions → rode run → download `screenshots`-artifact voor foutdiagnose |
 | `Joris niet genoeg spelers` bij bevestig | Race in spelers-selectie. Code matcht nu strict op typeahead-row. Mocht het terugkomen: zie diagnose-logregels `📊 SPELERS-CHECK` per stap |
 | Log meldt `⚠️ Onverwachte speler in #youPlayWith` + `🗑️ Verwijderd` | Klopt — defensieve cleanup. ETV's typeahead voegde een speler met overlappende naam toe (bv. "Ellen Daniels" bij zoekterm "Daniel Enderink"). Het script ruimt die op en gaat door. Eindigt 'ie alsnog met ✅: alles goed |
+| Rode badge op ⚙️-icoon in PWA | Je GitHub PAT verloopt binnen 7 dagen (of is al verlopen). Genereer nieuwe op github.com/settings/tokens (scope `workflow`) → ⚙️ → vul in + nieuwe verloopdatum |
+| Automatisch issue `auto-failure,boek` in repo | Workflow `boek.yml` faalde. Check link in het issue voor de run-log + download screenshots-artifact. Sluit issue na onderzoek (volgende failure = nieuw issue) |
 | Log toont `⚠️ Padel X was bezet door iemand anders` | Klopt — race-conditie, script probeert automatisch volgende vrije baan. Eindigt 'ie alsnog met ✅: alles goed. Eindigt 'ie met ❌ na 6 pogingen: alle padelbanen op alle alternatieve tijden waren bezet (zeldzaam) |
 | Wachtrij-item niet verwerkt | Check Actions → Verwerk Wachtrij. Cron-job.org kan ook 401 geven → PAT-scope checken |
 | Afspraak niet in agenda | Controleer `GOOGLE_CALENDAR_CREDENTIALS` en of agenda gedeeld is met serviceaccount |

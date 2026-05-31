@@ -20,6 +20,7 @@
 11. [Technische valkuilen en beslissingen](#11-technische-valkuilen-en-beslissingen)
 12. [Wijzigingen aanbrengen](#12-wijzigingen-aanbrengen)
 13. [Toekomstige features — multi-user setup](#13-toekomstige-features--multi-user-setup)
+14. [Operationele veiligheidsnetten](#14-operationele-veiligheidsnetten)
 
 ---
 
@@ -104,6 +105,7 @@ In te stellen via **GitHub → Repository → Settings → Secrets and variables
 | `KNLTB_WACHTWOORD` | Wachtwoord voor etv-volley.nl |
 | `GOOGLE_CALENDAR_CREDENTIALS` | Volledige JSON-inhoud van het Service Account-sleutelbestand |
 | `GOOGLE_CALENDAR_ID` | Agenda-ID (bijv. `primary` of e-mailadres) |
+| `HEALTHCHECK_PING_URL` *(optioneel)* | Healthchecks.io check URL voor dead-man's-switch (zie sectie 14) |
 
 Het **GitHub Personal Access Token (PAT)** wordt *niet* als Secret opgeslagen, maar:
 - **In de PWA** in `localStorage` (sleutel `knltb_pat`) voor PWA-triggers (workflow_dispatch)
@@ -825,3 +827,77 @@ Eén PAT van repo-eigenaar (met `workflow` scope) is genoeg voor alle gebruikers
 - Workflows: gebruikt secrets via masking — credentials worden in Action-logs vervangen door `***`.
 
 Geen serieuze blast-radius bij compromittering (geen financiële koppeling, geen persoonlijke data buiten ETV-baanreserveringen).
+
+
+---
+
+## 14. Operationele veiligheidsnetten
+
+### 14.1 Concurrency-groepen
+
+Alle 3 workflows (`boek.yml`, `beheer_reserveringen.yml`, `verwerk_wachtrij.yml`) hebben:
+
+```yaml
+concurrency:
+  group: knltb-account-joris
+  cancel-in-progress: false
+```
+
+**Waarom:** twee gelijktijdige Selenium-sessies tegen één ETV-account is sowieso vragen om problemen (race op `reserveringen.json` commit, ETV "1 actieve reservering"-vermoeden, dubbele agenda-events). De groep serialiseert runs op het account-niveau. `cancel-in-progress: false` zorgt dat een lopende boeking nooit halverwege wordt afgekapt door een nieuwe PWA-tap.
+
+Bij toekomstige multi-user wordt `group: knltb-account-${inputs.gebruiker}` zodat Joris en Toine parallel kunnen draaien (verschillende ETV-accounts) maar elk zelf nooit twee tegelijk.
+
+### 14.2 Auto-issue bij failure
+
+Elke workflow heeft een `if: failure()` step die via `gh issue create` een GitHub Issue opent met:
+- Run-link (naar Actions logs)
+- Context (datum/tijd/spelers voor boek, actie voor beheer)
+- Label `auto-failure,<bron>` voor filtering
+
+Per failure één issue. Je krijgt de standaard GitHub issue-mail; geen extra secret/webhook nodig.
+
+### 14.3 Healthchecks.io dead-man's-switch (optioneel)
+
+Als secret `HEALTHCHECK_PING_URL` is gezet (formaat `https://hc-ping.com/<uuid>`), pingt `verwerk_wachtrij.yml`:
+- `/start` bij begin van elke run
+- *(success URL)* als alle stappen ok zijn
+- `/fail` als iets faalt
+
+Setup (~3 min): account op [healthchecks.io](https://healthchecks.io) → Add Check → period 26 hours (cron 24u + buffer) → notifications email/Slack/etc → kopieer ping URL als Secret.
+
+**Voordeel:** ook bij compleet stille failures (cron-job.org account opgezegd, PAT verlopen → 401, GitHub Actions globale outage) krijg je binnen 24u een alert. Zonder dit weet je pas dat het fout zit als een wachtrij-boeking gemist wordt.
+
+### 14.4 Wachtrij-TTL
+
+`verwerk_wachtrij.yml` parsed het `ingediend`-veld van elk wachtrij-bestand. Items ouder dan **60 dagen** worden zonder boeking-trigger verwijderd. Voorkomt dat een half-vergeten plan van maanden terug spontaan een boeking creëert. Log toont per run: `Aantal verwerkt: N | Verlopen opgeruimd: M`.
+
+### 14.5 Dry-run modus
+
+`boek_baan.py --dry-run`: loopt door alle stappen (login + spelers + dag + baan + Volgende naar Confirm + zoek Bevestig-knop) maar slaat de daadwerkelijke `jQuery.trigger('click')` op de Bevestig-knop over. Returnt `'OK'` en `exit(0)` vóór verificatie / agenda / `reserveringen.json` update — geen state-pollution.
+
+Via PWA: amber 🧪 toggle boven de Reserveer-knop. Bij activering wijzigt de knop naar oranje + label "🧪 Dry-run baan reserveren" voor visuele bevestiging. State persisteert NIET in localStorage — elke tap is een bewuste keuze.
+
+Workflow: `boek.yml` heeft input `dry_run` (choice: true/false, default false) die wordt doorgegeven als `--dry-run` flag. Handig voor handmatige tests via Actions-UI.
+
+**Use case:** voor potentieel-problematische speler-combo's (substring-overlap zoals Daniel + Brugmans + Toine) eerst dry-run starten. Bij groen log → echte boeking. Bij rood log → verwacht failure pattern, fix code zonder echte reservering aan te maken.
+
+### 14.6 PAT-expiry waarschuwing (PWA)
+
+PWA toont badge op ⚙️-icoon:
+- amber (`#f59e0b`) bij 8-30 dagen tot verloop
+- rood bij 0-7 dagen
+- pulsende donkerrood `!` na verloop + harde error-toast
+
+Setup: in PAT-sheet vul de verloopdatum in (optioneel veld onder het PAT-veld zelf). Bewaard in `localStorage` als `knltb_pat_verloopt` (ISO date string). Pure client-side check — geen GitHub API-call nodig.
+
+### 14.7 Spelers 2-poging retry
+
+`voeg_spelers_toe()` doet per speler maximaal 2 pogingen. Bij fail van `_voeg_speler_toe()`: `driver.refresh()` + retry. De defensieve cleanup (zie 11.12) zorgt dat eerder-toegevoegde spelers de refresh overleven.
+
+Gebruikssituatie: één enkele netwerk-glitch of ETV-typeahead-vertraging crasht niet meer de hele booking-flow.
+
+### 14.8 Gedeelde ETV-login
+
+`etv_common.py` bevat de canonieke `login()` functie, gebruikt door `lees_reserveringen.py` en `haal_leden_op.py`. `boek_baan.py` heeft (voorlopig) nog z'n eigen `login()` — staat een TODO bij om over te zetten zodra de huidige cron-flow stabiel is bewezen.
+
+Vermijdt drift: een anti-bot fix in één script bleef voorheen achter in de andere twee.
