@@ -1,4 +1,4 @@
-const CACHE = 'padel-v29';
+const CACHE = 'padel-v30';
 // index.html en manifest altijd network-first zodat updates direct zichtbaar zijn
 const NETWORK_FIRST = ['/', '/index.html', '/manifest.json'];
 const CACHE_FIRST   = ['/sw.js', '/logo.png', '/icon-192.png', '/icon-512.png'];
@@ -25,8 +25,12 @@ self.addEventListener('fetch', e => {
   // Altijd vers: alle JSON-payloads (leden, reserveringen) + GitHub API.
   // Geen cache-hit ooit serveren — anders zie je na een annulering nog
   // steeds de oude reserveringen-lijst.
+  // `cache: 'no-store'` omzeilt ook GitHub raw cdn cache die ?t=...
+  // querystrings soms negeert als cache-key.
   if (ALTIJD_VERS_JSON.some(n => url.includes(n)) || url.includes('api.github.com')) {
-    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
+    e.respondWith(
+      fetch(e.request, { cache: 'no-store' }).catch(() => caches.match(e.request))
+    );
     return;
   }
 

@@ -1084,7 +1084,8 @@
   async function laadReserveringen() {
     const lijst = document.getElementById('reservList');
     try {
-      const r = await fetch(RESERV_URL + '?t=' + Date.now());
+      // cache: 'no-store' omzeilt GitHub raw cdn die ?t= soms negeert
+      const r = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
       if (r.status === 404) {
         lijst.innerHTML = '<div class="wachtrij-leeg">Nog geen lijst — tik 🔄 Verversen om je reserveringen op te halen.</div>';
         return;
@@ -1483,6 +1484,15 @@
         wisAlleInvoervelden();
         // Ververs de wachtrij-lijst na ~25 sec — workflow heeft dan tijd gehad om te committen.
         if (wordtIngepland) setTimeout(laadWachtrij, 25000);
+        // Direct-boek (geen wachtrij + geen dry-run): boek.yml triggert
+        // beheer_reserveringen automatisch na success → reserveringen.json
+        // is bijgewerkt ~4-5 min later. Poll 'Mijn reserveringen' tot we
+        // de nieuwe entry zien.
+        if (!dryRun && !wordtIngepland) {
+          [4*60, 5*60, 6*60, 7*60, 8*60].forEach(sec => {
+            setTimeout(laadReserveringen, sec * 1000);
+          });
+        }
       } else {
         toonToast('error', `❌ GitHub Actions fout (${resp.status})\nProbeer opnieuw.`);
       }

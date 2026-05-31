@@ -42,6 +42,7 @@ jobs:
     permissions:
       contents: write
       issues:   write
+      actions:  write    # nodig om beheer_reserveringen.yml te triggeren na success
     env:
       TZ: Europe/Amsterdam
     steps:
@@ -76,6 +77,19 @@ jobs:
             --speler3 "${{ inputs.speler3 }}" \
             --speler4 "${{ inputs.speler4 }}" \
             $DRY_FLAG
+
+      - name: Trigger scrape reserveringen.json na succesvolle echte boeking
+        if: success() && inputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Direct na een succesvolle boeking trigger beheer_reserveringen
+          # zodat reserveringen.json bijgewerkt wordt (incl. spelers via
+          # Wijzig-flow scrape). PWA polled vervolgens automatisch — geen
+          # handmatige Verversen-klik meer nodig.
+          # Concurrency-group serialiseert deze met andere account-runs.
+          gh workflow run beheer_reserveringen.yml --ref main || \
+            echo "::warning::beheer_reserveringen trigger faalde — verversen-knop in PWA is fallback"
 
       - name: Screenshots bij fout
         if: failure()
