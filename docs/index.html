@@ -657,7 +657,8 @@
   const LEDEN_URL   = `https://raw.githubusercontent.com/${REPO}/main/leden.json`;
   const PAT_KEY          = 'knltb_pat';
   const PAT_VERLOOPT_KEY = 'knltb_pat_verloopt';
-  const SPELERS_KEY      = 'knltb_spelers';
+  // Eenmalige opruim van legacy spelers-persistence (was 'knltb_spelers')
+  localStorage.removeItem('knltb_spelers');
 
   let alleLedenLijst = [];
 
@@ -755,16 +756,17 @@
   const datumTekst = document.getElementById('datumTekst');
 
   function toonDatum(isoWaarde) {
-    if (!isoWaarde) return;
+    if (!isoWaarde) {
+      datumTekst.textContent = 'DD-MM-JJJJ';
+      return;
+    }
     const [y, m, d] = isoWaarde.split('-');
     datumTekst.textContent = `${d}-${m}-${y}`;
     datumBtn.classList.remove('invalid');
   }
 
-  const morgen = new Date();
-  morgen.setDate(morgen.getDate() + 1);
-  datumInput.value = morgen.toISOString().slice(0, 10);
-  toonDatum(datumInput.value);
+  // Bewust GEEN default — gebruiker kiest expliciet een datum. Verlaagt
+  // risico op "ik klikte snel en boekte op de verkeerde dag" fouten.
 
   datumInput.addEventListener('change', () => toonDatum(datumInput.value));
 
@@ -774,6 +776,9 @@
 
   /* ─── Tijden ───────────────────────────────────────────── */
   const tijdEl = document.getElementById('tijd');
+  // Placeholder-option zodat het veld initieel leeg toont; gebruiker moet
+  // expliciet een tijd kiezen (geen verborgen default zoals voorheen 15:00).
+  tijdEl.innerHTML = '<option value="" disabled selected>Kies een tijd</option>';
   for (let h = 8; h <= 21; h++) {
     for (let m of [0, 30]) {
       if (h === 21 && m === 30) continue;
@@ -781,7 +786,6 @@
       tijdEl.innerHTML += `<option value="${t}">${t}</option>`;
     }
   }
-  tijdEl.value = '15:00';
 
   /* ─── Ledenlijst laden ─────────────────────────────────── */
   async function ledenLaatstVervestDatum() {
@@ -1215,11 +1219,9 @@
     }
   });
 
-  /* ─── Herstel opgeslagen spelers ───────────────────────── */
-  const opgeslagen = JSON.parse(localStorage.getItem(SPELERS_KEY) || '[]');
-  [2, 3, 4].forEach((nr, i) => {
-    if (opgeslagen[i]) zetSpeler(nr, opgeslagen[i]);
-  });
+  // Bewust GEEN herstel uit localStorage — gebruiker moet expliciet kiezen
+  // wie er meespelen. Verlaagt risico op 'verkeerde Joris' / 'oude Toine'
+  // boekingen door automatisch ingevulde velden over te slaan.
 
   function zetSpeler(nr, naam) {
     document.getElementById(`speler${nr}`).value = naam;
@@ -1230,9 +1232,25 @@
     pt.classList.remove('invalid');
   }
 
-  function slaSpelersOp() {
-    const vals = [2, 3, 4].map(n => document.getElementById(`speler${n}`).value);
-    localStorage.setItem(SPELERS_KEY, JSON.stringify(vals));
+  function wisSpeler(nr) {
+    document.getElementById(`speler${nr}`).value = '';
+    const pv = document.getElementById(`pv${nr}`);
+    pv.textContent = `Speler ${nr}`;
+    const pt = document.getElementById(`pt${nr}`);
+    pt.classList.remove('has-value', 'invalid');
+  }
+
+  /**
+   * Maak alle invoervelden leeg: datum, tijd, en 3 spelers-dropdowns.
+   * Wordt aangeroepen na een succesvolle "Baan reserveren" klik zodat de
+   * volgende reservering met een schone lei start (geen per-ongeluk-herbruik
+   * van vorige spelers/datum).
+   */
+  function wisAlleInvoervelden() {
+    datumInput.value = '';
+    toonDatum('');
+    tijdEl.value = '';
+    [2, 3, 4].forEach(wisSpeler);
   }
 
   /* ─── PrimeFaces-stijl dropdown ────────────────────────── */
@@ -1313,7 +1331,6 @@
     zetSpeler(nr, naam);
     document.getElementById(`pt${nr}`).classList.remove('open');
     document.getElementById(`pp${nr}`).classList.remove('open');
-    slaSpelersOp();
     // Spring automatisch naar volgend leeg veld
     const volgend = [2, 3, 4].find(n => n > nr && !document.getElementById(`speler${n}`).value);
     if (volgend) setTimeout(() => togglePf(volgend), 180);
@@ -1328,6 +1345,13 @@
       ok = false;
     } else {
       datumBtn.classList.remove('invalid');
+    }
+
+    if (!tijdEl.value) {
+      tijdEl.classList.add('invalid');
+      ok = false;
+    } else {
+      tijdEl.classList.remove('invalid');
     }
 
     [2, 3, 4].forEach(nr => {
@@ -1415,6 +1439,9 @@
           toonToast('success',
             `✅ Reservering gestart!\n📅 ${datumNL} om ${tijd}\n👥 ${speler2}, ${speler3}, ${speler4}\n\nJe ontvangt een e-mail zodra de baan gereserveerd is.`);
         }
+        // Velden leeg: schoon startpunt voor volgende reservering. Toast
+        // toont nog wel wat zojuist verstuurd is.
+        wisAlleInvoervelden();
         // Ververs de wachtrij-lijst na ~25 sec — workflow heeft dan tijd gehad om te committen.
         if (wordtIngepland) setTimeout(laadWachtrij, 25000);
       } else {
