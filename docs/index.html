@@ -840,6 +840,20 @@
     return `${dd}-${mm}-${yyyy}`;
   }
 
+  /** "DD-MM-YYYY HH:MM" voor 'Bijgewerkt' tags — getoond bij alle 3 lijsten
+   *  (ledenlijst, mijn reserveringen, ingeplande reserveringen).
+   */
+  function formatDDMMYYYY_HHMM(iso) {
+    const dt = new Date(iso);
+    if (isNaN(dt)) return null;
+    const dd   = String(dt.getDate()).padStart(2, '0');
+    const mm   = String(dt.getMonth() + 1).padStart(2, '0');
+    const yyyy = dt.getFullYear();
+    const hh   = String(dt.getHours()).padStart(2, '0');
+    const mn   = String(dt.getMinutes()).padStart(2, '0');
+    return `${dd}-${mm}-${yyyy} ${hh}:${mn}`;
+  }
+
   async function laadLeden() {
     try {
       const r = await fetch(LEDEN_URL + '?t=' + Date.now());
@@ -848,11 +862,11 @@
         if (Array.isArray(data) && data.length > 0) {
           alleLedenLijst = data;
           document.getElementById('ledenInfo').textContent = `${data.length} leden`;
-          // Datum van laatste refresh apart ophalen — async, niet blokkerend
+          // Tijdstip van laatste refresh apart ophalen — async, niet blokkerend
           ledenLaatstVervestDatum().then(iso => {
             const span = document.getElementById('ledenVerversInfo');
-            const datum = iso ? formatDDMMYYYY(iso) : null;
-            span.textContent = datum ? `Laatst ververst op ${datum}` : '';
+            const ts = iso ? formatDDMMYYYY_HHMM(iso) : null;
+            span.textContent = ts ? `Bijgewerkt: ${ts}` : '';
           });
           return;
         }
@@ -982,7 +996,8 @@
             <button class="wachtrij-del" title="Verwijder deze ingeplande reservering"
                     onclick="verwijderWachtrij(this,'${path}','${sha}')">🗑️</button>
           </div>`;
-      }).join('');
+      }).join('') +
+      `<div class="reserv-footer"><small>Bijgewerkt: ${formatDDMMYYYY_HHMM(new Date().toISOString())}</small></div>`;
     } catch (e) {
       lijst.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>';
     } finally {
@@ -1097,10 +1112,10 @@
       const data = await r.json();
       const items = Array.isArray(data.reserveringen) ? data.reserveringen : [];
       const ouder = _reservOuderdomMin(data);
-      const bijTekst = data.bijgewerkt ? `Bijgewerkt: ${formatDDMMYYYY(data.bijgewerkt) || '?'}` : '';
+      const bijTekst = data.bijgewerkt ? `Bijgewerkt: ${formatDDMMYYYY_HHMM(data.bijgewerkt) || '?'}` : '';
 
       if (items.length === 0) {
-        const bij = data.bijgewerkt ? `<br><small style="opacity:0.7">Gecontroleerd op ${formatDDMMYYYY(data.bijgewerkt) || '?'}</small>` : '';
+        const bij = data.bijgewerkt ? `<br><small style="opacity:0.7">${bijTekst}</small>` : '';
         lijst.innerHTML = `<div class="wachtrij-leeg">Geen actieve reserveringen.${bij}</div>`;
       } else {
         // Toon meteen de cached lijst + footer met bijgewerkt-tijd
