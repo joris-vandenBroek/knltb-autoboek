@@ -1,0 +1,124 @@
+name: Opruimen oude Actions-runs
+
+# Handmatig trigger via Actions → "Opruimen oude Actions-runs" → "Run workflow".
+# Verwijdert oude workflow-runs (= alles uit Actions tab die jou irriteert).
+#
+# - Behoudt altijd de N nieuwste runs per workflow (default 10)
+# - Verwijdert runs ouder dan X dagen (default 30)
+# - Werkt op ALLE workflows in deze repo (boek, beheer, verwerk_wachtrij,
+#   haal_leden_op + deze cleanup zelf)
+# - Dry-run modus om eerst te zien wat er weg zou gaan zonder echt te wissen
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_age_days:
+        description: 'Verwijder runs ouder dan N dagen'
+        required: false
+        default: '30'
+      keep_last_n:
+        description: 'Bewaar altijd minstens N nieuwste runs per workflow'
+        required: false
+        default: '10'
+      dry_run:
+        description: 'Dry-run: toon wat er weg zou gaan, geen echte delete'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Lijst + verwijder oude runs
+        env:
+          GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
+          MAX_AGE:     ${{ inputs.max_age_days }}
+          KEEP_LAST:   ${{ inputs.keep_last_n }}
+          DRY_RUN:     ${{ inputs.dry_run }}
+          REPO:        ${{ github.repository }}
+        run: |
+          set -e
+          echo "Repo:        $REPO"
+          echo "Max leeftijd:$MAX_AGE dagen"
+          echo "Behouden:    $KEEP_LAST nieuwste per workflow"
+          echo "Dry-run:     $DRY_RUN"
+          echo ""
+
+          drempel_epoch=$(date -d "$MAX_AGE days ago" +%s)
+          totaal_weg=0
+          totaal_behouden=0
+
+          # Loop per workflow-bestand. Zo blijven altijd de N nieuwste per
+          # workflow staan — anders zouden weinig-draaiende workflows soms
+          # geen recente historie meer hebben.
+          workflows=$(gh api "/repos/$REPO/actions/workflows" --jq '.workflows[].path')
+          for wf_path in $workflows; do
+            wf_name=$(basename "$wf_path")
+            echo "── $wf_name ────────────────────────────────"
+
+            # Haal alle runs van deze workflow (gesorteerd nieuwste eerst)
+            runs_json=$(gh api --paginate "/repos/$REPO/actions/workflows/$wf_name/runs?per_page=100" \
+              --jq '.workflow_runs[] | {id: .id, n: .run_number, created: .created_at, status: .status, concl: .conclusion}' \
+              | jq -s '.')
+            aantal=$(echo "$runs_json" | jq 'length')
+            echo "  Totaal runs: $aantal"
+
+            # Splits: eerste KEEP_LAST behouden, rest beoordelen op leeftijd
+            te_beoordelen=$(echo "$runs_json" | jq ".[$KEEP_LAST:]")
+            behouden_recent=$(echo "$runs_json" | jq "[.[0:$KEEP_LAST] | .[] | .id] | length")
+            totaal_behouden=$((totaal_behouden + behouden_recent))
+
+            beoordeel_aantal=$(echo "$te_beoordelen" | jq 'length')
+            if [ "$beoordeel_aantal" = "0" ]; then
+              echo "  Niets te beoordelen (≤ $KEEP_LAST runs totaal)"
+              continue
+            fi
+
+            echo "$te_beoordelen" | jq -c '.[]' | while read -r r; do
+              id=$(echo "$r" | jq -r '.id')
+              n=$(echo "$r" | jq -r '.n')
+              created=$(echo "$r" | jq -r '.created')
+              status=$(echo "$r" | jq -r '.status')
+              concl=$(echo "$r" | jq -r '.concl')
+
+              created_epoch=$(date -d "$created" +%s)
+              if [ "$created_epoch" -ge "$drempel_epoch" ]; then
+                # Nieuwer dan drempel → behouden
+                continue
+              fi
+
+              # in_progress / queued nooit verwijderen
+              if [ "$status" != "completed" ]; then
+                echo "  ⏭️  #$n ($created) — status=$status, skip"
+                continue
+              fi
+
+              if [ "$DRY_RUN" = "true" ]; then
+                echo "  🔍 [DRY] #$n ($created) $concl — zou verwijderd worden"
+              else
+                if gh api -X DELETE "/repos/$REPO/actions/runs/$id" 2>/dev/null; then
+                  echo "  🗑️  #$n ($created) $concl — verwijderd"
+                else
+                  echo "  ⚠️  #$n ($created) $concl — delete faalde"
+                fi
+              fi
+            done
+
+            # Tel weg-aantal uit de buffer-output (lokaal verloren door subshell)
+          done
+
+          echo ""
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "✅ DRY-RUN voltooid. Run opnieuw met dry_run=false om écht te verwijderen."
+          else
+            echo "✅ Cleanup voltooid. Behouden per workflow: $KEEP_LAST nieuwste runs."
+          fi
