@@ -181,53 +181,24 @@ def scrape_reserveringen(driver) -> list:
             var tekst = veiligTekst(tr);
             if (!tekst || tekst.length < 8 || tekst.length > 800) return;
 
-            // Vind 'Wijzigen' link/knop in deze rij. Probeer in volgorde:
-            //  1. <a> met href + 'wijzig' in tekst
-            //  2. element met data-url + 'wijzig' in tekst
-            //  3. ANY element met 'wijzigen' in tekst → wijzigInfo voor
-            //     XPATH-click fallback in Python (zonder URL)
-            var wijzigUrl = null;
-            var wijzigKlikHtml = null;
-            tr.querySelectorAll('a').forEach(function(a) {
-                if (wijzigUrl) return;
-                var lt = (a.innerText || a.textContent || '').trim().toLowerCase();
-                if (lt.indexOf('wijzig') >= 0 || lt.indexOf('edit') >= 0) {
-                    wijzigUrl = a.href || null;
-                }
-            });
-            if (!wijzigUrl) {
-                // Probeer button/role=button met data-url of formaction
-                tr.querySelectorAll('button, [role="button"], [data-url]').forEach(function(b) {
-                    if (wijzigUrl) return;
-                    var lt = (b.innerText || b.textContent || '').trim().toLowerCase();
-                    if (lt.indexOf('wijzig') < 0 && lt.indexOf('edit') < 0) return;
-                    var du = b.getAttribute('data-url') || b.getAttribute('formaction');
-                    if (du) {
-                        wijzigUrl = du.indexOf('http') === 0 ? du : (location.origin + du);
-                    } else {
-                        wijzigKlikHtml = b.outerHTML.slice(0, 400);
-                    }
-                });
-            }
-            if (!wijzigUrl && !wijzigKlikHtml) {
-                // Laatste fallback: ANY element met exact tekst 'Wijzigen'
-                // — bewaar outerHTML voor diagnose + signaal XPATH-click flow
-                tr.querySelectorAll('*').forEach(function(el) {
-                    if (wijzigKlikHtml) return;
-                    var t = (el.innerText || el.textContent || '').trim();
-                    if (t === 'Wijzigen' || t === 'Wijzig' || t === 'Edit') {
-                        wijzigKlikHtml = el.outerHTML.slice(0, 400);
-                    }
-                });
+            // ETV's 'Wijzigen' is een form-submit (POST /me/EditReservation
+            // met ReservationId + CSRF token in hidden inputs). De button
+            // heeft type="button" en onclick="" — een jQuery-handler op
+            // .edit-reservation submit het form. Wij submitten het direct
+            // via JS in Python (omzeilt anti-bot/jQuery-bind issues).
+            var reservationId = null;
+            var editForm = tr.querySelector('form[action*="EditReservation"]');
+            if (editForm) {
+                var idInput = editForm.querySelector('input[name="ReservationId"]');
+                if (idInput) reservationId = idInput.value || null;
             }
 
             resultaat.push({
-                type:           'table-row',
-                tekst:          tekst,
-                tdCount:        tds.length,
-                html:           tr.outerHTML.slice(0, 1200),
-                wijzigUrl:      wijzigUrl,
-                wijzigKlikHtml: wijzigKlikHtml
+                type:          'table-row',
+                tekst:         tekst,
+                tdCount:       tds.length,
+                html:          tr.outerHTML.slice(0, 1200),
+                reservationId: reservationId
             });
         });
 
@@ -325,14 +296,13 @@ def scrape_reserveringen(driver) -> list:
                 break
 
         reserveringen.append({
-            'id':             rid,
-            'datum':          datum,
-            'tijd':           tijd,
-            'baan':           baan,
-            'tekst':          tekst[:300],
-            'cancel':         cancel_info,
-            'wijzigUrl':      r.get('wijzigUrl'),
-            '_wijzigKlikHtml': r.get('wijzigKlikHtml'),  # alleen voor scrape; niet in PWA
+            'id':              rid,
+            'datum':           datum,
+            'tijd':            tijd,
+            'baan':            baan,
+            'tekst':           tekst[:300],
+            'cancel':          cancel_info,
+            '_reservationId':  r.get('reservationId'),  # voor EditReservation POST
             '_trHtml':         r.get('html'),
         })
 
@@ -368,70 +338,49 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
         return reserveringen
     log.info(f"🔍 Spelers ophalen via Wijzig-flow voor {len(reserveringen)} reservering(en)...")
 
-    from selenium.webdriver.common.action_chains import ActionChains
-
     for idx, r in enumerate(reserveringen, start=1):
-        wijzig_url = r.get('wijzigUrl')
         rid = r.get('id', '?')
-        url_voor = driver.current_url
+        reservation_id = r.get('_reservationId')
 
-        # Diagnose-log: HTML van de tr + wijzig-element (eerste run)
-        if not wijzig_url:
-            klik_html = r.get('_wijzigKlikHtml')
+        # Vanaf iteratie 2: terug naar overzicht zodat de forms (incl.
+        # huidige CSRF tokens) verse referenties zijn voor JS-submit.
+        if idx > 1:
+            try:
+                driver.get("https://www.etv-volley.nl/mijn/Reservations")
+                time.sleep(3)
+            except Exception as e:
+                log.warning(f"  Terugnavigatie naar overzicht faalde: {e}")
+                break
+
+        if not reservation_id:
             tr_html_snippet = (r.get('_trHtml') or '')[:600]
-            log.info(f"  [{idx}] {rid}: geen wijzigUrl. wijzigKlikHtml={klik_html!r}")
-            log.info(f"      tr-HTML (600): {tr_html_snippet}")
+            log.info(f"  [{idx}] {rid}: geen ReservationId in tr → skip. tr-HTML (600): {tr_html_snippet}")
+            continue
 
-        gelukt_navigeren = False
-
-        # Strategie A: directe URL
-        if wijzig_url:
-            log.info(f"  [{idx}] {rid}: navigate {wijzig_url}")
-            try:
-                driver.get(wijzig_url)
-                gelukt_navigeren = True
-            except Exception as e:
-                log.warning(f"      driver.get faalde: {e}")
-
-        # Strategie B: jQuery .trigger('click') op de Wijzig-button.
-        # ETV gebruikt jQuery event-delegation op .edit-reservation
-        # (onclick attribuut is leeg, de echte handler luistert via class).
-        # ActionChains werkte niet → jQuery-trigger is bewezen patroon
-        # (zie bevestig-knop in boek_baan.py).
-        if not gelukt_navigeren:
-            try:
-                datum_dmy = '-'.join(reversed(r['datum'].split('-')))
-                # Beperk tot <button> om nested <strong> mismatches te vermijden
-                xpath = (
-                    f"//tr[contains(., '{datum_dmy}') and contains(., '{r['tijd']}')]"
-                    f"//button[contains(@class, 'edit-reservation')]"
-                )
-                elements = driver.find_elements(By.XPATH, xpath)
-                # Fallback selector als 'edit-reservation' class niet gevonden
-                if not elements:
-                    xpath = (
-                        f"//tr[contains(., '{datum_dmy}') and contains(., '{r['tijd']}')]"
-                        f"//button[contains(normalize-space(), 'Wijzigen')]"
-                    )
-                    elements = driver.find_elements(By.XPATH, xpath)
-                log.info(f"  [{idx}] {rid}: XPATH-fallback vond {len(elements)} button(s)")
-                if elements:
-                    klik_methode = driver.execute_script("""
-                        var el = arguments[0];
-                        if (window.jQuery) {
-                            window.jQuery(el).trigger('click');
-                            return 'jquery-trigger';
-                        }
-                        el.click();
-                        return 'dom-click';
-                    """, elements[0])
-                    log.info(f"      Klik uitgevoerd via {klik_methode}")
-                    gelukt_navigeren = True
-            except Exception as e:
-                log.warning(f"      XPATH-klik faalde: {e}")
-
-        if not gelukt_navigeren:
-            log.info(f"  [{idx}] {rid}: spelers niet ophaalbaar — PWA toont alleen baan")
+        # Submit het EditReservation-form direct via JS. Werkt rond
+        # type="button" + jQuery-event-delegation door form.submit() te
+        # forceren met de hidden ReservationId + CSRF-token uit DOM.
+        # POST naar /me/EditReservation → server stuurt redirect naar
+        # de wijzig-pagina met spelers ingevuld.
+        log.info(f"  [{idx}] {rid}: submit EditReservation form (id={reservation_id})")
+        try:
+            submit_result = driver.execute_script("""
+                var rid = arguments[0];
+                var forms = document.querySelectorAll('form[action*="EditReservation"]');
+                for (var i = 0; i < forms.length; i++) {
+                    var input = forms[i].querySelector('input[name="ReservationId"]');
+                    if (input && input.value === rid) {
+                        forms[i].submit();
+                        return 'submitted';
+                    }
+                }
+                return 'form-not-found';
+            """, reservation_id)
+            log.info(f"      JS form.submit() → {submit_result}")
+            if submit_result != 'submitted':
+                continue
+        except Exception as e:
+            log.warning(f"      form.submit faalde: {e}")
             continue
 
         try:
