@@ -1038,20 +1038,15 @@
   laadWachtrij();
 
   /* ─── Mijn reserveringen (actieve ETV-reserveringen) ───────── */
-  const RESERV_URL         = `https://raw.githubusercontent.com/${REPO}/main/reserveringen.json`;
-  // Side-file met spelers per reservering-id, gevuld door boek_baan.py na
-  // succesvolle PWA-boeking. Handmatige ETV-boekingen staan hier NIET in
-  // (we kennen die spelers niet). PWA toont in dat geval alleen de baan.
-  const RESERV_SPELERS_URL = `https://raw.githubusercontent.com/${REPO}/main/reserveringen_spelers.json`;
+  const RESERV_URL      = `https://raw.githubusercontent.com/${REPO}/main/reserveringen.json`;
   const BEHEER_WORKFLOW = 'beheer_reserveringen.yml';
-  let _reservSpelersData   = {};
   // Auto-ververs TTL: als reserveringen.json ouder is dan dit, doen we bij
   // PWA-open of tab-terugkomst een achtergrondrefresh. Voorkomt dat back-to-
   // back opens elke keer een 1.5min-workflow triggeren.
   const RESERV_STALE_MINUTES = 15;
   let _autoVerversBezig = false;
 
-  /** Bouw HTML voor een reserveringen-lijst (zelfde markup als render hieronder). */
+  /** Bouw HTML voor een reserveringen-lijst. */
   function _renderReservList(items) {
     items.sort((a, b) => (a.datum + a.tijd).localeCompare(b.datum + b.tijd));
     return items.map(rv => {
@@ -1059,18 +1054,9 @@
       const baan  = rv.baan || 'baan onbekend';
       const id    = escapeHtml(rv.id || '');
 
-      // Spelers achter baan op 1 regel. Prioriteit:
-      //  1. rv.spelers — direct uit scrape (lees_reserveringen.py Wijzig-flow);
-      //     bevat alleen medespelers
-      //  2. _reservSpelersData[rv.id] — side-file na PWA-boeking;
-      //     bevat [Joris, S2, S3, S4] dus skip eerste
-      let medespelers = null;
-      if (Array.isArray(rv.spelers) && rv.spelers.length) {
-        medespelers = rv.spelers;
-      } else if (rv.id && _reservSpelersData[rv.id]) {
-        const arr = _reservSpelersData[rv.id];
-        if (arr.length > 1) medespelers = arr.slice(1);
-      }
+      // Spelers achter baan op 1 regel — uit rv.spelers (gescrapet door
+      // lees_reserveringen.py via Wijzig-flow). Bij ontbreken: alleen baan.
+      const medespelers = (Array.isArray(rv.spelers) && rv.spelers.length) ? rv.spelers : null;
       const baanRegel = medespelers
         ? `${escapeHtml(baan)} <span class="reserv-met">— met ${escapeHtml(medespelers.join(', '))}</span>`
         : escapeHtml(baan);
@@ -1087,16 +1073,6 @@
     }).join('');
   }
 
-  /** Fetch reserveringen_spelers.json (idempotent, faalt stil bij 404). */
-  async function _laadReservSpelers() {
-    try {
-      const r = await fetch(RESERV_SPELERS_URL + '?t=' + Date.now());
-      if (!r.ok) return;  // 404 = geen side-file (eerste keer of opgeruimd)
-      const data = await r.json();
-      if (data && typeof data === 'object') _reservSpelersData = data;
-    } catch (_) { /* netwerk-glitch: laat oude data staan */ }
-  }
-
   /** Minuten sinds bijgewerkt-timestamp. Infinity als geen waarde. */
   function _reservOuderdomMin(data) {
     if (!data || !data.bijgewerkt) return Infinity;
@@ -1107,8 +1083,6 @@
 
   async function laadReserveringen() {
     const lijst = document.getElementById('reservList');
-    // Eerst spelers-side-file fetchen (snel, klein), daarna hoofd-JSON
-    await _laadReservSpelers();
     try {
       const r = await fetch(RESERV_URL + '?t=' + Date.now());
       if (r.status === 404) {

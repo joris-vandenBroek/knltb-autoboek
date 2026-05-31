@@ -718,32 +718,12 @@ def main():
             fh.write("\n")
         log.info(f"📄 reserveringen.json geschreven ({len(reserveringen)} items)")
 
-        # Side-file (reserveringen_spelers.json) opschonen: verwijder IDs
-        # die niet meer in reserveringen.json staan. Voorkomt onbegrensde
-        # groei + stale data zichtbaar in PWA na annulering.
-        try:
-            if os.path.exists("reserveringen_spelers.json"):
-                with open("reserveringen_spelers.json", encoding="utf-8") as fh:
-                    side = json.load(fh)
-                if isinstance(side, dict):
-                    actuele_ids = {r['id'] for r in reserveringen}
-                    overbodig = [k for k in side if k not in actuele_ids]
-                    if overbodig:
-                        for k in overbodig:
-                            del side[k]
-                        with open("reserveringen_spelers.json", "w", encoding="utf-8") as fh:
-                            json.dump(side, fh, ensure_ascii=False, indent=2, sort_keys=True)
-                            fh.write("\n")
-                        log.info(f"🧹 reserveringen_spelers.json: {len(overbodig)} verouderd id(s) opgeruimd")
-        except Exception as e:
-            log.warning(f"Side-file cleanup faalde ({e}) — geen blocker")
-
     finally:
         driver.quit()
 
     actie = f"annuleer {args.cancel}" if args.cancel else "lees lijst"
     if not commit_en_push(
-        ["reserveringen.json", "reserveringen_spelers.json"],
+        ["reserveringen.json"],
         f"reserveringen: {actie} ({len(reserveringen)} actief)"
     ):
         log.error("❌ commit/push mislukt")
