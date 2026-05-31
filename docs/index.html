@@ -924,13 +924,21 @@
     const btn   = document.getElementById('wachtrijVerversBtn');
     if (handmatig && btn) { btn.disabled = true; btn.textContent = '⏳…'; }
     try {
-      const r = await fetch(WACHTRIJ_API + '?t=' + Date.now());
+      // Gebruik authenticated request bij beschikbaar PAT — voorkomt
+      // GitHub's unauthenticated rate-limit (60/uur per IP) die anders
+      // bij intensief PWA-gebruik tot 403's leidt + lege lijst.
+      const pat = getPat();
+      const headers = pat
+        ? { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
+        : { 'Accept': 'application/vnd.github+json' };
+      const r = await fetch(WACHTRIJ_API + '?t=' + Date.now(), { headers });
       if (r.status === 404) {
         lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>';
         return;
       }
       if (!r.ok) {
-        lijst.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>';
+        const hint = r.status === 403 ? ' (rate-limit — zet je PAT in via ⚙️ of wacht een uur)' : '';
+        lijst.innerHTML = `<div class="wachtrij-leeg">Kon wachtrij niet laden (HTTP ${r.status})${hint}</div>`;
         return;
       }
       const files = await r.json();
