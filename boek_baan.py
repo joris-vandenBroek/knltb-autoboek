@@ -1199,97 +1199,55 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
 
         # Zoek tijdslot in een padel-rij via ABSOLUTE document-Y (scroll-onafhankelijk).
         # getBoundingClientRect().top + window.scrollY = absolute document-Y.
+        # DOM-structuur based matching (sinds run #75 + ETV-HTML-inzicht 01-06):
+        # Het ETV-grid is een accordion met <div class="court"> per baan. Elke
+        # court heeft:
+        #   - <button class="btn-link"> met text "9 Padel 1<span>Padel</span>"
+        #   - <div data-hour="N" class="timeincourt"> per uur; class="disabled"
+        #     als niet boekbaar. <option>-elementen binnen het <select> per
+        #     boekbaar 5-min-slot.
+        #
         # Strategie:
-        #   1. Vind padel-label elementen (kleine tekst ≤25 tekens met "Padel N")
-        #      en bereken hun absolute document-Y.
-        #   2. Verzamel alle .timeincourt / [data-hour] cellen met de gewenste tijd
-        #      en bereken hun absolute document-Y.
-        #   3. Kies de tijdcel met de kleinste absolute Y-afstand tot een padel-label.
-        #   4. Geen match binnen 120px → return null (weiger smashcourt als fallback).
+        #   1. Loop over .court containers, filter op padel-banen via button-tekst
+        #   2. Per padel-court: vind .timeincourt:not(.disabled) waarvan
+        #      innerText met de gewenste tijd start (bv. "18:30" of "15:00")
+        #   3. Eerste match wint (laagste Padel-nummer eerst)
+        #
+        # Voordelen vs. de oude Y-coördinaat-aanpak:
+        #   - Geen cross-rij mismatches (run #75 koos Padel 1 voor 18:00 want
+        #     een tennis/pickle-cel was 53px van Padel 1's label)
+        #   - .disabled cellen worden expliciet uitgesloten
+        #   - Werkt onafhankelijk van accordion-expand-state / scrollpositie
         result = driver.execute_script("""
-            var tijd       = arguments[0];
-            var padelNamen = arguments[1];
+            var tijd = arguments[0];
+            var found = null;
+            document.querySelectorAll('.court').forEach(function(court) {
+                if (found) return;
+                var btn = court.querySelector('button.btn-link');
+                if (!btn) return;
+                var courtNaam = (btn.innerText || '').trim();
+                // Match "Padel N" — voorbeeld button-text: "9 Padel 1Padel"
+                var m = courtNaam.match(/Padel \\d/);
+                if (!m) return;
+                var padelLabel = m[0];
 
-            // ── Stap 1: padel-labels → absolute document-Y ────────────────────────
-            var padelItems = [];
-            document.querySelectorAll('*').forEach(function(el) {
-                var r = el.getBoundingClientRect();
-                if (r.width <= 0 || r.height <= 0) return;   // niet gerenderd/zichtbaar
-                var txt = (el.innerText || '').trim();
-                if (txt.length === 0 || txt.length > 25) return;  // te lang = container
-                for (var n = 0; n < padelNamen.length; n++) {
-                    if (txt.indexOf(padelNamen[n]) >= 0) {
-                        padelItems.push({
-                            name: padelNamen[n],
-                            absY: r.top + window.scrollY + r.height / 2
-                        });
-                        break;
+                var cellen = court.querySelectorAll('.timeincourt:not(.disabled)');
+                for (var i = 0; i < cellen.length; i++) {
+                    var cel = cellen[i];
+                    var txt = (cel.innerText || '').trim();
+                    if (txt === tijd || txt.startsWith(tijd)) {
+                        found = { cel: cel, baan: padelLabel };
+                        return;
                     }
                 }
             });
+            window._kiesBaanResult = found ? found.baan : 'geen';
+            return found;
+        """, tijd)
 
-            window._padelCount = padelItems.length;
-            window._padelAbsY  = padelItems.map(function(p) { return Math.round(p.absY); });
-
-            // ── Stap 2: tijdcellen → absolute document-Y ─────────────────────────
-            var tijdItems = Array.from(
-                document.querySelectorAll('.timeincourt, [data-hour]')
-            ).filter(function(el) {
-                var r = el.getBoundingClientRect();
-                if (r.width <= 0 || r.height <= 0) return false;
-                var txt = (el.innerText || '').trim();
-                return txt === tijd || txt.startsWith(tijd);
-            }).map(function(el) {
-                var r = el.getBoundingClientRect();
-                return { el: el, absY: r.top + window.scrollY + r.height / 2 };
-            });
-
-            window._tijdCount = tijdItems.length;
-
-            if (!tijdItems.length || !padelItems.length) return null;
-
-            // ── Stap 3: kies tijdcel dichtstbij een padel-label ──────────────────
-            var beste = null, minAfstand = Infinity, bestePadel = '';
-            tijdItems.forEach(function(ti) {
-                padelItems.forEach(function(pi) {
-                    var afstand = Math.abs(ti.absY - pi.absY);
-                    if (afstand < minAfstand) {
-                        minAfstand = afstand;
-                        beste      = ti.el;
-                        bestePadel = pi.name;
-                    }
-                });
-            });
-
-            window._minAfstand = minAfstand;
-            window._bestePadel = bestePadel;
-
-            // Max 30px afwijking = zelfde rij (rijen ~60px hoog, label in
-            // midden). 30px is strikt genoeg om naburige rijen (tennis,
-            // smashcourt, pickle) niet per ongeluk als padel-rij te
-            // labelen.
-            //
-            // Eerder was de drempel 120px → te ruim. Run #75 koos Padel 1
-            // voor tijd 18:00 op basis van een tijdcel die 53px van Padel 1
-            // af lag — feitelijk een tennis- of pickle-rij die TOEVALLIG
-            // 18:00 had. Padel 1 zelf heeft op hele uren (14:00, 15:00,
-            // 16:00, 17:00, 21:00, 22:00); 18:00 zit NIET in de Padel 1
-            // rij. Strikter drempel voorkomt zo'n cross-rij-mismatch.
-            if (beste && minAfstand < 30) {
-                return { cel: beste, baan: bestePadel };
-            }
-            return null;
-        """, tijd, PADEL_BANEN)
-
-        # Diagnose loggen (geen backslash in f-string: Python<3.12 compatibel)
         try:
-            d_padel  = driver.execute_script('return window._padelCount||0')
-            d_y      = driver.execute_script('return (window._padelAbsY||[]).slice(0,6)')
-            d_cellen = driver.execute_script('return window._tijdCount||0')
-            d_afst   = driver.execute_script('return Math.round(window._minAfstand||-1)')
-            d_padnm  = driver.execute_script('return window._bestePadel||""')
-            log.info(f"  diagnose: padel_labels={d_padel} absY={d_y} "
-                     f"tijdcellen={d_cellen} minAfstand={d_afst} bestePadel='{d_padnm}'")
+            d_resultaat = driver.execute_script('return window._kiesBaanResult || ""')
+            log.info(f"  diagnose: match='{d_resultaat}' voor tijd '{tijd}'")
         except Exception:
             pass
 
