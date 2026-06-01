@@ -989,11 +989,19 @@
         (a.content.datum + a.content.tijd).localeCompare(b.content.datum + b.content.tijd)
       );
       // Detect 'verwerking gefaald': reserveringsdatum (= speeldag - 2d)
-      // ligt in het verleden, maar wachtrij-bestand staat er nog. Sinds
-      // verwerk_wachtrij.yml (commit a5dd3d4) de file pas verwijdert bij
-      // boek-success, betekent 'nog aanwezig na reserveringsdatum' dat
-      // de boek-flow gefaald is.
-      const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+      // ligt in het verleden, of is vandaag maar de cron is al langs.
+      // Sinds verwerk_wachtrij.yml (commit a5dd3d4) de file pas verwijdert
+      // bij boek-success, betekent 'nog aanwezig op/na reserveringsdatum'
+      // dat de boek-flow gefaald is.
+      //
+      // Logica:
+      //   - boekDt <  vandaag                         → gefaald
+      //   - boekDt == vandaag EN nu > 07:00 NL        → gefaald
+      //     (cron triggert 06:50, boek loopt tot ~07:10; na 07:00 is
+      //     de flow gestart en als 'ie geslaagd was, was 't bestand weg)
+      const nu = new Date();
+      const vandaag = new Date(nu); vandaag.setHours(0,0,0,0);
+      const drempel07 = new Date(vandaag); drempel07.setHours(7,0,0,0);
 
       lijst.innerHTML = geldig.map(e => {
         const item      = e.content;
@@ -1006,7 +1014,8 @@
         // Bepaal status
         const [by, bm, bd] = boekDatum.split('-').map(Number);
         const boekDt = new Date(by, bm - 1, bd);
-        const gefaald = boekDt < vandaag;
+        const gefaald = (boekDt < vandaag) ||
+                        (boekDt.getTime() === vandaag.getTime() && nu > drempel07);
 
         const icoon = gefaald ? '❌' : '🗓️';
         const itemClass = gefaald ? 'wachtrij-item wachtrij-failed' : 'wachtrij-item';
