@@ -450,6 +450,19 @@
       color: var(--grijs);
       margin-top: 7px;
     }
+    /* Gefaalde wachtrij-item: lichte rode achtergrond + linker-balk +
+       rode tekst voor de "verwerking gefaald"-melding. */
+    .wachtrij-failed {
+      background: #fef2f2;
+      border-left: 4px solid var(--fout);
+      padding-left: 12px;
+      margin-left: -16px;
+      padding-right: 4px;
+    }
+    .wachtrij-failed .wachtrij-boekt {
+      color: var(--fout);
+      font-weight: 500;
+    }
     .wachtrij-del {
       background: none;
       border: none;
@@ -975,20 +988,38 @@
       geldig.sort((a, b) =>
         (a.content.datum + a.content.tijd).localeCompare(b.content.datum + b.content.tijd)
       );
+      // Detect 'verwerking gefaald': reserveringsdatum (= speeldag - 2d)
+      // ligt in het verleden, maar wachtrij-bestand staat er nog. Sinds
+      // verwerk_wachtrij.yml (commit a5dd3d4) de file pas verwijdert bij
+      // boek-success, betekent 'nog aanwezig na reserveringsdatum' dat
+      // de boek-flow gefaald is.
+      const vandaag = new Date(); vandaag.setHours(0,0,0,0);
+
       lijst.innerHTML = geldig.map(e => {
         const item      = e.content;
         const boekDatum = minusDagen(item.datum, 2);
         const spelers   = escapeHtml(item.spelers.join(', '));
         const datum     = escapeHtml(`${formatNL(item.datum)} om ${item.tijd}`);
-        const boekt     = escapeHtml(`Reserveert automatisch op ${formatNL(boekDatum)} om 07:00`);
         const path      = escapeHtml(e.file.path);
         const sha       = escapeHtml(e.file.sha);
+
+        // Bepaal status
+        const [by, bm, bd] = boekDatum.split('-').map(Number);
+        const boekDt = new Date(by, bm - 1, bd);
+        const gefaald = boekDt < vandaag;
+
+        const icoon = gefaald ? '❌' : '🗓️';
+        const itemClass = gefaald ? 'wachtrij-item wachtrij-failed' : 'wachtrij-item';
+        const boektTekst = gefaald
+          ? `⚠️ Verwerking gefaald op ${formatNL(boekDatum)} — boek handmatig of verwijder`
+          : escapeHtml(`Reserveert automatisch op ${formatNL(boekDatum)} om 07:00`);
+
         return `
-          <div class="wachtrij-item">
+          <div class="${itemClass}">
             <div class="wachtrij-item-inhoud">
-              <div class="wachtrij-datum">🗓️ ${datum}</div>
+              <div class="wachtrij-datum">${icoon} ${datum}</div>
               <div class="wachtrij-spelers">${spelers}</div>
-              <div class="wachtrij-boekt">${boekt}</div>
+              <div class="wachtrij-boekt">${boektTekst}</div>
             </div>
             <button class="wachtrij-del" title="Verwijder deze ingeplande reservering"
                     onclick="verwijderWachtrij(this,'${path}','${sha}')">🗑️</button>
