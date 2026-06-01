@@ -1264,8 +1264,18 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
             window._minAfstand = minAfstand;
             window._bestePadel = bestePadel;
 
-            // Max 120px afwijking = zelfde rij (rijen zijn typisch 40-60px hoog)
-            if (beste && minAfstand < 120) {
+            // Max 30px afwijking = zelfde rij (rijen ~60px hoog, label in
+            // midden). 30px is strikt genoeg om naburige rijen (tennis,
+            // smashcourt, pickle) niet per ongeluk als padel-rij te
+            // labelen.
+            //
+            // Eerder was de drempel 120px → te ruim. Run #75 koos Padel 1
+            // voor tijd 18:00 op basis van een tijdcel die 53px van Padel 1
+            // af lag — feitelijk een tennis- of pickle-rij die TOEVALLIG
+            // 18:00 had. Padel 1 zelf heeft op hele uren (14:00, 15:00,
+            // 16:00, 17:00, 21:00, 22:00); 18:00 zit NIET in de Padel 1
+            // rij. Strikter drempel voorkomt zo'n cross-rij-mismatch.
+            if (beste && minAfstand < 30) {
                 return { cel: beste, baan: bestePadel };
             }
             return null;
