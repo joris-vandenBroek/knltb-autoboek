@@ -1871,97 +1871,132 @@ def main():
             log.error("🚫 Inloggen mislukt — controleer KNLTB_BONDSNUMMER en KNLTB_WACHTWOORD")
             sys.exit(1)
 
-        if not klik_baan_afhangen(driver):
-            log.error("🚫 'Baan afhangen' knop niet gevonden")
-            sys.exit(1)
-
-        if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4):
-            log.error("🚫 Speler niet gevonden — controleer spelernamen")
-            sys.exit(1)
-
         alle_spelers = [SPELER1, args.speler2, args.speler3, args.speler4]
-        _log_zichtbare_spelers(driver, alle_spelers,
-            "na voeg_spelers_toe (4 verwacht)")
 
-        # ── Klok-buffer: wacht tot 07:01 NL vóór kies_dag ───────────────────
-        # Run #63 (cron 30-05 06:50 NL) bewees dat ETV's server de daypart-
-        # selectie ZELF al weigert vóór 07:00 NL. Het script kreeg 'geen
-        # navigatie' na elke Volgende-klik op de dag-pagina.
-        #
-        # Cron-job.org triggert om 06:50; login + spelers werken al wel
-        # vóór 07:00 (geen slot-validatie daar). Maar kies_dag, kies_baan,
-        # bevestig moeten ALLE drie ná 07:00 lopen. Daarom: wacht hier,
-        # niet later.
-        nu_pre_dag = datetime.now()
-        doel_window_open = reserveringsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
-        if nu_pre_dag.date() == reserveringsdatum.date() and nu_pre_dag < doel_window_open:
-            wacht_sec = int((doel_window_open - nu_pre_dag).total_seconds())
-            log.info(f"⏳ Wacht {wacht_sec} sec tot 07:01 NL vóór dag-selectie "
-                     f"(ETV opent het slot om 07:00, buffer voor klok-skew)...")
-            time.sleep(wacht_sec)
-            log.info(f"⏰ {datetime.now().strftime('%H:%M:%S')} NL — boekvenster open.")
-
-        if not kies_dag(driver, args.datum, args.tijd):
-            log.error(f"🚫 Dag {args.datum} kon niet worden geselecteerd")
-            sys.exit(1)
-
-        _log_zichtbare_spelers(driver, alle_spelers,
-            "na kies_dag (baan-grid; spelers mogelijk niet meer zichtbaar)")
-
-        # ── Retry-loop: baan + tijd kiezen + bevestigen ─────────────────────
-        # Race-conditie: tussen kies_baan_en_tijd en bevestig kan iemand
-        # anders nét sneller zijn en dezelfde baan boeken. Server reageert
-        # dan met "niet gevonden" / "al gereserveerd" / etc. → bevestig()
-        # returnt 'BEZET'. We laden de baan-keuze pagina opnieuw (Vorige-
-        # equivalent); ETV toont de bezette tijdcel daarna niet meer, dus
-        # kies_baan_en_tijd pakt automatisch de volgende padelbaan voor
-        # dezelfde tijd — en pas als alle 6 padelbanen voor die tijd vol
-        # zijn, valt 'ie terug op alternatieve tijden. Max 6 pogingen als
-        # safety net tegen onverwachte loops.
+        # ╔══════════════════════════════════════════════════════════════════╗
+        # ║ OUTER-RETRY: volledige wizard-restart bij ETV-restricties        ║
+        # ║                                                                  ║
+        # ║ Achtergrond (run #74, 01-06): ETV gaf na Volgende-klik op de     ║
+        # ║ dag-keuze geen navigatie terug. Doeldatum (03-06, dag+2) bleek   ║
+        # ║ op die pagina als 'grijs/disabled' getoond — vermoedelijk omdat  ║
+        # ║ er al een actieve reservering bestond ('1 actieve reservering'  ║
+        # ║ vermoeden uit valkuil 11.9) of omdat ETV de dag+2-slot op een    ║
+        # ║ tragere cadens vrijgeeft dan precies 07:00.                      ║
+        # ║                                                                  ║
+        # ║ Joris-wens: bij faal in kies_dag (of bevestig met 'FOUT')        ║
+        # ║ volledig herstart vanaf 'Baan afhangen' (spelers opnieuw, etc.). ║
+        # ║ Max 5 pogingen met 30s wachten tussendoor zodat ETV server-side  ║
+        # ║ state-changes mee kan pakken.                                    ║
+        # ╚══════════════════════════════════════════════════════════════════╝
+        MAX_OUTER_POGINGEN = 5
+        boek_gelukt = False
         baan = ""
         gereserveerde_tijd = ""
-        MAX_BAAN_POGINGEN = 6
 
-        for baan_poging in range(1, MAX_BAAN_POGINGEN + 1):
-            log.info(f"━━━━ Baan-poging {baan_poging}/{MAX_BAAN_POGINGEN} ━━━━")
-            baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd)
-            if not baan:
-                log.error(f"🚫 Geen padelbaan beschikbaar op {args.datum} rondom {args.tijd}")
-                sys.exit(1)
+        for outer_poging in range(1, MAX_OUTER_POGINGEN + 1):
+            log.info(f"╔══ BOEK-POGING {outer_poging}/{MAX_OUTER_POGINGEN} ══╗")
+
+            if outer_poging > 1:
+                log.info("⏳ Wacht 30s en restart wizard vanaf 'Baan afhangen'...")
+                time.sleep(30)
+                try:
+                    driver.get("https://www.etv-volley.nl/me/Reservations")
+                    time.sleep(3)
+                except Exception as e:
+                    log.warning(f"Terugnavigeren naar /me/Reservations faalde: {e}")
+
+            if not klik_baan_afhangen(driver):
+                log.error(f"🚫 'Baan afhangen' knop niet gevonden (poging {outer_poging})")
+                continue  # outer retry
+
+            if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4):
+                log.error("🚫 Speler niet gevonden — controleer spelernamen")
+                sys.exit(1)  # credentials/lid-issue, geen retry zinvol
 
             _log_zichtbare_spelers(driver, alle_spelers,
-                "na kies_baan_en_tijd (Confirm-pagina; 4 spelers verwacht)")
+                "na voeg_spelers_toe (4 verwacht)")
 
-            resultaat = bevestig(driver, dry_run=args.dry_run)
+            # Klok-buffer alleen op 1e poging: wacht tot 07:01 NL vóór kies_dag.
+            # Run #63 (cron 30-05) bewees dat ETV's daypart-selectie ZELF al
+            # geweigerd wordt vóór 07:00 NL. Bij outer-retry (poging 2+) zijn
+            # we sowieso ruim voorbij 07:01.
+            if outer_poging == 1:
+                nu_pre_dag = datetime.now()
+                doel_window_open = reserveringsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
+                if nu_pre_dag.date() == reserveringsdatum.date() and nu_pre_dag < doel_window_open:
+                    wacht_sec = int((doel_window_open - nu_pre_dag).total_seconds())
+                    log.info(f"⏳ Wacht {wacht_sec} sec tot 07:01 NL vóór dag-selectie "
+                             f"(ETV opent het slot om 07:00, buffer voor klok-skew)...")
+                    time.sleep(wacht_sec)
+                    log.info(f"⏰ {datetime.now().strftime('%H:%M:%S')} NL — boekvenster open.")
 
-            if resultaat == 'OK':
-                if args.dry_run:
-                    log.info(f"🧪 DRY-RUN voltooid op poging {baan_poging}: {baan} om {gereserveerde_tijd}")
-                    log.info("🧪 Geen verdere stappen (verificatie/agenda/reserveringen.json overgeslagen).")
-                    sys.exit(0)
-                log.info(f"✅ Bevestigd op poging {baan_poging}: {baan} om {gereserveerde_tijd}")
+            if not kies_dag(driver, args.datum, args.tijd):
+                log.warning(f"⚠️ Dag {args.datum} niet selecteerbaar in poging {outer_poging} — "
+                            f"mogelijk ETV restrictie (dag+2 nog niet open of 1-actieve-reservering-rule). "
+                            f"Outer-retry.")
+                continue  # outer retry
+
+            _log_zichtbare_spelers(driver, alle_spelers,
+                "na kies_dag (baan-grid; spelers mogelijk niet meer zichtbaar)")
+
+            # ── Innerlijke retry: baan + tijd kiezen + bevestigen ───────────
+            # Race-conditie: tussen kies_baan_en_tijd en bevestig kan iemand
+            # anders nét sneller zijn. ETV toont bezette tijdcel daarna niet
+            # meer; kies_baan_en_tijd pakt automatisch de volgende baan voor
+            # dezelfde tijd, dan alternatieve tijden. Max 6 pogingen.
+            MAX_BAAN_POGINGEN = 6
+            bevestig_ok = False
+
+            for baan_poging in range(1, MAX_BAAN_POGINGEN + 1):
+                log.info(f"━━━━ Baan-poging {baan_poging}/{MAX_BAAN_POGINGEN} ━━━━")
+                baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd)
+                if not baan:
+                    log.warning(f"🚫 Geen padelbaan beschikbaar in baan-poging {baan_poging}")
+                    break  # naar outer-retry
+
+                _log_zichtbare_spelers(driver, alle_spelers,
+                    "na kies_baan_en_tijd (Confirm-pagina; 4 spelers verwacht)")
+
+                resultaat = bevestig(driver, dry_run=args.dry_run)
+
+                if resultaat == 'OK':
+                    if args.dry_run:
+                        log.info(f"🧪 DRY-RUN voltooid op baan-poging {baan_poging}: "
+                                 f"{baan} om {gereserveerde_tijd}")
+                        log.info("🧪 Geen verdere stappen (verificatie/agenda/reserveringen.json overgeslagen).")
+                        sys.exit(0)
+                    log.info(f"✅ Bevestigd op baan-poging {baan_poging}: {baan} om {gereserveerde_tijd}")
+                    bevestig_ok = True
+                    break
+
+                if resultaat == 'BEZET':
+                    log.warning(f"⚠️ {baan} om {gereserveerde_tijd} werd net door iemand anders "
+                                f"gereserveerd. Terug naar baan-keuze; bezette slots verdwijnen "
+                                f"na de refresh.")
+                    try:
+                        driver.get("https://www.etv-volley.nl/me/ReservationsCourt")
+                        time.sleep(2)
+                        log.info("⟳ Forceer expliciete refresh — garandeert verse DOM van ETV")
+                        driver.refresh()
+                        time.sleep(2)
+                    except Exception as e:
+                        log.warning(f"Kon niet terug naar baan-keuze: {e}")
+                        break  # naar outer-retry
+                    continue
+
+                # resultaat == 'FOUT' — outer-retry kan misschien helpen
+                log.warning(f"⚠️ Bevestigen mislukt (FOUT) op baan-poging {baan_poging} — outer-retry.")
                 break
 
-            if resultaat == 'BEZET':
-                log.warning(f"⚠️ {baan} om {gereserveerde_tijd} werd net door iemand anders "
-                            f"gereserveerd. Terug naar baan-keuze pagina; bezette slots "
-                            f"verdwijnen na de refresh, dus volgende padelbaan wordt vanzelf gekozen.")
-                try:
-                    driver.get("https://www.etv-volley.nl/me/ReservationsCourt")
-                    time.sleep(2)
-                    log.info("⟳ Forceer expliciete refresh — garandeert verse DOM van ETV")
-                    driver.refresh()
-                    time.sleep(2)
-                except Exception as e:
-                    log.error(f"🚫 Kon niet terug naar baan-keuze: {e}")
-                    sys.exit(1)
-                continue
+            if bevestig_ok:
+                boek_gelukt = True
+                break  # outer-retry-loop verlaten
 
-            # resultaat == 'FOUT'
-            log.error("🚫 Bevestigen mislukt — geen retry mogelijk")
-            sys.exit(1)
-        else:
-            log.error(f"🚫 Na {MAX_BAAN_POGINGEN} pogingen nog geen baan kunnen bevestigen")
+            # Hier zonder bevestig_ok: vol of fout → outer-retry
+            log.warning(f"⚠️ Boek-poging {outer_poging} niet gelukt — wacht + restart.")
+
+        if not boek_gelukt:
+            log.error(f"🚫 Na {MAX_OUTER_POGINGEN} boek-pogingen nog geen reservering gelukt")
             sys.exit(1)
 
         # ── Verificeer dat reservering zichtbaar is op Mijn Reserveringen ────────
