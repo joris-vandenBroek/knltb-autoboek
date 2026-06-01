@@ -28,7 +28,10 @@ concurrency:
 jobs:
   verwerk:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 35 min: lang genoeg om 1+ boek.yml runs (elk max ~15 min) af te
+    # wachten alvorens 't wachtrij-bestand te verwijderen. Bij faal
+    # blijft het bestand staan voor handmatige bekijking / retry.
+    timeout-minutes: 35
     env:
       TZ: Europe/Amsterdam
     steps:
@@ -108,8 +111,30 @@ jobs:
                 --field speler2="$speler2" \
                 --field speler3="$speler3" \
                 --field speler4="$speler4"
-              rm "$f"
-              processed=$((processed + 1))
+
+              # Wacht 5s voor GitHub Actions om de run aan te maken,
+              # pak dan de net-getriggerde run-id (concurrency-group
+              # serializeert, dus latest = de onze).
+              sleep 5
+              RUN_ID=$(gh run list --workflow=boek.yml --limit=1 --json databaseId --jq '.[0].databaseId')
+              echo "⏳ Boek-run #$RUN_ID gestart — wacht op completion (~3-5 min)..."
+
+              # gh run watch streamt + wacht tot conclusion. Geen --exit-
+              # status: anders zou faal de hele step afkappen en blijven
+              # andere wachtrij-items onverwerkt.
+              gh run watch "$RUN_ID" --interval 30 || true
+
+              CONCL=$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion // "unknown"')
+              echo "Boek-run #$RUN_ID conclusion: $CONCL"
+
+              if [ "$CONCL" = "success" ]; then
+                rm "$f"
+                processed=$((processed + 1))
+                echo "✅ $f verwerkt + verwijderd uit wachtrij"
+              else
+                echo "⚠️ $f BLIJFT IN WACHTRIJ — boek faalde ($CONCL). Handmatige"
+                echo "   bekijking via Actions-issue + handmatig boeken/retry nodig."
+              fi
             else
               echo "⏭️  Skip $f (reserveringsdatum $reserveringsdatum, niet vandaag $today)"
             fi
