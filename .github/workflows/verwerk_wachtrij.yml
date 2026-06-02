@@ -18,11 +18,15 @@ permissions:
   actions:  write
   issues:   write
 
-# Voorkom dat 2 cron-firings (zomertijd + wintertijd, of cron-job.org + GitHub
-# native) tegelijk de wachtrij verwerken. Dezelfde groep als boek.yml om
-# parallel boeken op één account te voorkomen.
+# Eigen concurrency-groep voor verwerk_wachtrij zodat dubbele cron-firings
+# (zomertijd + wintertijd, of cron-job.org + GitHub native) elkaar niet
+# dupliceren — maar NIET de boek/beheer-groep: anders wacht de cron-run
+# op eventuele achterliggende handmatige boek-runs en start de echte
+# boeking te laat (run #79 was 35 min vertraagd hierdoor).
+# boek.yml-runs die verwerk_wachtrij triggert krijgen WEL de boek-groep
+# zodat die onderling geserialiseerd blijven.
 concurrency:
-  group: knltb-account-joris
+  group: knltb-verwerk-wachtrij
   cancel-in-progress: false
 
 jobs:
