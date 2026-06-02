@@ -663,7 +663,25 @@ def commit_en_push(bestanden: list, message: str):
         return False
 
     for poging in range(1, 6):
-        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=False)
+        rebase = subprocess.run(["git", "pull", "--rebase", "origin", "main"],
+                                capture_output=True, text=True)
+        if rebase.returncode != 0:
+            # Merge-conflict tijdens rebase (bv. parallelle push van
+            # verwerk_wachtrij of cleanup). Breek de rebase af + gebruik
+            # onze versie voor de bestanden die wij net geschreven hebben
+            # (na een verse ETV-scrape zijn wij authoritative).
+            log.warning(f"  git pull --rebase conflict (poging {poging}): {rebase.stderr.strip()[:200]}")
+            subprocess.run(["git", "rebase", "--abort"], check=False)
+            # Haal remote op + cherry-pick onze commit bovenop remote HEAD
+            subprocess.run(["git", "fetch", "origin", "main"], check=False)
+            subprocess.run(["git", "reset", "--soft", "origin/main"], check=False)
+            # Onze bestanden opnieuw stagen (zijn al gewijzigd door script)
+            subprocess.run(["git", "add"] + bestanden, check=False)
+            diff = subprocess.run(["git", "diff", "--cached", "--quiet"])
+            if diff.returncode != 0:
+                subprocess.run(["git", "commit", "-m", message + " [conflict-resolved]"],
+                               check=False)
+
         if subprocess.run(["git", "push"]).returncode == 0:
             log.info(f"✅ Gecommit en gepusht (poging {poging})")
             return True
