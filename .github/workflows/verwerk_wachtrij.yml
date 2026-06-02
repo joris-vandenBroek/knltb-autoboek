@@ -125,9 +125,18 @@ jobs:
 
               # gh run watch streamt + wacht tot conclusion. Geen --exit-
               # status: anders zou faal de hele step afkappen en blijven
-              # andere wachtrij-items onverwerkt.
-              gh run watch "$RUN_ID" --interval 30 || true
+              # andere wachtrij-items onverwerkt. Timeout 20 min:
+              # boek.yml heeft zelf max 15 min + 5 min buffer. Na timeout
+              # lezen we conclusion alsnog expliciet via gh run view.
+              gh run watch "$RUN_ID" --interval 30 --timeout 1200 || true
 
+              # Wacht nog even als run nog 'in_progress' is na watch-exit
+              for _w in 1 2 3 4 5; do
+                CONCL=$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion // "unknown"')
+                if [ "$CONCL" != "null" ] && [ "$CONCL" != "unknown" ]; then break; fi
+                echo "  run nog niet klaar, wacht 30s..."
+                sleep 30
+              done
               CONCL=$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion // "unknown"')
               echo "Boek-run #$RUN_ID conclusion: $CONCL"
 
