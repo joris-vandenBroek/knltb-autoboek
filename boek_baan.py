@@ -349,6 +349,18 @@ def login(driver: uc.Chrome) -> bool:
         log.info("✅ Ingelogd!")
         return True
     except TimeoutException as e:
+        # Detecteer onderhoudspagina: geen inputvelden + onderhoud-tekst
+        try:
+            body = driver.find_element(By.TAG_NAME, "body").text.lower()
+            onderhoud_keywords = ["onderhoud", "maintenance", "tijdelijk niet beschikbaar",
+                                  "temporarily unavailable", "we zijn zo weer bij je terug",
+                                  "be right back"]
+            if any(kw in body for kw in onderhoud_keywords):
+                log.warning("⚠️ ETV toont onderhoudspagina — site tijdelijk niet beschikbaar")
+                screenshot(driver, "login_fout_onderhoud")
+                return 'ONDERHOUD'
+        except Exception:
+            pass
         log.error(f"❌ Inloggen mislukt: {e}")
         screenshot(driver, "login_fout")
         return False
@@ -1835,9 +1847,27 @@ def main():
     baan, gereserveerde_tijd = "", ""
 
     try:
-        if not login(driver):
-            log.error("🚫 Inloggen mislukt — controleer KNLTB_BONDSNUMMER en KNLTB_WACHTWOORD")
-            sys.exit(1)
+        # Login met onderhoud-retry: bij ETV-onderhoudspagina max 5×
+        # wachten (3 min per poging) voor we opgeven.
+        MAX_LOGIN_POGINGEN = 5
+        ONDERHOUD_WACHT_SEC = 180
+        for login_poging in range(1, MAX_LOGIN_POGINGEN + 1):
+            login_result = login(driver)
+            if login_result is True:
+                break
+            if login_result == 'ONDERHOUD':
+                if login_poging < MAX_LOGIN_POGINGEN:
+                    log.warning(f"⏳ ETV in onderhoud — wacht {ONDERHOUD_WACHT_SEC}s en probeer opnieuw "
+                                f"(poging {login_poging}/{MAX_LOGIN_POGINGEN})")
+                    time.sleep(ONDERHOUD_WACHT_SEC)
+                    driver.get(LOGIN_URL)
+                    time.sleep(4)
+                    continue
+                log.error("🚫 ETV bleef in onderhoud na alle login-pogingen")
+                sys.exit(1)
+            else:
+                log.error("🚫 Inloggen mislukt — controleer KNLTB_BONDSNUMMER en KNLTB_WACHTWOORD")
+                sys.exit(1)
 
         alle_spelers = [SPELER1, args.speler2, args.speler3, args.speler4]
 
