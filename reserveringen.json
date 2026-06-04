@@ -1,4 +1,23 @@
 {
-  "bijgewerkt": "2026-06-03T20:38:40",
-  "reserveringen": []
+  "bijgewerkt": "2026-06-04T07:05:05",
+  "reserveringen": [
+    {
+      "id": "2026-06-06_1300_padel-1",
+      "datum": "2026-06-06",
+      "tijd": "13:00",
+      "baan": "Padel 1",
+      "tekst": "06-06-2026\t13:00 - 14:00\tPadel 1\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Toine Aanraad",
+        "Peter Nijhof"
+      ]
+    }
+  ]
 }
