@@ -116,26 +116,35 @@ jobs:
                 --field speler3="$speler3" \
                 --field speler4="$speler4"
 
-              # Wacht tot de run aangemaakt én voorbij 'pending' is
-              # voordat gh run watch wordt aangeroepen. 'pending' runs
-              # geven een usage-error op gh run watch.
-              sleep 5
-              RUN_ID=$(gh run list --workflow=boek.yml --limit=1 --json databaseId --jq '.[0].databaseId')
-              echo "⏳ Boek-run #$RUN_ID gestart — wacht op completion (~3-5 min)..."
-
-              # Wacht tot status != 'queued' en != 'pending' (max 3 min)
+              # Wacht tot run aangemaakt is in de API en voorbij pending.
+              # gh run watch geeft usage-error op queued/pending runs.
+              # Strategie: wacht in een loop tot gh run list de run
+              # teruggeeft MET een geldige status (in_progress of
+              # completed). Max 3 minuten wachten.
+              RUN_ID=""
               for _p in $(seq 1 18); do
-                STATUS=$(gh run view "$RUN_ID" --json status --jq '.status // "unknown"')
-                if [ "$STATUS" != "queued" ] && [ "$STATUS" != "pending" ] && [ "$STATUS" != "unknown" ]; then
+                sleep 10
+                CANDIDATE=$(gh run list --workflow=boek.yml --limit=1 \
+                  --json databaseId,status,createdAt \
+                  --jq '.[0] | "\(.databaseId) \(.status)"' 2>/dev/null || echo "")
+                RID=$(echo "$CANDIDATE" | cut -d' ' -f1)
+                RSTATUS=$(echo "$CANDIDATE" | cut -d' ' -f2)
+                if [ -n "$RID" ] && [ "$RSTATUS" != "queued" ] && [ "$RSTATUS" != "pending" ] && [ "$RSTATUS" != "" ]; then
+                  RUN_ID="$RID"
+                  echo "  run $RUN_ID is $RSTATUS — klaar voor watch"
                   break
                 fi
-                echo "  run is $STATUS, wacht 10s..."
-                sleep 10
+                echo "  wacht op run-start (poging $_p/18, status: $RSTATUS)..."
               done
 
-              # gh run watch streamt + wacht tot conclusion. Geen --exit-
-              # status: anders zou faal de hele step afkappen en blijven
-              # andere wachtrij-items onverwerkt. Timeout 20 min.
+              if [ -z "$RUN_ID" ]; then
+                echo "⚠️ Run-id niet gevonden na 3 min — $f blijft in wachtrij"
+                continue
+              fi
+              echo "⏳ Boek-run #$RUN_ID gestart — wacht op completion (~3-5 min)..."
+
+              # gh run watch: timeout 20 min, geen --exit-status zodat
+              # een faal-run de hele step niet afkapt.
               gh run watch "$RUN_ID" --interval 30 --timeout 1200 || true
 
               # Retry-loop voor conclusion (run kan net klaar zijn na watch)
