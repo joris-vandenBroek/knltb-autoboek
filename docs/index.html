@@ -866,7 +866,10 @@
       if (r.ok) {
         const data = await r.json();
         if (Array.isArray(data) && data.length > 0) {
-          alleLedenLijst = data;
+          // Normaliseer: oud formaat (strings) of nieuw formaat (objecten met naam+sterkte_padel)
+          alleLedenLijst = data.map(item =>
+            typeof item === 'string' ? { naam: item, sterkte_padel: '' } : item
+          );
           document.getElementById('ledenInfo').textContent = `${data.length} leden`;
           // Tijdstip van laatste refresh apart ophalen — async, niet blokkerend
           ledenLaatstVervestDatum().then(iso => {
@@ -1385,9 +1388,9 @@
     );
 
     const gefilterd = (q
-      ? alleLedenLijst.filter(n => n.toLowerCase().includes(q))
+      ? alleLedenLijst.filter(lid => lid.naam.toLowerCase().includes(q))
       : alleLedenLijst
-    ).filter(n => !alGekozen.has(n));  // sluit al gekozen spelers uit
+    ).filter(lid => !alGekozen.has(lid.naam));  // sluit al gekozen spelers uit
 
     if (gefilterd.length === 0) {
       const el = document.createElement('div');
@@ -1397,11 +1400,13 @@
         : 'Geen resultaten';
       lijst.appendChild(el);
     } else {
-      gefilterd.forEach(naam => {
+      gefilterd.forEach(lid => {
         const el = document.createElement('div');
-        el.className = 'pf-item' + (naam === huidig ? ' selected' : '');
-        el.textContent = naam;
-        el.addEventListener('click', () => selecteer(nr, naam));
+        el.className = 'pf-item' + (lid.naam === huidig ? ' selected' : '');
+        el.textContent = lid.sterkte_padel
+          ? `${lid.naam} (${lid.sterkte_padel})`
+          : lid.naam;
+        el.addEventListener('click', () => selecteer(nr, lid.naam));
         lijst.appendChild(el);
       });
     }
