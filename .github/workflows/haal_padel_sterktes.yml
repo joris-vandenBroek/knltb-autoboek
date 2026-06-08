@@ -1,17 +1,17 @@
-name: Ledenlijst ophalen
+name: Padel speelsterktes ophalen
+
+# Draait automatisch na haal_leden_op.yml (via workflow_dispatch trigger daar)
+# en kan ook handmatig gestart worden.
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 5 * * 1'  # Elke maandag 07:00 CEST
 
 jobs:
-  haal-leden-op:
+  haal-padel-sterktes:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: write
-      actions:  write
 
     steps:
       - uses: actions/checkout@v4
@@ -23,9 +23,9 @@ jobs:
       - name: Installeer dependencies
         run: |
           sudo apt-get install -y xvfb
-          pip install undetected-chromedriver selenium requests
+          pip install undetected-chromedriver selenium
 
-      - name: Leden ophalen
+      - name: Padel sterktes ophalen
         env:
           DISPLAY: :99
           KNLTB_BONDSNUMMER: ${{ secrets.KNLTB_BONDSNUMMER }}
@@ -33,7 +33,7 @@ jobs:
         run: |
           Xvfb :99 -screen 0 1280x900x24 &
           sleep 2
-          python haal_leden_op.py
+          python haal_padel_sterktes.py
 
       - name: leden.json committen
         run: |
@@ -44,8 +44,7 @@ jobs:
             echo "Geen wijzigingen aan leden.json — niets te committen."
             exit 0
           fi
-          git commit -m "Ledenlijst bijgewerkt"
-          # Retry-lus voor race condities met andere bots/commits op main.
+          git commit -m "Padel speelsterktes bijgewerkt"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main || true
             if git push; then
@@ -58,18 +57,10 @@ jobs:
           echo "❌ Push faalde na 5 pogingen"
           exit 1
 
-      - name: Trigger haal_padel_sterktes.yml
-        if: success()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run haal_padel_sterktes.yml --ref main
-          echo "✅ haal_padel_sterktes.yml getriggerd"
-
       - name: Screenshots bij fout
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: leden-screenshots
+          name: padel-sterktes-screenshots
           path: '*.png'
           retention-days: 3

@@ -1,21 +1,21 @@
 """
 Haal alle leden op van de Ledenlijst-pagina op etv-volley.nl
-en sla op in leden.json, inclusief padel speelsterkte van mijnknltb.toernooi.nl.
+en sla op in leden.json (naam + bondsnummer per lid).
 
 Strategie:
-1. Login via Selenium (UC + Xvfb, bypass Cloudflare) op etv-volley.nl
+1. Login via Selenium (UC + Xvfb, bypass Cloudflare)
 2. Navigeer naar de Ledenlijst-tab
-3. Scrape alle namen + bondsnummers uit de HTML-tabel (kolom 0 + 1)
-4. Herhaal scrollen/paginering totdat er geen nieuwe namen meer bijkomen
-5. Login op mijnknltb.toernooi.nl met dezelfde credentials
-6. Per lid: zoek profiel via bondsnummer, haal padel dubbel speelsterkte op
-7. Sla op in leden.json als lijst van objecten met naam, bondsnummer en sterkte_padel
+3. Scrape naam (kolom 0) + bondsnummer (kolom 1) uit de HTML-tabel
+4. Herhaal paginering totdat er geen nieuwe leden meer bijkomen
+5. Sla op in leden.json als lijst van objecten
+
+Padel speelsterktes worden apart opgehaald door haal_padel_sterktes.py,
+dat automatisch getriggerd wordt door haal_leden_op.yml na afloop.
 """
 
 import os, sys, json, time, logging
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
@@ -24,11 +24,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
                     handlers=[logging.StreamHandler(sys.stdout)])
 log = logging.getLogger(__name__)
 
-LOGIN_URL        = "https://www.etv-volley.nl/mijn"
-MIJNKNLTB_URL    = "https://mijnknltb.toernooi.nl"
-BONDSNUMMER      = os.environ.get("KNLTB_BONDSNUMMER", "")
-WACHTWOORD       = os.environ.get("KNLTB_WACHTWOORD", "")
-TIMEOUT          = 20
+LOGIN_URL   = "https://www.etv-volley.nl/mijn"
+BONDSNUMMER = os.environ.get("KNLTB_BONDSNUMMER", "")
+WACHTWOORD  = os.environ.get("KNLTB_WACHTWOORD", "")
 
 
 def screenshot(driver, naam):
@@ -68,7 +66,6 @@ def maak_driver():
 
 
 def login(driver) -> bool:
-    """Login op etv-volley.nl via etv_common."""
     from etv_common import login as _common_login
     return _common_login(
         driver,
@@ -80,9 +77,7 @@ def login(driver) -> bool:
 
 
 def naar_ledenlijst(driver) -> bool:
-    """Klik op de Ledenlijst-tab in de navigatie."""
     log.info("Navigeer naar Ledenlijst...")
-
     for sel in [
         "//a[contains(.,'Ledenlijst')]",
         "//a[contains(@href,'Member') or contains(@href,'Leden')]",
@@ -91,16 +86,13 @@ def naar_ledenlijst(driver) -> bool:
         try:
             link = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.XPATH, sel)))
-            href = link.get_attribute("href") or ""
-            log.info(f"Ledenlijst-link gevonden: '{link.text.strip()}' href='{href}'")
+            log.info(f"Ledenlijst-link: '{link.text.strip()}'")
             driver.execute_script("arguments[0].click();", link)
             time.sleep(3)
             screenshot(driver, "03_ledenlijst")
-            log.info(f"URL na klik: {driver.current_url}")
             return True
         except TimeoutException:
             pass
-
     log.error("Ledenlijst-link niet gevonden")
     screenshot(driver, "03_ledenlijst_fout")
     return False
@@ -113,7 +105,7 @@ def haal_leden_van_pagina(driver) -> list:
         var rijen = document.querySelectorAll('table tr');
         rijen.forEach(function(rij) {
             var cellen = rij.querySelectorAll('td');
-            if (!cellen.length) return;  // headerrij
+            if (!cellen.length) return;
             var naam = cellen[0].textContent.trim();
             var bondsnummer = cellen[1] ? cellen[1].textContent.trim() : '';
             if (naam && naam.length > 3 && naam.indexOf(' ') >= 0)
@@ -124,13 +116,9 @@ def haal_leden_van_pagina(driver) -> list:
 
 
 def scrape_ledenlijst(driver) -> list:
-    """
-    Scrape alle leden (naam + bondsnummer) uit de ledenlijst.
-    Handelt paginering af; deduplicatie op bondsnummer.
-    """
-    alle_leden = {}  # bondsnummer -> {naam, bondsnummer}
+    """Scrape alle leden (naam + bondsnummer), handelt paginering af."""
+    alle_leden = {}  # bondsnummer (of naam als fallback) -> object
 
-    # Wacht tot de tabel geladen is
     try:
         WebDriverWait(driver, 15).until(
             lambda d: len(d.find_elements(By.CSS_SELECTOR, "table tr td")) > 0
@@ -150,19 +138,14 @@ def scrape_ledenlijst(driver) -> list:
                 nieuw += 1
         return nieuw
 
-    # Eerste batch
     leden = haal_leden_van_pagina(driver)
-    nieuw = verwerk_batch(leden)
-    log.info(f"Eerste batch: {len(leden)} rijen, {nieuw} nieuw")
+    log.info(f"Eerste batch: {len(leden)} rijen, {verwerk_batch(leden)} nieuw")
 
-    # Paginering
     pagina = 1
     while True:
         volgende = None
-
         try:
-            kandidaten = driver.find_elements(By.XPATH,
-                f"//a[normalize-space(.)='{pagina + 1}']")
+            kandidaten = driver.find_elements(By.XPATH, f"//a[normalize-space(.)='{pagina + 1}']")
             for el in kandidaten:
                 if el.is_displayed() and el.is_enabled():
                     volgende = el
@@ -172,15 +155,12 @@ def scrape_ledenlijst(driver) -> list:
 
         if not volgende:
             for sel in [
-                "//a[normalize-space(.)='»' or normalize-space(.)='›'"
-                "    or contains(.,'Volgende') or contains(.,'Next')]",
-                "//button[normalize-space(.)='»' or normalize-space(.)='›'"
-                "        or contains(.,'Volgende')]",
+                "//a[normalize-space(.)='»' or normalize-space(.)='›' or contains(.,'Volgende') or contains(.,'Next')]",
+                "//button[normalize-space(.)='»' or normalize-space(.)='›' or contains(.,'Volgende')]",
                 "//li[contains(@class,'next') and not(contains(@class,'disabled'))]//a",
             ]:
                 try:
-                    kandidaten = driver.find_elements(By.XPATH, sel)
-                    for el in kandidaten:
+                    for el in driver.find_elements(By.XPATH, sel):
                         if el.is_displayed() and el.is_enabled():
                             volgende = el
                             break
@@ -196,138 +176,42 @@ def scrape_ledenlijst(driver) -> list:
         driver.execute_script("arguments[0].click();", volgende)
         pagina += 1
         time.sleep(2)
-
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(0.5)
         driver.execute_script("window.scrollTo(0, 0);")
 
         leden = haal_leden_van_pagina(driver)
         nieuw = verwerk_batch(leden)
-        log.info(f"Pagina {pagina}: {len(leden)} rijen, totaal uniek: {len(alle_leden)} (+{nieuw})")
-
+        log.info(f"Pagina {pagina}: {len(leden)} rijen, totaal: {len(alle_leden)} (+{nieuw})")
         if nieuw == 0:
-            log.info("Geen nieuwe leden op deze pagina — stoppen")
+            log.info("Geen nieuwe leden — stoppen")
             break
 
-    log.info(f"Paginering klaar: {pagina} pagina's, {len(alle_leden)} unieke leden")
+    log.info(f"Klaar: {pagina} pagina's, {len(alle_leden)} unieke leden")
 
     # Fallback: zoekfilter per letter als te weinig resultaten
     if len(alle_leden) < 10:
-        log.warning(f"Slechts {len(alle_leden)} leden gevonden — probeer zoekfilter per letter")
+        log.warning(f"Slechts {len(alle_leden)} — probeer zoekfilter per letter")
         zoek_veld = None
-        for sel in ["//input[@placeholder='Zoeken' or @type='search' or @type='text']"]:
+        for sel in ["//input[@placeholder='Zoeken' or @type='search']"]:
             try:
-                velden = driver.find_elements(By.XPATH, sel)
-                for v in velden:
+                for v in driver.find_elements(By.XPATH, sel):
                     if v.is_displayed():
                         zoek_veld = v
                         break
             except Exception:
                 pass
-
         if zoek_veld:
             for letter in "abcdefghijklmnopqrstuvwxyz":
                 zoek_veld.clear()
                 zoek_veld.send_keys(letter)
                 time.sleep(1.5)
-                leden = haal_leden_van_pagina(driver)
-                nieuw = verwerk_batch(leden)
-                log.info(f"  Filter '{letter}': {len(leden)} rijen, totaal: {len(alle_leden)} (+{nieuw})")
+                nieuw = verwerk_batch(haal_leden_van_pagina(driver))
+                log.info(f"  Filter '{letter}': totaal {len(alle_leden)} (+{nieuw})")
             zoek_veld.clear()
 
     screenshot(driver, "05_einde_scrape")
     return list(alle_leden.values())
-
-
-def login_mijnknltb(driver) -> bool:
-    """Login op mijnknltb.toernooi.nl met KNLTB-credentials."""
-    log.info("Login op mijnknltb.toernooi.nl...")
-    driver.get(f"{MIJNKNLTB_URL}/user/login")
-    time.sleep(2)
-
-    # Accepteer cookie-wall als die er is
-    try:
-        WebDriverWait(driver, 5).until(
-            EC.element_to_be_clickable((By.XPATH, "//button[normalize-space(.)='Akkoord']"))
-        ).click()
-        time.sleep(1)
-        log.info("Cookie-wall geaccepteerd")
-    except Exception:
-        pass
-
-    try:
-        veld_nr = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located(
-                (By.XPATH, "//input[@name='Username' or @id='Username' or @type='text']"))
-        )
-        veld_nr.clear()
-        veld_nr.send_keys(BONDSNUMMER)
-
-        veld_pw = driver.find_element(By.CSS_SELECTOR, "input[type='password']")
-        veld_pw.clear()
-        veld_pw.send_keys(WACHTWOORD)
-        veld_pw.send_keys(Keys.RETURN)
-        time.sleep(3)
-
-        if "login" not in driver.current_url.lower():
-            log.info(f"MijnKNLTB login geslaagd: {driver.current_url}")
-            return True
-        else:
-            log.error(f"MijnKNLTB login mislukt: {driver.current_url}")
-            screenshot(driver, "mijnknltb_login_fout")
-            return False
-    except Exception as e:
-        log.error(f"MijnKNLTB login fout: {e}")
-        screenshot(driver, "mijnknltb_login_fout")
-        return False
-
-
-def haal_padel_sterkte(driver, bondsnummer: str) -> dict:
-    """
-    Zoek speler op mijnknltb.toernooi.nl via bondsnummer en haal padel dubbel
-    speelsterkte op. Geeft {'sterkte': '7', 'rating': '7,32'} of {} bij mislukking.
-    """
-    url = f"{MIJNKNLTB_URL}/find/player?q={bondsnummer}"
-    driver.get(url)
-    time.sleep(1.5)
-
-    try:
-        # Vind profiellink (niet eigen 'Mijn profiel'-link)
-        profiel_links = driver.find_elements(
-            By.XPATH,
-            "//a[contains(@href,'player-profile') and "
-            "not(normalize-space(.)='Mijn profiel')]"
-        )
-        if not profiel_links:
-            log.warning(f"  Geen profiel gevonden voor {bondsnummer}")
-            return {}
-
-        profiel_url = profiel_links[0].get_attribute("href")
-        driver.get(profiel_url)
-        time.sleep(1.5)
-
-        # Extraheer padel dubbel speelsterkte
-        result = driver.execute_script("""
-            var el = document.querySelector('span[title="Padel Dubbel"]');
-            if (!el) return null;
-            var sterkte = el.querySelector('.tag-duo__title');
-            var rating  = el.querySelector('.tag-duo__value');
-            return {
-                sterkte: sterkte ? sterkte.textContent.trim() : null,
-                rating:  rating  ? rating.textContent.trim()  : null
-            };
-        """)
-
-        if result and result.get('sterkte'):
-            log.info(f"  ✅ {bondsnummer}: sterkte={result['sterkte']}, rating={result['rating']}")
-            return result
-        else:
-            log.info(f"  ⚠️  {bondsnummer}: geen padel sterkte op {profiel_url}")
-            return {}
-
-    except Exception as e:
-        log.warning(f"  Fout bij ophalen padel sterkte {bondsnummer}: {e}")
-        return {}
 
 
 def main():
@@ -339,39 +223,13 @@ def main():
     leden_lijst = []
 
     try:
-        # Stap 1: etv-volley ledenlijst scrapen
         if not login(driver):
-            log.error("Login etv-volley mislukt")
+            log.error("Login mislukt")
             sys.exit(1)
-
         if not naar_ledenlijst(driver):
             log.error("Navigatie naar Ledenlijst mislukt")
             sys.exit(1)
-
         leden_lijst = scrape_ledenlijst(driver)
-
-        if not leden_lijst:
-            log.error("Geen leden gevonden — leden.json wordt NIET overschreven")
-            sys.exit(1)
-
-        log.info(f"Ledenlijst: {len(leden_lijst)} leden gevonden")
-
-        # Stap 2: mijnknltb.toernooi.nl — padel speelsterktes ophalen
-        knltb_ok = login_mijnknltb(driver)
-        if not knltb_ok:
-            log.warning("MijnKNLTB login mislukt — speelsterktes worden overgeslagen")
-        else:
-            log.info(f"Padel speelsterktes ophalen voor {len(leden_lijst)} leden...")
-            for i, lid in enumerate(leden_lijst):
-                bnr = lid.get('bondsnummer', '').strip()
-                if not bnr:
-                    log.info(f"  [{i+1}/{len(leden_lijst)}] {lid['naam']}: geen bondsnummer, overgeslagen")
-                    continue
-                log.info(f"  [{i+1}/{len(leden_lijst)}] {lid['naam']} ({bnr})")
-                sterkte_data = haal_padel_sterkte(driver, bnr)
-                lid['sterkte_padel'] = sterkte_data.get('sterkte', '')
-                lid['rating_padel']  = sterkte_data.get('rating', '')
-
     finally:
         try:
             screenshot(driver, "99_einde")
@@ -379,15 +237,41 @@ def main():
             pass
         driver.quit()
 
-    # Sorteer op naam en sla op
+    if not leden_lijst:
+        log.error("Geen leden gevonden — leden.json wordt NIET overschreven")
+        sys.exit(1)
+
+    # Bewaar eventuele sterkte_padel uit huidige leden.json (zodat sterktes niet
+    # verloren gaan als alleen de ledenlijst opnieuw gescraped wordt)
+    bestaande_sterktes = {}
+    try:
+        with open("leden.json", encoding="utf-8") as f:
+            oud = json.load(f)
+        for item in oud:
+            if isinstance(item, dict) and item.get('bondsnummer'):
+                bestaande_sterktes[item['bondsnummer']] = {
+                    'sterkte_padel': item.get('sterkte_padel', ''),
+                    'rating_padel':  item.get('rating_padel', ''),
+                }
+        log.info(f"Bestaande sterktes bewaard voor {len(bestaande_sterktes)} leden")
+    except Exception:
+        pass
+
+    for lid in leden_lijst:
+        bnr = lid.get('bondsnummer', '')
+        if bnr in bestaande_sterktes:
+            lid['sterkte_padel'] = bestaande_sterktes[bnr]['sterkte_padel']
+            lid['rating_padel']  = bestaande_sterktes[bnr]['rating_padel']
+        else:
+            lid.setdefault('sterkte_padel', '')
+            lid.setdefault('rating_padel', '')
+
     leden_lijst.sort(key=lambda x: x['naam'])
     with open("leden.json", "w", encoding="utf-8") as f:
         json.dump(leden_lijst, f, ensure_ascii=False, indent=2)
 
     log.info(f"Opgeslagen: {len(leden_lijst)} leden in leden.json")
     log.info(f"Voorbeeld: {json.dumps(leden_lijst[0], ensure_ascii=False)}")
-    met_sterkte = sum(1 for l in leden_lijst if l.get('sterkte_padel'))
-    log.info(f"Padel sterkte aanwezig voor {met_sterkte}/{len(leden_lijst)} leden")
 
 
 if __name__ == "__main__":
