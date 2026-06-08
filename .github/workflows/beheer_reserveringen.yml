@@ -14,7 +14,7 @@ on:
         required: false
         default: ''
 
-# Zelfde account-groep als boek.yml: 2 simultane Selenium-sessies op Ã©Ã©n
+# Zelfde account-groep als boek.yml: 2 simultane Selenium-sessies op een
 # ETV-account is sowieso vragen om problemen.
 concurrency:
   group: knltb-account-joris
@@ -45,8 +45,8 @@ jobs:
       - name: Beheer reserveringen
         env:
           DISPLAY:                     :99
-          ETVVOLLEY_BONDSNUMMER:           ${{ secrets.ETVVOLLEY_BONDSNUMMER }}
-          ETVVOLLEY_WACHTWOORD:            ${{ secrets.ETVVOLLEY_WACHTWOORD }}
+          ETVVOLLEY_BONDSNUMMER:       ${{ secrets.ETVVOLLEY_BONDSNUMMER }}
+          ETVVOLLEY_WACHTWOORD:        ${{ secrets.ETVVOLLEY_WACHTWOORD }}
           GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
           GOOGLE_CALENDAR_ID:          ${{ secrets.GOOGLE_CALENDAR_ID }}
         run: |
@@ -74,16 +74,12 @@ jobs:
           set -e
           actie="scrape"
           if [ -n "${{ inputs.cancel_id }}" ]; then actie="annuleer ${{ inputs.cancel_id }}"; fi
-          titel="âŒ beheer_reserveringen faalt: $actie (run #${{ github.run_number }})"
-          body=$(cat <<EOF
-          Beheer-actie gefaald.
+          titel="beheer_reserveringen faalt: $actie (run #${{ github.run_number }})"
+          body="Beheer-actie gefaald.
 
-          - **Actie:** $actie
-          - **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          - Actie: $actie
+          - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-          reserveringen.json is mogelijk niet ge-update. Probeer ðŸ”„ verversen in de PWA.
-          EOF
-          )
+          reserveringen.json is mogelijk niet ge-update. Probeer verversen in de PWA."
           gh issue create --title "$titel" --body "$body" --label "auto-failure,beheer" || \
             gh issue create --title "$titel" --body "$body"
-
