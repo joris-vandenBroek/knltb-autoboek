@@ -131,7 +131,7 @@ def login(session: requests.Session) -> bool:
     r = session.post(
         f"{MIJNKNLTB_URL}/user/login",
         data={
-            "Username": BONDSNUMMER,
+            "Login": BONDSNUMMER,
             "Password": WACHTWOORD,
             "__RequestVerificationToken": token,
             "ReturnUrl": return_url,
