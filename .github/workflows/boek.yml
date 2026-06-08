@@ -29,7 +29,7 @@ on:
 
 # Voorkom dat parallelle PWA-taps of cron + handmatige retry twee Selenium-
 # sessies tegen hetzelfde ETV-account aanjagen (race op reserveringen.json
-# commit + ETV "1 actieve reservering"-rule). Groep is per-user â€” bij
+# commit + ETV "1 actieve reservering"-rule). Groep is per-user -- bij
 # toekomstige multi-user wordt 'joris' parameterized.
 concurrency:
   group: knltb-account-joris
@@ -85,11 +85,11 @@ jobs:
         run: |
           # Direct na een succesvolle boeking trigger beheer_reserveringen
           # zodat reserveringen.json bijgewerkt wordt (incl. spelers via
-          # Wijzig-flow scrape). PWA polled vervolgens automatisch â€” geen
-          # handmatige Verversen-klik meer nodig.
+          # Wijzig-flow scrape). PWA polled vervolgens automatisch --
+          # geen handmatige Verversen-klik meer nodig.
           # Concurrency-group serialiseert deze met andere account-runs.
           gh workflow run beheer_reserveringen.yml --ref main || \
-            echo "::warning::beheer_reserveringen trigger faalde â€” verversen-knop in PWA is fallback"
+            echo "::warning::beheer_reserveringen trigger faalde -- verversen-knop in PWA is fallback"
 
       - name: Screenshots bij fout
         if: failure()
@@ -105,9 +105,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          titel="âŒ boek.yml faalt: ${{ inputs.datum }} ${{ inputs.tijd }} (run #${{ github.run_number }})"
+          titel="boek.yml faalt: ${{ inputs.datum }} ${{ inputs.tijd }} (run #${{ github.run_number }})"
           body=$(cat <<EOF
-          Run faalde â€” automatisch gemeld door boek.yml.
+          Run faalde -- automatisch gemeld door boek.yml.
 
           - **Speeldatum:** ${{ inputs.datum }}
           - **Tijd:** ${{ inputs.tijd }}
@@ -115,9 +115,8 @@ jobs:
           - **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           - **Screenshots-artifact:** beschikbaar 3 dagen
 
-          Sluit dit issue zodra je 't bekeken hebt. Een nieuwe failure maakt een nieuw issue.
+          Sluit dit issue zodra je het bekeken hebt. Een nieuwe failure maakt een nieuw issue.
           EOF
           )
           gh issue create --title "$titel" --body "$body" --label "auto-failure,boek" || \
             gh issue create --title "$titel" --body "$body"
-

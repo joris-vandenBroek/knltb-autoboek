@@ -1547,7 +1547,9 @@
           _startPollingNaBoek();
         }
       } else {
-        toonToast('error', `❌ GitHub Actions fout (${resp.status})\nProbeer opnieuw.`);
+        let detail = '';
+        try { const j = await resp.json(); detail = j.message ? `\n${j.message}` : ''; } catch (_) {}
+        toonToast('error', `❌ GitHub Actions fout (${resp.status})${detail}\nProbeer opnieuw.`);
       }
     } catch (e) {
       toonToast('error', `❌ Netwerkfout: ${e.message}`);
