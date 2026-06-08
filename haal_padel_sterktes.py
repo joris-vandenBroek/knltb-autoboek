@@ -16,8 +16,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 MIJNKNLTB_URL = "https://mijnknltb.toernooi.nl"
-BONDSNUMMER   = os.environ.get("KNLTB_BONDSNUMMER", "")
-WACHTWOORD    = os.environ.get("KNLTB_WACHTWOORD", "")
+GEBRUIKERSNAAM = os.environ.get("KNLTB_USERNAME", "")
+WACHTWOORD     = os.environ.get("KNLTB_WACHTWOORD", "")
 MAX_LEDEN     = int(os.environ.get("MAX_LEDEN", "0") or "0")
 
 HEADERS = {
@@ -127,11 +127,12 @@ def login(session: requests.Session) -> bool:
     return_url_m = re.search(r'name="ReturnUrl"[^>]*value="([^"]*)"', r.text, re.I)
     return_url = return_url_m.group(1) if return_url_m else ""
 
-    log.info(f"POST login als bondsnummer {BONDSNUMMER[:4]}***, ReturnUrl={return_url!r}...")
+    log.info(f"POST login als gebruiker {GEBRUIKERSNAAM[:4]}*** (len={len(GEBRUIKERSNAAM)}), "
+             f"wachtwoord len={len(WACHTWOORD)}, ReturnUrl={return_url!r}...")
     r = session.post(
         f"{MIJNKNLTB_URL}/user/login",
         data={
-            "Login": BONDSNUMMER,
+            "Login": GEBRUIKERSNAAM,
             "Password": WACHTWOORD,
             "__RequestVerificationToken": token,
             "ReturnUrl": return_url,
@@ -268,8 +269,8 @@ def haal_padel_sterkte(session: requests.Session, bondsnummer: str, idx: int = 0
 
 
 def main():
-    if not BONDSNUMMER or not WACHTWOORD:
-        log.error("Stel KNLTB_BONDSNUMMER en KNLTB_WACHTWOORD in als GitHub Secrets")
+    if not GEBRUIKERSNAAM or not WACHTWOORD:
+        log.error("Stel KNLTB_USERNAME en KNLTB_WACHTWOORD in als GitHub Secrets")
         sys.exit(1)
 
     try:

@@ -27,7 +27,7 @@ jobs:
 
       - name: Padel sterktes ophalen
         env:
-          KNLTB_BONDSNUMMER: ${{ secrets.KNLTB_BONDSNUMMER }}
+          KNLTB_USERNAME:    ${{ secrets.KNLTB_USERNAME }}
           KNLTB_WACHTWOORD:  ${{ secrets.KNLTB_WACHTWOORD }}
           MAX_LEDEN:         ${{ github.event.inputs.max_leden || '0' }}
         run: python haal_padel_sterktes.py
