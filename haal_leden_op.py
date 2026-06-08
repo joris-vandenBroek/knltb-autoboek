@@ -1,4 +1,4 @@
-"""
+﻿"""
 Haal alle leden op van de Ledenlijst-pagina op etv-volley.nl
 en sla op in leden.json (naam + bondsnummer per lid).
 
@@ -25,14 +25,14 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 LOGIN_URL   = "https://www.etv-volley.nl/mijn"
-BONDSNUMMER = os.environ.get("KNLTB_BONDSNUMMER", "")
-WACHTWOORD  = os.environ.get("KNLTB_WACHTWOORD", "")
+BONDSNUMMER = os.environ.get("ETVVOLLEY_BONDSNUMMER", "")
+WACHTWOORD  = os.environ.get("ETVVOLLEY_WACHTWOORD", "")
 
 
 def screenshot(driver, naam):
     try:
         driver.save_screenshot(f"{naam}.png")
-        log.info(f"Screenshot: {naam}.png — URL: {driver.current_url}")
+        log.info(f"Screenshot: {naam}.png â€” URL: {driver.current_url}")
     except Exception as e:
         log.warning(f"Screenshot mislukt ({naam}): {e}")
 
@@ -125,7 +125,7 @@ def scrape_ledenlijst(driver) -> list:
         )
         log.info("Tabel zichtbaar")
     except TimeoutException:
-        log.warning("Tabel niet gevonden na 15s — toch proberen")
+        log.warning("Tabel niet gevonden na 15s â€” toch proberen")
 
     screenshot(driver, "04_tabel_geladen")
 
@@ -155,8 +155,8 @@ def scrape_ledenlijst(driver) -> list:
 
         if not volgende:
             for sel in [
-                "//a[normalize-space(.)='»' or normalize-space(.)='›' or contains(.,'Volgende') or contains(.,'Next')]",
-                "//button[normalize-space(.)='»' or normalize-space(.)='›' or contains(.,'Volgende')]",
+                "//a[normalize-space(.)='Â»' or normalize-space(.)='â€º' or contains(.,'Volgende') or contains(.,'Next')]",
+                "//button[normalize-space(.)='Â»' or normalize-space(.)='â€º' or contains(.,'Volgende')]",
                 "//li[contains(@class,'next') and not(contains(@class,'disabled'))]//a",
             ]:
                 try:
@@ -170,7 +170,7 @@ def scrape_ledenlijst(driver) -> list:
                     break
 
         if not volgende:
-            log.info(f"Geen volgende pagina na pagina {pagina} — klaar")
+            log.info(f"Geen volgende pagina na pagina {pagina} â€” klaar")
             break
 
         driver.execute_script("arguments[0].click();", volgende)
@@ -184,14 +184,14 @@ def scrape_ledenlijst(driver) -> list:
         nieuw = verwerk_batch(leden)
         log.info(f"Pagina {pagina}: {len(leden)} rijen, totaal: {len(alle_leden)} (+{nieuw})")
         if nieuw == 0:
-            log.info("Geen nieuwe leden — stoppen")
+            log.info("Geen nieuwe leden â€” stoppen")
             break
 
     log.info(f"Klaar: {pagina} pagina's, {len(alle_leden)} unieke leden")
 
     # Fallback: zoekfilter per letter als te weinig resultaten
     if len(alle_leden) < 10:
-        log.warning(f"Slechts {len(alle_leden)} — probeer zoekfilter per letter")
+        log.warning(f"Slechts {len(alle_leden)} â€” probeer zoekfilter per letter")
         zoek_veld = None
         for sel in ["//input[@placeholder='Zoeken' or @type='search']"]:
             try:
@@ -216,7 +216,7 @@ def scrape_ledenlijst(driver) -> list:
 
 def main():
     if not BONDSNUMMER or not WACHTWOORD:
-        log.error("Stel KNLTB_BONDSNUMMER en KNLTB_WACHTWOORD in als GitHub Secrets")
+        log.error("Stel ETVVOLLEY_BONDSNUMMER en ETVVOLLEY_WACHTWOORD in als GitHub Secrets")
         sys.exit(1)
 
     driver = maak_driver()
@@ -238,7 +238,7 @@ def main():
         driver.quit()
 
     if not leden_lijst:
-        log.error("Geen leden gevonden — leden.json wordt NIET overschreven")
+        log.error("Geen leden gevonden â€” leden.json wordt NIET overschreven")
         sys.exit(1)
 
     # Bewaar eventuele sterkte_padel uit huidige leden.json (zodat sterktes niet
@@ -276,3 +276,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Beheer actieve ETV-Volley reserveringen:
 - Zonder argumenten: scrape /mijn/Reservations en schrijf reserveringen.json
 - Met --cancel ID: annuleer de reservering met die ID, dan scrape opnieuw
@@ -6,7 +6,7 @@ Beheer actieve ETV-Volley reserveringen:
 ID-format: "{YYYY-MM-DD}_{HHMM}_{baan_slug}" zoals "2026-05-31_1500_padel-1"
 
 Strategie:
-1. Login via Selenium (UC + Xvfb, bypass Cloudflare) — zelfde patroon als
+1. Login via Selenium (UC + Xvfb, bypass Cloudflare) â€” zelfde patroon als
    haal_leden_op.py en boek_baan.py
 2. Navigeer naar /mijn/Reservations
 3. Scrape booking rows met heuristieken (tabel-rijen + class-based)
@@ -44,8 +44,8 @@ RESERVERINGEN_URLS = [
     "https://www.etv-volley.nl/me/Reservations",
 ]
 
-BONDSNUMMER         = os.environ.get("KNLTB_BONDSNUMMER", "")
-WACHTWOORD          = os.environ.get("KNLTB_WACHTWOORD", "")
+BONDSNUMMER         = os.environ.get("ETVVOLLEY_BONDSNUMMER", "")
+WACHTWOORD          = os.environ.get("ETVVOLLEY_WACHTWOORD", "")
 GOOGLE_CREDENTIALS  = os.environ.get("GOOGLE_CALENDAR_CREDENTIALS", "")
 GOOGLE_CALENDAR_ID  = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
 TIMEOUT             = 20
@@ -54,7 +54,7 @@ TIMEOUT             = 20
 def screenshot(driver, naam: str):
     try:
         driver.save_screenshot(f"{naam}.png")
-        log.info(f"📸 Screenshot: {naam}.png | URL: {driver.current_url}")
+        log.info(f"ðŸ“¸ Screenshot: {naam}.png | URL: {driver.current_url}")
     except Exception as e:
         log.warning(f"Screenshot mislukt ({naam}): {e}")
 
@@ -86,7 +86,7 @@ def maak_driver():
 
 
 def login(driver) -> bool:
-    """Dunne wrapper rond etv_common.login() — gedeelde flow met
+    """Dunne wrapper rond etv_common.login() â€” gedeelde flow met
     haal_leden_op.py (en op termijn ook boek_baan.py).
     """
     from etv_common import login as _common_login
@@ -183,7 +183,7 @@ def scrape_reserveringen(driver) -> list:
 
             // ETV's 'Wijzigen' is een form-submit (POST /me/EditReservation
             // met ReservationId + CSRF token in hidden inputs). De button
-            // heeft type="button" en onclick="" — een jQuery-handler op
+            // heeft type="button" en onclick="" â€” een jQuery-handler op
             // .edit-reservation submit het form. Wij submitten het direct
             // via JS in Python (omzeilt anti-bot/jQuery-bind issues).
             var reservationId = null;
@@ -308,7 +308,7 @@ def scrape_reserveringen(driver) -> list:
 
     log.info(f"Geparseerde reserveringen: {len(reserveringen)}")
     for r in reserveringen:
-        log.info(f"  ✓ {r['datum']} {r['tijd']} {r['baan']} (id={r['id']}, cancel={bool(r['cancel'])})")
+        log.info(f"  âœ“ {r['datum']} {r['tijd']} {r['baan']} (id={r['id']}, cancel={bool(r['cancel'])})")
 
     return reserveringen
 
@@ -316,11 +316,11 @@ def scrape_reserveringen(driver) -> list:
 def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
     """
     Voor elke reservering: navigeer naar de Wijzig-pagina, scrape de
-    spelers, navigeer terug. NIET op Bevestig/OK klikken — dat zou ETV
+    spelers, navigeer terug. NIET op Bevestig/OK klikken â€” dat zou ETV
     de reservering opnieuw laten opslaan met mogelijke side-effects.
 
     Werkwijze:
-      1. driver.get(wijzigUrl) — leidt naar ReservationsConfirm of
+      1. driver.get(wijzigUrl) â€” leidt naar ReservationsConfirm of
          vergelijkbare detail-pagina met de bestaande spelers ingevuld
       2. Wacht kort op DOM
       3. Probeer spelers te vinden via:
@@ -328,15 +328,15 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
          b. .player-row, .deelnemer-naam, vergelijkbare class-names
          c. Tabel-rijen met 'speler' / 'partner' label
       4. Sla op in r['spelers'] (lijst van strings, EXCL. de eigenaar Joris)
-      5. driver.get(/mijn/Reservations) om terug te keren — schoner dan
+      5. driver.get(/mijn/Reservations) om terug te keren â€” schoner dan
          driver.back() (cache-gerelateerde gotchas)
 
     Bij faal: r['spelers'] blijft leeg/ontbrekend. PWA toont dan
-    alleen de baan — graceful degradation, geen crash.
+    alleen de baan â€” graceful degradation, geen crash.
     """
     if not reserveringen:
         return reserveringen
-    log.info(f"🔍 Spelers ophalen via Wijzig-flow voor {len(reserveringen)} reservering(en)...")
+    log.info(f"ðŸ” Spelers ophalen via Wijzig-flow voor {len(reserveringen)} reservering(en)...")
 
     for idx, r in enumerate(reserveringen, start=1):
         rid = r.get('id', '?')
@@ -354,13 +354,13 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
 
         if not reservation_id:
             tr_html_snippet = (r.get('_trHtml') or '')[:600]
-            log.info(f"  [{idx}] {rid}: geen ReservationId in tr → skip. tr-HTML (600): {tr_html_snippet}")
+            log.info(f"  [{idx}] {rid}: geen ReservationId in tr â†’ skip. tr-HTML (600): {tr_html_snippet}")
             continue
 
         # Submit het EditReservation-form direct via JS. Werkt rond
         # type="button" + jQuery-event-delegation door form.submit() te
         # forceren met de hidden ReservationId + CSRF-token uit DOM.
-        # POST naar /me/EditReservation → server stuurt redirect naar
+        # POST naar /me/EditReservation â†’ server stuurt redirect naar
         # de wijzig-pagina met spelers ingevuld.
         log.info(f"  [{idx}] {rid}: submit EditReservation form (id={reservation_id})")
         try:
@@ -376,7 +376,7 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
                 }
                 return 'form-not-found';
             """, reservation_id)
-            log.info(f"      JS form.submit() → {submit_result}")
+            log.info(f"      JS form.submit() â†’ {submit_result}")
             if submit_result != 'submitted':
                 continue
         except Exception as e:
@@ -397,7 +397,7 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
                     resultaat.debug.modalHtml600 = modal.outerHTML.slice(0, 600);
                 }
 
-                // Primaire route: #youPlayWith — zelfde structuur als de
+                // Primaire route: #youPlayWith â€” zelfde structuur als de
                 // bevestig-stap bij een nieuwe boeking
                 var ypw = document.getElementById('youPlayWith');
                 if (ypw) {
@@ -431,7 +431,7 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
             """)
 
             medespelers = spelers_info.get('medespelers', []) if spelers_info else []
-            log.info(f"      → debug: {spelers_info.get('debug') if spelers_info else 'no-result'}")
+            log.info(f"      â†’ debug: {spelers_info.get('debug') if spelers_info else 'no-result'}")
 
             if medespelers:
                 # Dedup (in geval een speler dubbel matched op meerdere selectors)
@@ -442,11 +442,11 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
                         seen.add(naam)
                         unieke.append(naam)
                 r['spelers'] = unieke
-                log.info(f"      ✅ Spelers: {unieke}")
+                log.info(f"      âœ… Spelers: {unieke}")
             else:
-                log.info(f"      ⚠️ Geen spelers gevonden — PWA toont alleen baan")
+                log.info(f"      âš ï¸ Geen spelers gevonden â€” PWA toont alleen baan")
         except Exception as e:
-            log.warning(f"  [{idx}] {rid}: spelers-scrape faalde ({e}) — skip")
+            log.warning(f"  [{idx}] {rid}: spelers-scrape faalde ({e}) â€” skip")
 
     # Terug naar de overzichtspagina (cleaner dan driver.back())
     try:
@@ -467,7 +467,7 @@ def annuleer(driver, target_id: str) -> bool:
     # Parse target_id terug naar datum/tijd
     m = re.match(r"(\d{4}-\d{2}-\d{2})_(\d{4})_", target_id)
     if not m:
-        log.error(f"❌ Ongeldige ID: {target_id}")
+        log.error(f"âŒ Ongeldige ID: {target_id}")
         return False
     doel_datum = m.group(1)
     doel_tijd  = f"{m.group(2)[:2]}:{m.group(2)[2:]}"
@@ -484,7 +484,7 @@ def annuleer(driver, target_id: str) -> bool:
             log.info(f"Reservering lijkt zichtbaar op {url}")
             break
     else:
-        log.warning("Reservering niet zichtbaar op een van de URLs — mogelijk al geannuleerd")
+        log.warning("Reservering niet zichtbaar op een van de URLs â€” mogelijk al geannuleerd")
         return True
 
     # Zoek cancel-knop binnen rij/container die datum+tijd bevat
@@ -518,14 +518,14 @@ def annuleer(driver, target_id: str) -> bool:
     """, doel_datum, doel_tijd)
 
     if not gelukt:
-        log.error(f"❌ Geen annuleer-knop gevonden voor {doel_datum} {doel_tijd}")
+        log.error(f"âŒ Geen annuleer-knop gevonden voor {doel_datum} {doel_tijd}")
         screenshot(driver, "annuleer_geen_knop")
         return False
 
     log.info(f"Cancel-knop {gelukt}")
     time.sleep(2)
 
-    # ETV kan een bevestigingsdialoog tonen — klik 'Ja'/'Bevestig'
+    # ETV kan een bevestigingsdialoog tonen â€” klik 'Ja'/'Bevestig'
     try:
         for xpath in [
             "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'ja')]",
@@ -561,16 +561,16 @@ def annuleer(driver, target_id: str) -> bool:
         body_na = ""
     weg = (doel_datum not in body_na) and (doel_tijd not in body_na)
     if weg:
-        log.info(f"✅ Reservering {target_id} succesvol geannuleerd")
+        log.info(f"âœ… Reservering {target_id} succesvol geannuleerd")
     else:
-        log.warning(f"⚠️ Reservering {target_id} mogelijk nog aanwezig (datum/tijd nog zichtbaar)")
+        log.warning(f"âš ï¸ Reservering {target_id} mogelijk nog aanwezig (datum/tijd nog zichtbaar)")
     return weg
 
 
 def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
     """Verwijder de matching Padel-event uit Google Agenda voor (datum, tijd)."""
     if not GOOGLE_CREDENTIALS:
-        log.warning("⚠️ GOOGLE_CALENDAR_CREDENTIALS niet ingesteld — agenda-verwijdering overgeslagen")
+        log.warning("âš ï¸ GOOGLE_CALENDAR_CREDENTIALS niet ingesteld â€” agenda-verwijdering overgeslagen")
         return False
     try:
         from datetime import timedelta
@@ -591,7 +591,7 @@ def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
             tz_nl = ZoneInfo("Europe/Amsterdam")
             start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M").replace(tzinfo=tz_nl)
         except ImportError:
-            # Fallback voor Python <3.9 — bepaal CEST/CET via maand
+            # Fallback voor Python <3.9 â€” bepaal CEST/CET via maand
             start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M")
             offset = "+02:00" if 4 <= start_dt.month <= 10 else "+01:00"
             tz_offset_str = offset
@@ -600,7 +600,7 @@ def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
         time_min = (start_dt - timedelta(hours=1)).isoformat()
         time_max = (start_dt + timedelta(hours=2)).isoformat()
         if not time_min.endswith(('Z', '+01:00', '+02:00', '-01:00', '-02:00')) and 'T' in time_min:
-            # Fallback-pad zonder zoneinfo — voeg expliciete offset toe
+            # Fallback-pad zonder zoneinfo â€” voeg expliciete offset toe
             time_min += tz_offset_str
             time_max += tz_offset_str
 
@@ -612,7 +612,7 @@ def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
             singleEvents=True,
         ).execute()
         events = events_result.get('items', [])
-        log.info(f"  Agenda-zoekvenster {time_min} → {time_max}: {len(events)} 'Padel'-event(s) gevonden")
+        log.info(f"  Agenda-zoekvenster {time_min} â†’ {time_max}: {len(events)} 'Padel'-event(s) gevonden")
 
         # Match op datum+tijd substring (zonder timezone)
         target_dt_local = start_dt.strftime("%Y-%m-%dT%H:%M")
@@ -630,18 +630,18 @@ def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
                 verwijderd += 1
 
         if verwijderd > 0:
-            log.info(f"✅ {verwijderd} agenda-event(s) verwijderd")
+            log.info(f"âœ… {verwijderd} agenda-event(s) verwijderd")
             return True
-        log.warning(f"⚠️ Geen matching Padel-event in agenda voor {datum} {tijd}")
+        log.warning(f"âš ï¸ Geen matching Padel-event in agenda voor {datum} {tijd}")
         return False
     except ImportError:
-        log.error("❌ google-api-python-client niet geïnstalleerd")
+        log.error("âŒ google-api-python-client niet geÃ¯nstalleerd")
         return False
     except json.JSONDecodeError:
-        log.error("❌ GOOGLE_CALENDAR_CREDENTIALS is geen geldig JSON")
+        log.error("âŒ GOOGLE_CALENDAR_CREDENTIALS is geen geldig JSON")
         return False
     except Exception as e:
-        log.error(f"❌ Agenda-verwijdering mislukt: {e}")
+        log.error(f"âŒ Agenda-verwijdering mislukt: {e}")
         return False
 
 
@@ -655,7 +655,7 @@ def commit_en_push(bestanden: list, message: str):
         # Check of er iets te committen valt
         result = subprocess.run(["git", "diff", "--cached", "--quiet"])
         if result.returncode == 0:
-            log.info("Geen wijzigingen — niets te committen")
+            log.info("Geen wijzigingen â€” niets te committen")
             return True
         subprocess.run(["git", "commit", "-m", message], check=True)
     except subprocess.CalledProcessError as e:
@@ -683,9 +683,9 @@ def commit_en_push(bestanden: list, message: str):
                                check=False)
 
         if subprocess.run(["git", "push"]).returncode == 0:
-            log.info(f"✅ Gecommit en gepusht (poging {poging})")
+            log.info(f"âœ… Gecommit en gepusht (poging {poging})")
             return True
-        log.warning(f"Push poging {poging} mislukt — retry na {poging}s")
+        log.warning(f"Push poging {poging} mislukt â€” retry na {poging}s")
         time.sleep(poging)
     return False
 
@@ -693,7 +693,7 @@ def commit_en_push(bestanden: list, message: str):
 def ruim_wachtrij_op(reserveringen: list) -> list:
     """
     Verwijder wachtrij-items waarvan datum + tijd al in de gescrapete
-    reserveringen staan — de boeking is kennelijk geslaagd.
+    reserveringen staan â€” de boeking is kennelijk geslaagd.
     Returnt lijst van verwijderde bestandspaden (voor commit).
     """
     import glob
@@ -713,9 +713,9 @@ def ruim_wachtrij_op(reserveringen: list) -> list:
         if (datum, tijd) in geboekte_slots:
             os.remove(f)
             verwijderd.append(f)
-            log.info(f"✅ Wachtrij opgeruimd: {f} ({datum} {tijd} staat al in reserveringen)")
+            log.info(f"âœ… Wachtrij opgeruimd: {f} ({datum} {tijd} staat al in reserveringen)")
         else:
-            log.info(f"⏭️  Wachtrij bewaard: {f} ({datum} {tijd} nog niet in reserveringen)")
+            log.info(f"â­ï¸  Wachtrij bewaard: {f} ({datum} {tijd} nog niet in reserveringen)")
     return verwijderd
 
 
@@ -725,7 +725,7 @@ def main():
     args = parser.parse_args()
 
     if not BONDSNUMMER or not WACHTWOORD:
-        log.error("❌ Stel KNLTB_BONDSNUMMER en KNLTB_WACHTWOORD in als GitHub Secrets")
+        log.error("âŒ Stel ETVVOLLEY_BONDSNUMMER en ETVVOLLEY_WACHTWOORD in als GitHub Secrets")
         sys.exit(1)
 
     driver = maak_driver()
@@ -736,7 +736,7 @@ def main():
         if args.cancel:
             etv_ok = annuleer(driver, args.cancel)
             if not etv_ok:
-                log.error("❌ Annuleren op ETV-site mislukt")
+                log.error("âŒ Annuleren op ETV-site mislukt")
             # Ook agenda-event verwijderen (zelfs als ETV-cancel mislukte, beter
             # een lege agenda dan een spookafspraak)
             m = re.match(r"(\d{4}-\d{2}-\d{2})_(\d{4})_", args.cancel)
@@ -746,12 +746,12 @@ def main():
         reserveringen = scrape_reserveringen(driver)
 
         # Per reservering de spelers ophalen via de Wijzig-flow.
-        # Best-effort: faalt voor één item ⇒ blijft 'spelers' weg ⇒ PWA
+        # Best-effort: faalt voor Ã©Ã©n item â‡’ blijft 'spelers' weg â‡’ PWA
         # toont alleen de baan (graceful degradation).
         reserveringen = scrape_spelers_per_reservering(driver, reserveringen)
 
         # Diagnose-velden (beginnen met '_') strippen voor we naar JSON
-        # schrijven — die zijn alleen voor de scrape zelf bedoeld.
+        # schrijven â€” die zijn alleen voor de scrape zelf bedoeld.
         for r in reserveringen:
             for k in [k for k in r if k.startswith('_')]:
                 del r[k]
@@ -763,7 +763,7 @@ def main():
                 "reserveringen": reserveringen,
             }, fh, ensure_ascii=False, indent=2)
             fh.write("\n")
-        log.info(f"📄 reserveringen.json geschreven ({len(reserveringen)} items)")
+        log.info(f"ðŸ“„ reserveringen.json geschreven ({len(reserveringen)} items)")
 
         verwijderde_wachtrij = ruim_wachtrij_op(reserveringen)
 
@@ -778,9 +778,10 @@ def main():
         te_committen,
         f"reserveringen: {actie} ({len(reserveringen)} actief)"
     ):
-        log.error("❌ commit/push mislukt")
+        log.error("âŒ commit/push mislukt")
         sys.exit(1)
 
 
 if __name__ == "__main__":
     main()
+

@@ -1,11 +1,11 @@
-"""
+﻿"""
 Haal padel speelsterktes op van mijnknltb.toernooi.nl en voeg toe aan leden.json.
 
 Strategie:
 - Geen Selenium nodig: mijnknltb.toernooi.nl heeft geen Cloudflare-bescherming.
 - requests.Session + CSRF-token voor login
-- GET /find/player/DoSearch?Query={bondsnummer} → player-profile link
-- GET /player-profile/{guid} → padel sterkte uit server-rendered HTML
+- GET /find/player/DoSearch?Query={bondsnummer} â†’ player-profile link
+- GET /player-profile/{guid} â†’ padel sterkte uit server-rendered HTML
 """
 
 import os, sys, json, re, logging
@@ -16,8 +16,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 MIJNKNLTB_URL = "https://mijnknltb.toernooi.nl"
-GEBRUIKERSNAAM = os.environ.get("KNLTB_USERNAME", "")
-WACHTWOORD     = os.environ.get("KNLTB_WACHTWOORD", "")
+BONDSNUMMER = os.environ.get("ETVVOLLEY_BONDSNUMMER", "")
+WACHTWOORD     = os.environ.get("ETVVOLLEY_WACHTWOORD", "")
 MAX_LEDEN     = int(os.environ.get("MAX_LEDEN", "0") or "0")
 
 HEADERS = {
@@ -48,7 +48,7 @@ def accepteer_cookiewall(session: requests.Session) -> None:
         log.info("Geen cookie wall aangetroffen")
         return
 
-    log.info("Cookie wall gevonden — accepteren...")
+    log.info("Cookie wall gevonden â€” accepteren...")
 
     # Zoek form action en CSRF token in de cookie wall
     action_m = re.search(r'<form[^>]+action="([^"]*cookiewall[^"]*)"', r.text, re.I)
@@ -84,7 +84,7 @@ def login(session: requests.Session) -> bool:
 
     # Als we nog steeds op de cookie wall zitten, harder accepteren
     if "cookiewall" in r.url.lower():
-        log.warning("Cookie wall nog steeds actief — probeer via GET-parameter")
+        log.warning("Cookie wall nog steeds actief â€” probeer via GET-parameter")
         session.get(f"{MIJNKNLTB_URL}/cookiewall",
                     params={"returnurl": "/user/login", "accept": "true"},
                     timeout=10)
@@ -103,7 +103,7 @@ def login(session: requests.Session) -> bool:
         m = re.search(r'value="([^"]+)"[^>]*name="__RequestVerificationToken"', r.text)
     token = m.group(1) if m else ""
     if not token:
-        log.warning("Geen CSRF-token gevonden — toch proberen")
+        log.warning("Geen CSRF-token gevonden â€” toch proberen")
         snippet = re.sub(r'\s+', ' ', r.text)[:400]
         log.warning(f"Pagina snippet: {snippet!r}")
     else:
@@ -127,12 +127,12 @@ def login(session: requests.Session) -> bool:
     return_url_m = re.search(r'name="ReturnUrl"[^>]*value="([^"]*)"', r.text, re.I)
     return_url = return_url_m.group(1) if return_url_m else ""
 
-    log.info(f"POST login als gebruiker {GEBRUIKERSNAAM[:4]}*** (len={len(GEBRUIKERSNAAM)}), "
+    log.info(f"POST login als gebruiker {BONDSNUMMER[:4]}*** (len={len(BONDSNUMMER)}), "
              f"wachtwoord len={len(WACHTWOORD)}, ReturnUrl={return_url!r}...")
     r = session.post(
         f"{MIJNKNLTB_URL}/user/login",
         data={
-            "Login": GEBRUIKERSNAAM,
+            "Login": BONDSNUMMER,
             "Password": WACHTWOORD,
             "__RequestVerificationToken": token,
             "ReturnUrl": return_url,
@@ -236,7 +236,7 @@ def haal_padel_sterkte_van_profiel(session: requests.Session, profiel_url: str,
         if m:
             sterkte = re.sub(r'<[^>]+>', '', m.group(1)).strip()
             rating  = m.group(2).strip()
-            log.info(f"  ✅ {bondsnummer}: sterkte={sterkte!r}, rating={rating!r}")
+            log.info(f"  âœ… {bondsnummer}: sterkte={sterkte!r}, rating={rating!r}")
             return {"sterkte": sterkte, "rating": rating}
 
         log.info(f"  Geen Padel Dubbel rating voor {bondsnummer}")
@@ -247,16 +247,16 @@ def haal_padel_sterkte_van_profiel(session: requests.Session, profiel_url: str,
 
 
 def haal_padel_sterkte(session: requests.Session, bondsnummer: str, idx: int = 0) -> dict:
-    """Volledig ophaalproces voor één lid. Geeft {'sterkte':..., 'rating':...} of {}."""
+    """Volledig ophaalproces voor Ã©Ã©n lid. Geeft {'sterkte':..., 'rating':...} of {}."""
 
     # Stap 1: zoek profiel-URL
     profiel_url = zoek_profiel_url(session, bondsnummer)
     if profiel_url is None:
-        # Sessie mogelijk verlopen — herstellen en opnieuw proberen
+        # Sessie mogelijk verlopen â€” herstellen en opnieuw proberen
         if herstel_sessie(session):
             profiel_url = zoek_profiel_url(session, bondsnummer)
     if not profiel_url:
-        log.warning(f"  ❌ Geen profiel gevonden voor {bondsnummer}")
+        log.warning(f"  âŒ Geen profiel gevonden voor {bondsnummer}")
         return {}
 
     # Stap 2: haal sterkte op van profielpagina
@@ -269,8 +269,8 @@ def haal_padel_sterkte(session: requests.Session, bondsnummer: str, idx: int = 0
 
 
 def main():
-    if not GEBRUIKERSNAAM or not WACHTWOORD:
-        log.error("Stel KNLTB_USERNAME en KNLTB_WACHTWOORD in als GitHub Secrets")
+    if not BONDSNUMMER or not WACHTWOORD:
+        log.error("Stel ETVVOLLEY_BONDSNUMMER en ETVVOLLEY_WACHTWOORD in als GitHub Secrets")
         sys.exit(1)
 
     try:
@@ -294,7 +294,7 @@ def main():
 
     session = maak_sessie()
     if not login(session):
-        log.error("Login mislukt — script stopt")
+        log.error("Login mislukt â€” script stopt")
         sys.exit(1)
 
     # Elke 100 leden sessie controleren en zonodig herstellen
@@ -324,3 +324,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

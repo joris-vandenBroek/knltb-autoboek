@@ -1,4 +1,4 @@
-name: Reserveer Padelbaan
+﻿name: Reserveer Padelbaan
 
 on:
   workflow_dispatch:
@@ -29,7 +29,7 @@ on:
 
 # Voorkom dat parallelle PWA-taps of cron + handmatige retry twee Selenium-
 # sessies tegen hetzelfde ETV-account aanjagen (race op reserveringen.json
-# commit + ETV "1 actieve reservering"-rule). Groep is per-user — bij
+# commit + ETV "1 actieve reservering"-rule). Groep is per-user â€” bij
 # toekomstige multi-user wordt 'joris' parameterized.
 concurrency:
   group: knltb-account-joris
@@ -61,8 +61,8 @@ jobs:
       - name: Reserveer baan
         env:
           DISPLAY:                      :99
-          KNLTB_BONDSNUMMER:            ${{ secrets.KNLTB_BONDSNUMMER }}
-          KNLTB_WACHTWOORD:             ${{ secrets.KNLTB_WACHTWOORD }}
+          ETVVOLLEY_BONDSNUMMER:            ${{ secrets.ETVVOLLEY_BONDSNUMMER }}
+          ETVVOLLEY_WACHTWOORD:             ${{ secrets.ETVVOLLEY_WACHTWOORD }}
           GOOGLE_CALENDAR_CREDENTIALS:  ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
           GOOGLE_CALENDAR_ID:           ${{ secrets.GOOGLE_CALENDAR_ID }}
         run: |
@@ -85,11 +85,11 @@ jobs:
         run: |
           # Direct na een succesvolle boeking trigger beheer_reserveringen
           # zodat reserveringen.json bijgewerkt wordt (incl. spelers via
-          # Wijzig-flow scrape). PWA polled vervolgens automatisch — geen
+          # Wijzig-flow scrape). PWA polled vervolgens automatisch â€” geen
           # handmatige Verversen-klik meer nodig.
           # Concurrency-group serialiseert deze met andere account-runs.
           gh workflow run beheer_reserveringen.yml --ref main || \
-            echo "::warning::beheer_reserveringen trigger faalde — verversen-knop in PWA is fallback"
+            echo "::warning::beheer_reserveringen trigger faalde â€” verversen-knop in PWA is fallback"
 
       - name: Screenshots bij fout
         if: failure()
@@ -105,9 +105,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          titel="❌ boek.yml faalt: ${{ inputs.datum }} ${{ inputs.tijd }} (run #${{ github.run_number }})"
+          titel="âŒ boek.yml faalt: ${{ inputs.datum }} ${{ inputs.tijd }} (run #${{ github.run_number }})"
           body=$(cat <<EOF
-          Run faalde — automatisch gemeld door boek.yml.
+          Run faalde â€” automatisch gemeld door boek.yml.
 
           - **Speeldatum:** ${{ inputs.datum }}
           - **Tijd:** ${{ inputs.tijd }}
@@ -120,3 +120,4 @@ jobs:
           )
           gh issue create --title "$titel" --body "$body" --label "auto-failure,boek" || \
             gh issue create --title "$titel" --body "$body"
+
