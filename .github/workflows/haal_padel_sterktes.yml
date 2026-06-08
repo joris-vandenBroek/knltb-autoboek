@@ -5,6 +5,11 @@ name: Padel speelsterktes ophalen
 
 on:
   workflow_dispatch:
+    inputs:
+      max_leden:
+        description: 'Max aantal leden verwerken (0 = allemaal)'
+        required: false
+        default: '0'
 
 jobs:
   haal-padel-sterktes:
@@ -30,6 +35,7 @@ jobs:
           DISPLAY: :99
           KNLTB_BONDSNUMMER: ${{ secrets.KNLTB_BONDSNUMMER }}
           KNLTB_WACHTWOORD:  ${{ secrets.KNLTB_WACHTWOORD }}
+          MAX_LEDEN:         ${{ github.event.inputs.max_leden || '0' }}
         run: |
           Xvfb :99 -screen 0 1280x900x24 &
           sleep 2

@@ -23,6 +23,7 @@ log = logging.getLogger(__name__)
 MIJNKNLTB_URL = "https://mijnknltb.toernooi.nl"
 BONDSNUMMER   = os.environ.get("KNLTB_BONDSNUMMER", "")
 WACHTWOORD    = os.environ.get("KNLTB_WACHTWOORD", "")
+MAX_LEDEN     = int(os.environ.get("MAX_LEDEN", "0") or "0")
 
 
 def screenshot(driver, naam):
@@ -208,8 +209,12 @@ def main():
         for item in leden_lijst
     ]
 
+    if MAX_LEDEN > 0:
+        log.info(f"MAX_LEDEN={MAX_LEDEN} — verwerk alleen eerste {MAX_LEDEN} leden")
+        leden_lijst = leden_lijst[:MAX_LEDEN]
+
     met_bondsnummer = [l for l in leden_lijst if l.get('bondsnummer', '').strip()]
-    log.info(f"{len(leden_lijst)} leden, {len(met_bondsnummer)} met bondsnummer")
+    log.info(f"{len(leden_lijst)} leden te verwerken, {len(met_bondsnummer)} met bondsnummer")
 
     driver = maak_driver()
     try:
