@@ -57,10 +57,11 @@ jobs:
           echo "❌ Push faalde na 5 pogingen"
           exit 1
 
-      - name: Screenshots bij fout
-        if: failure()
+      - name: Screenshots uploaden (altijd, voor diagnose)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: padel-sterktes-screenshots
           path: '*.png'
+          if-no-files-found: ignore
           retention-days: 3

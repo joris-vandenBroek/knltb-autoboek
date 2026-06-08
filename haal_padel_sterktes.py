@@ -104,43 +104,71 @@ def login_mijnknltb(driver) -> bool:
         return False
 
 
-def haal_padel_sterkte(driver, bondsnummer: str) -> dict:
+def haal_padel_sterkte(driver, bondsnummer: str, idx: int = 0) -> dict:
     """
     Zoek spelersprofiel via bondsnummer op mijnknltb.toernooi.nl.
     Geeft {'sterkte': '7', 'rating': '7,32'} of {} bij mislukking.
+    idx wordt gebruikt voor unieke screenshot-namen.
     """
     url = f"{MIJNKNLTB_URL}/find/player?q={bondsnummer}"
+    log.info(f"  → GET {url}")
     driver.get(url)
 
-    # Wacht tot zoekresultaten geladen zijn (max 5s)
+    # Wacht tot zoekresultaten geladen zijn (max 8s)
     try:
-        WebDriverWait(driver, 5).until(
+        WebDriverWait(driver, 8).until(
             lambda d: len(d.find_elements(
                 By.XPATH,
                 "//a[contains(@href,'player-profile') and not(normalize-space(.)='Mijn profiel')]"
             )) > 0
         )
+        log.info(f"  Zoekresultaat geladen: {driver.current_url}")
     except Exception:
-        pass  # Geen resultaat — hieronder checken
+        log.warning(f"  Timeout wachten op profiellink voor {bondsnummer}")
+
+    screenshot(driver, f"s{idx:04d}_zoek_{bondsnummer}")
+
+    # Log paginatekst voor diagnose
+    page_snippet = driver.execute_script(
+        "return document.body ? document.body.innerText.slice(0, 300) : 'geen body'"
+    )
+    log.info(f"  Paginatekst: {page_snippet!r}")
 
     profiel_links = driver.find_elements(
         By.XPATH,
         "//a[contains(@href,'player-profile') and not(normalize-space(.)='Mijn profiel')]"
     )
+    log.info(f"  Profiellinks gevonden: {len(profiel_links)}")
+
     if not profiel_links:
-        log.info(f"  Geen profiel gevonden voor {bondsnummer}")
+        log.warning(f"  ❌ Geen profiel voor {bondsnummer} (url={driver.current_url})")
         return {}
 
     profiel_url = profiel_links[0].get_attribute("href")
+    log.info(f"  → Profiel: {profiel_url}")
     driver.get(profiel_url)
 
-    # Wacht op padel sterkte element
+    # Wacht op padel sterkte element (max 8s)
     try:
-        WebDriverWait(driver, 5).until(
+        WebDriverWait(driver, 8).until(
             lambda d: d.find_element(By.CSS_SELECTOR, 'span[title="Padel Dubbel"]')
         )
+        log.info(f"  Padel Dubbel element gevonden")
     except Exception:
-        pass
+        log.warning(f"  Timeout wachten op 'Padel Dubbel' element")
+
+    screenshot(driver, f"s{idx:04d}_profiel_{bondsnummer}")
+
+    # Log alle tag-duo elementen voor diagnose
+    tags = driver.execute_script("""
+        var tags = [];
+        document.querySelectorAll('span[title]').forEach(function(el) {
+            var title = el.getAttribute('title');
+            if (title) tags.push({title: title, text: el.innerText});
+        });
+        return tags;
+    """) or []
+    log.info(f"  Gevonden title-spans: {tags}")
 
     result = driver.execute_script("""
         var el = document.querySelector('span[title="Padel Dubbel"]');
@@ -157,8 +185,7 @@ def haal_padel_sterkte(driver, bondsnummer: str) -> dict:
         log.info(f"  ✅ {bondsnummer}: sterkte={result['sterkte']}, rating={result['rating']}")
         return result
 
-    log.info(f"  ⚠️  {bondsnummer}: geen padel sterkte op {profiel_url}")
-    screenshot(driver, f"geen_sterkte_{bondsnummer}")
+    log.warning(f"  ⚠️  {bondsnummer}: geen padel sterkte gevonden")
     return {}
 
 
@@ -199,7 +226,7 @@ def main():
                 continue
 
             log.info(f"[{i+1}/{len(leden_lijst)}] {lid['naam']} ({bnr})")
-            data = haal_padel_sterkte(driver, bnr)
+            data = haal_padel_sterkte(driver, bnr, idx=i)
             lid['sterkte_padel'] = data.get('sterkte', '')
             lid['rating_padel']  = data.get('rating', '')
 
