@@ -650,10 +650,7 @@
 
 <!-- ── Mijn reserveringen ──────────────────────────────────── -->
 <div class="card">
-  <div class="card-header-row">
-    <div class="card-header">📅 Mijn reserveringen</div>
-    <button class="btn-refresh-mini" id="reservVerversBtn" onclick="verversReserveringen()">🔄&nbsp;Verversen</button>
-  </div>
+  <div class="card-header">📅 Mijn reserveringen</div>
   <div class="wachtrij-list" id="reservList">
     <div class="wachtrij-leeg">Reserveringen laden…</div>
   </div>
@@ -661,10 +658,7 @@
 
 <!-- ── Ingeplande reserveringen (wachtrij) ──────────────── -->
 <div class="card">
-  <div class="card-header-row">
-    <div class="card-header">🕒 Ingeplande reserveringen</div>
-    <button class="btn-refresh-mini" id="wachtrijVerversBtn" onclick="laadWachtrij(true)">🔄&nbsp;Verversen</button>
-  </div>
+  <div class="card-header">🕒 Ingeplande reserveringen</div>
   <div class="wachtrij-list" id="wachtrijList">
     <div class="wachtrij-leeg">Wachtrij laden…</div>
   </div>
@@ -943,10 +937,9 @@
     );
   }
 
-  async function laadWachtrij(handmatig) {
+  async function laadWachtrij() {
     const lijst = document.getElementById('wachtrijList');
-    const btn   = document.getElementById('wachtrijVerversBtn');
-    if (handmatig && btn) { btn.disabled = true; btn.textContent = '⏳…'; }
+    const bijTekst = () => `<div class="reserv-footer">Bijgewerkt: ${formatDDMMYYYY_HHMM(new Date().toISOString())}</div>`;
     try {
       // Gebruik authenticated request bij beschikbaar PAT — voorkomt
       // GitHub's unauthenticated rate-limit (60/uur per IP) die anders
@@ -957,18 +950,18 @@
         : { 'Accept': 'application/vnd.github+json' };
       const r = await fetch(WACHTRIJ_API + '?t=' + Date.now(), { headers });
       if (r.status === 404) {
-        lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>';
+        lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>' + bijTekst();
         return;
       }
       if (!r.ok) {
         const hint = r.status === 403 ? ' (rate-limit — zet je PAT in via ⚙️ of wacht een uur)' : '';
-        lijst.innerHTML = `<div class="wachtrij-leeg">Kon wachtrij niet laden (HTTP ${r.status})${hint}</div>`;
+        lijst.innerHTML = `<div class="wachtrij-leeg">Kon wachtrij niet laden (HTTP ${r.status})${hint}</div>` + bijTekst();
         return;
       }
       const files = await r.json();
       const json = files.filter(f => f.name.endsWith('.json') && f.name !== '.gitkeep');
       if (json.length === 0) {
-        lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>';
+        lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>' + bijTekst();
         return;
       }
       const entries = await Promise.all(json.map(async f => {
@@ -982,7 +975,7 @@
         e && e.content && e.content.datum && e.content.tijd && Array.isArray(e.content.spelers)
       );
       if (geldig.length === 0) {
-        lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>';
+        lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>' + bijTekst();
         return;
       }
       geldig.sort((a, b) =>
@@ -1033,14 +1026,10 @@
             <button class="wachtrij-del" title="Verwijder deze ingeplande reservering"
                     onclick="verwijderWachtrij(this,'${path}','${sha}')">🗑️</button>
           </div>`;
-      }).join('') +
-      `<div class="reserv-footer">Bijgewerkt: ${formatDDMMYYYY_HHMM(new Date().toISOString())}</div>`;
+      }).join('') + bijTekst();
     } catch (e) {
-      lijst.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>';
-    } finally {
-      if (handmatig && btn) { btn.disabled = false; btn.textContent = '🔄 Verversen'; }
+      lijst.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>' + bijTekst();
     }
-  }
 
   async function verwijderWachtrij(btn, path, sha) {
     const pat = getPat();
@@ -1248,36 +1237,6 @@
     }
   }
 
-  async function verversReserveringen() {
-    const pat = getPat();
-    if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
-    const btn = document.getElementById('reservVerversBtn');
-    btn.disabled = true;
-    btn.textContent = '⏳…';
-    try {
-      const r = await fetch(
-        `https://api.github.com/repos/${REPO}/actions/workflows/${BEHEER_WORKFLOW}/dispatches`,
-        { method: 'POST',
-          headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
-                     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ref: 'main', inputs: { cancel_id: '' } }) }
-      );
-      if (r.status === 204) {
-        toonToast('success', '🔄 Reserveringen worden opgehaald (~1.5 min).\nLijst ververst zelf zodra klaar.');
-        // Probeer 4× met oplopende interval te herladen
-        setTimeout(laadReserveringen, 90000);
-        setTimeout(laadReserveringen, 120000);
-        setTimeout(laadReserveringen, 150000);
-        setTimeout(laadReserveringen, 180000);
-      } else {
-        toonToast('error', `❌ Workflow-trigger faalde (${r.status})`);
-      }
-    } catch (e) {
-      toonToast('error', `❌ Netwerkfout: ${e.message}`);
-    }
-    btn.disabled = false;
-    btn.textContent = '🔄 Verversen';
-  }
 
   async function annuleerReservering(btn, id, datum, tijd) {
     const pat = getPat();
@@ -1305,8 +1264,7 @@
           item.style.pointerEvents = 'none';
           setTimeout(() => item.remove(), 400);
         }
-        // Polling tot verse data binnen is (beheer ~90s + jitter)
-        [90, 120, 150, 180, 210].forEach(s => setTimeout(laadReserveringen, s * 1000));
+        _startPollingNaBoek();
       } else {
         toonToast('error', `❌ Workflow-trigger faalde (${r.status})`);
         btn.disabled = false;
