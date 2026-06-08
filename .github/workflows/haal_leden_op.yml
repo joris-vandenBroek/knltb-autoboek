@@ -41,21 +41,20 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add leden.json
           if git diff --cached --quiet; then
-            echo "Geen wijzigingen aan leden.json â€” niets te committen."
+            echo "Geen wijzigingen aan leden.json -- niets te committen."
             exit 0
           fi
           git commit -m "Ledenlijst bijgewerkt"
-          # Retry-lus voor race condities met andere bots/commits op main.
           for i in 1 2 3 4 5; do
             git pull --rebase origin main || true
             if git push; then
-              echo "âœ… Push gelukt (poging $i)"
+              echo "Push gelukt (poging $i)"
               exit 0
             fi
-            echo "âš ï¸  Push poging $i mislukt â€” opnieuw na ${i}s"
+            echo "Push poging $i mislukt -- opnieuw na ${i}s"
             sleep "$i"
           done
-          echo "âŒ Push faalde na 5 pogingen"
+          echo "Push faalde na 5 pogingen"
           exit 1
 
       - name: Trigger haal_padel_sterktes.yml
@@ -64,7 +63,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run haal_padel_sterktes.yml --ref main
-          echo "âœ… haal_padel_sterktes.yml getriggerd"
+          echo "haal_padel_sterktes.yml getriggerd"
 
       - name: Screenshots bij fout
         if: failure()
@@ -73,4 +72,3 @@ jobs:
           name: leden-screenshots
           path: '*.png'
           retention-days: 3
-
