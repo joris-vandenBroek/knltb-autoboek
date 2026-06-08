@@ -1,4 +1,4 @@
-﻿name: Beheer Reserveringen
+name: Beheer Reserveringen
 
 # Workflow_dispatch met optionele cancel_id input.
 # - Zonder cancel_id: scrape reserveringen en update reserveringen.json

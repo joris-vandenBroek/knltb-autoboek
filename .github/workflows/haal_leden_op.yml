@@ -1,4 +1,4 @@
-﻿name: Ledenlijst ophalen
+name: Ledenlijst ophalen
 
 on:
   workflow_dispatch:

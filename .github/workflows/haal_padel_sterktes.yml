@@ -1,4 +1,4 @@
-﻿name: Padel speelsterktes ophalen
+name: Padel speelsterktes ophalen
 
 on:
   workflow_dispatch:
