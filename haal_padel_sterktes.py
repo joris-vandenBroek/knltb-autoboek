@@ -37,26 +37,79 @@ def maak_sessie() -> requests.Session:
     return s
 
 
+def accepteer_cookiewall(session: requests.Session) -> None:
+    """
+    Accepteer de cookie wall als die verschijnt.
+    De wall staat op /cookiewall en heeft een formulier met een 'Akkoord'-knop.
+    """
+    r = session.get(f"{MIJNKNLTB_URL}/cookiewall", timeout=15,
+                    params={"returnurl": "/user/login"})
+    if "cookiewall" not in r.url.lower():
+        log.info("Geen cookie wall aangetroffen")
+        return
+
+    log.info("Cookie wall gevonden — accepteren...")
+
+    # Zoek form action en CSRF token in de cookie wall
+    action_m = re.search(r'<form[^>]+action="([^"]*cookiewall[^"]*)"', r.text, re.I)
+    action = action_m.group(1) if action_m else "/cookiewall"
+    if not action.startswith("http"):
+        action = MIJNKNLTB_URL + action
+
+    token_m = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"', r.text)
+    token = token_m.group(1) if token_m else ""
+
+    # POST acceptatie (knop 'Akkoord')
+    session.post(
+        action,
+        data={
+            "__RequestVerificationToken": token,
+            "AcceptAll": "true",   # gangbare veldnaam voor 'Akkoord'
+            "returnUrl": "/user/login",
+        },
+        headers={"Referer": r.url},
+        timeout=15,
+        allow_redirects=True,
+    )
+    log.info("Cookie wall geaccepteerd")
+
+
 def login(session: requests.Session) -> bool:
     """Login op mijnknltb via requests. Geeft True als geslaagd."""
+    # Stap 0: accepteer eventuele cookie wall
+    accepteer_cookiewall(session)
+
     log.info("GET login-pagina voor CSRF-token...")
-    r = session.get(f"{MIJNKNLTB_URL}/user/login", timeout=20)
+    r = session.get(f"{MIJNKNLTB_URL}/user/login", timeout=20, allow_redirects=True)
+
+    # Als we nog steeds op de cookie wall zitten, harder accepteren
+    if "cookiewall" in r.url.lower():
+        log.warning("Cookie wall nog steeds actief — probeer via GET-parameter")
+        session.get(f"{MIJNKNLTB_URL}/cookiewall",
+                    params={"returnurl": "/user/login", "accept": "true"},
+                    timeout=10)
+        r = session.get(f"{MIJNKNLTB_URL}/user/login", timeout=20, allow_redirects=True)
+
     if r.status_code != 200:
-        log.error(f"Login-pagina niet bereikbaar: {r.status_code}")
+        log.error(f"Login-pagina niet bereikbaar: {r.status_code} {r.url}")
         return False
+
+    # Log waar we nu zijn
+    log.info(f"Login-pagina URL: {r.url}")
 
     # Extract __RequestVerificationToken
     m = re.search(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"', r.text)
     if not m:
-        # Probeer alternatieve positie
         m = re.search(r'value="([^"]+)"[^>]*name="__RequestVerificationToken"', r.text)
     token = m.group(1) if m else ""
     if not token:
         log.warning("Geen CSRF-token gevonden — toch proberen")
+        snippet = re.sub(r'\s+', ' ', r.text)[:400]
+        log.warning(f"Pagina snippet: {snippet!r}")
     else:
         log.info(f"CSRF-token gevonden (len={len(token)})")
 
-    log.info(f"POST login als bondsnummer {BONDSNUMMER}...")
+    log.info(f"POST login als bondsnummer {BONDSNUMMER[:4]}***...")
     r = session.post(
         f"{MIJNKNLTB_URL}/user/login",
         data={
@@ -69,10 +122,9 @@ def login(session: requests.Session) -> bool:
         allow_redirects=True,
     )
 
-    if "login" in r.url.lower():
+    if "login" in r.url.lower() or "cookiewall" in r.url.lower():
         log.error(f"Login mislukt: {r.url}")
-        # Log snippet voor diagnose
-        snippet = re.sub(r'\s+', ' ', r.text)[:300]
+        snippet = re.sub(r'\s+', ' ', r.text)[:400]
         log.error(f"Response snippet: {snippet!r}")
         return False
 
