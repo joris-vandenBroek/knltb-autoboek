@@ -1108,14 +1108,24 @@
         ? `${escapeHtml(baan)} <span class="reserv-met">— met ${escapeHtml(medespelers.join(', '))}</span>`
         : escapeHtml(baan);
 
+      // Annuleer-knop alleen tonen als Joris de organisator is (speler 1).
+      // rv.spelers bevat uitsluitend medespelers (speler 2-4), NIET de organisator.
+      // Als "Joris van den Broek" in rv.spelers staat, boekte iemand anders de baan
+      // en is Joris medespeler — hij mag die reservering dan niet annuleren.
+      const SPELER1_NAAM = 'Joris van den Broek';
+      const isOrganisator = !medespelers || !medespelers.includes(SPELER1_NAAM);
+      const delBtn = isOrganisator
+        ? `<button class="wachtrij-del" title="Annuleer deze reservering"
+                  onclick="annuleerReservering(this,'${id}','${escapeHtml(rv.datum)}','${escapeHtml(rv.tijd)}')">🗑️</button>`
+        : '';
+
       return `
         <div class="wachtrij-item">
           <div class="wachtrij-item-inhoud">
             <div class="wachtrij-datum">🎾 ${datum}</div>
             <div class="wachtrij-spelers">${baanRegel}</div>
           </div>
-          <button class="wachtrij-del" title="Annuleer deze reservering"
-                  onclick="annuleerReservering(this,'${id}','${escapeHtml(rv.datum)}','${escapeHtml(rv.tijd)}')">🗑️</button>
+          ${delBtn}
         </div>`;
     }).join('');
   }
