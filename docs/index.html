@@ -652,7 +652,10 @@
 
 <!-- ── Mijn reserveringen ──────────────────────────────────── -->
 <div class="card">
-  <div class="card-header">📅 Mijn reserveringen</div>
+  <div class="leden-row" style="padding: 18px 18px 0 22px;">
+    <div class="card-header" style="padding: 0; flex: 1;">📅 Mijn reserveringen</div>
+    <button class="btn-refresh-mini" id="verversReservBtn" onclick="verversReserveringen()">🔄&nbsp;Verversen</button>
+  </div>
   <div class="wachtrij-list" id="reservList">
     <div class="wachtrij-leeg">Reserveringen laden…</div>
   </div>
@@ -1200,6 +1203,36 @@
       if (Date.now() - start < 15 * 60 * 1000) setTimeout(poll, 30000);
     };
     setTimeout(poll, 60000);
+  }
+
+  /** Handmatige verversen-knop: triggert workflow en toont toast. */
+  async function verversReserveringen() {
+    const pat = getPat();
+    if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
+    const btn = document.getElementById('verversReservBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳…';
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/workflows/${BEHEER_WORKFLOW}/dispatches`,
+        { method: 'POST',
+          headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
+                     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref: 'main', inputs: { cancel_id: '' } }) }
+      );
+      if (r.status === 204) {
+        toonToast('success', '🔄 Reserveringen worden bijgewerkt (~1.5 min).\nLijst ververst vanzelf.');
+        autoVerversReserveringen();
+      } else {
+        let detail = '';
+        try { const j = await r.json(); detail = j.message ? `\n${j.message}` : ''; } catch (_) {}
+        toonToast('error', `❌ Mislukt (${r.status})${detail}`);
+      }
+    } catch (e) {
+      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+    }
+    btn.disabled = false;
+    btn.textContent = '🔄 Verversen';
   }
 
   /**
