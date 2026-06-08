@@ -690,6 +690,35 @@ def commit_en_push(bestanden: list, message: str):
     return False
 
 
+def ruim_wachtrij_op(reserveringen: list) -> list:
+    """
+    Verwijder wachtrij-items waarvan datum + tijd al in de gescrapete
+    reserveringen staan — de boeking is kennelijk geslaagd.
+    Returnt lijst van verwijderde bestandspaden (voor commit).
+    """
+    import glob
+    geboekte_slots = {(r['datum'], r['tijd']) for r in reserveringen}
+    verwijderd = []
+    for f in sorted(glob.glob('wachtrij/*.json')):
+        try:
+            with open(f, encoding='utf-8') as fh:
+                item = json.load(fh)
+        except Exception as e:
+            log.warning(f"Wachtrij-check {f} overgeslagen: {e}")
+            continue
+        datum = item.get('datum', '')
+        tijd  = item.get('tijd', '')
+        if not datum or not tijd:
+            continue
+        if (datum, tijd) in geboekte_slots:
+            os.remove(f)
+            verwijderd.append(f)
+            log.info(f"✅ Wachtrij opgeruimd: {f} ({datum} {tijd} staat al in reserveringen)")
+        else:
+            log.info(f"⏭️  Wachtrij bewaard: {f} ({datum} {tijd} nog niet in reserveringen)")
+    return verwijderd
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cancel", help="ID van te annuleren reservering", default=None)
@@ -736,12 +765,17 @@ def main():
             fh.write("\n")
         log.info(f"📄 reserveringen.json geschreven ({len(reserveringen)} items)")
 
+        verwijderde_wachtrij = ruim_wachtrij_op(reserveringen)
+
     finally:
         driver.quit()
 
+    te_committen = ["reserveringen.json"] + verwijderde_wachtrij
     actie = f"annuleer {args.cancel}" if args.cancel else "lees lijst"
+    if verwijderde_wachtrij:
+        actie += f"; wachtrij opgeruimd: {', '.join(verwijderde_wachtrij)}"
     if not commit_en_push(
-        ["reserveringen.json"],
+        te_committen,
         f"reserveringen: {actie} ({len(reserveringen)} actief)"
     ):
         log.error("❌ commit/push mislukt")
