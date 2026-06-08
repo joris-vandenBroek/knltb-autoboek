@@ -109,13 +109,32 @@ def login(session: requests.Session) -> bool:
     else:
         log.info(f"CSRF-token gevonden (len={len(token)})")
 
-    log.info(f"POST login als bondsnummer {BONDSNUMMER[:4]}***...")
+    # Log alle form input velden op de loginpagina (ter debug)
+    form_inputs = re.findall(r'<input[^>]+>', r.text, re.I)
+    for inp in form_inputs:
+        name_m  = re.search(r'name="([^"]*)"', inp, re.I)
+        type_m  = re.search(r'type="([^"]*)"', inp, re.I)
+        value_m = re.search(r'value="([^"]*)"', inp, re.I)
+        inp_name  = name_m.group(1)  if name_m  else "(no name)"
+        inp_type  = type_m.group(1)  if type_m  else "(no type)"
+        inp_value = value_m.group(1) if value_m else ""
+        if inp_type.lower() != "password":
+            log.info(f"  Form input: name={inp_name!r} type={inp_type!r} value={inp_value[:40]!r}")
+        else:
+            log.info(f"  Form input: name={inp_name!r} type={inp_type!r} value=***")
+
+    # ReturnUrl is standaard aanwezig in ASP.NET Identity login forms
+    return_url_m = re.search(r'name="ReturnUrl"[^>]*value="([^"]*)"', r.text, re.I)
+    return_url = return_url_m.group(1) if return_url_m else ""
+
+    log.info(f"POST login als bondsnummer {BONDSNUMMER[:4]}***, ReturnUrl={return_url!r}...")
     r = session.post(
         f"{MIJNKNLTB_URL}/user/login",
         data={
             "Username": BONDSNUMMER,
             "Password": WACHTWOORD,
             "__RequestVerificationToken": token,
+            "ReturnUrl": return_url,
         },
         headers={"Referer": f"{MIJNKNLTB_URL}/user/login"},
         timeout=20,
@@ -124,8 +143,15 @@ def login(session: requests.Session) -> bool:
 
     if "login" in r.url.lower() or "cookiewall" in r.url.lower():
         log.error(f"Login mislukt: {r.url}")
-        snippet = re.sub(r'\s+', ' ', r.text)[:400]
-        log.error(f"Response snippet: {snippet!r}")
+        # Log de response headers voor clues
+        for k, v in r.headers.items():
+            log.error(f"  Response header: {k}: {v}")
+        # Log form inputs van de login-response om foutmelding te zien
+        error_m = re.search(r'class="[^"]*error[^"]*"[^>]*>(.*?)</[a-z]+>', r.text, re.DOTALL | re.I)
+        if error_m:
+            log.error(f"  Foutmelding op pagina: {re.sub(r'<[^>]+>', '', error_m.group(1)).strip()!r}")
+        snippet = re.sub(r'\s+', ' ', r.text)[:600]
+        log.error(f"  Response snippet: {snippet!r}")
         return False
 
     log.info(f"Login geslaagd: {r.url}")
