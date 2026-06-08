@@ -16,8 +16,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 log = logging.getLogger(__name__)
 
 MIJNKNLTB_URL = "https://mijnknltb.toernooi.nl"
-BONDSNUMMER = os.environ.get("ETVVOLLEY_BONDSNUMMER", "")
-WACHTWOORD     = os.environ.get("ETVVOLLEY_WACHTWOORD", "")
+BONDSNUMMER = os.environ.get("KNLTB_LOGINNAAM", "")
+WACHTWOORD     = os.environ.get("KNLTB_WACHTWOORD", "")
 MAX_LEDEN     = int(os.environ.get("MAX_LEDEN", "0") or "0")
 
 HEADERS = {
@@ -270,7 +270,7 @@ def haal_padel_sterkte(session: requests.Session, bondsnummer: str, idx: int = 0
 
 def main():
     if not BONDSNUMMER or not WACHTWOORD:
-        log.error("Stel ETVVOLLEY_BONDSNUMMER en ETVVOLLEY_WACHTWOORD in als GitHub Secrets")
+        log.error("Stel KNLTB_LOGINNAAM en KNLTB_WACHTWOORD in als GitHub Secrets")
         sys.exit(1)
 
     try:
@@ -324,4 +324,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

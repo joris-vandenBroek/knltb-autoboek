@@ -27,8 +27,8 @@ jobs:
 
       - name: Padel sterktes ophalen
         env:
-          ETVVOLLEY_BONDSNUMMER:    ${{ secrets.ETVVOLLEY_BONDSNUMMER }}
-          ETVVOLLEY_WACHTWOORD:  ${{ secrets.ETVVOLLEY_WACHTWOORD }}
+          KNLTB_LOGINNAAM:    ${{ secrets.KNLTB_LOGINNAAM }}
+          KNLTB_WACHTWOORD:  ${{ secrets.KNLTB_WACHTWOORD }}
           MAX_LEDEN:         ${{ github.event.inputs.max_leden || '0' }}
         run: python haal_padel_sterktes.py
 
@@ -51,4 +51,5 @@ jobs:
             sleep "$i"
           done
           exit 1
+
 
