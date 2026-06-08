@@ -1,8 +1,5 @@
 name: Padel speelsterktes ophalen
 
-# Draait automatisch na haal_leden_op.yml (via workflow_dispatch trigger daar)
-# en kan ook handmatig gestart worden.
-
 on:
   workflow_dispatch:
     inputs:
@@ -14,7 +11,7 @@ on:
 jobs:
   haal-padel-sterktes:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     permissions:
       contents: write
 
@@ -26,20 +23,14 @@ jobs:
           python-version: '3.11'
 
       - name: Installeer dependencies
-        run: |
-          sudo apt-get install -y xvfb
-          pip install undetected-chromedriver selenium requests
+        run: pip install requests
 
       - name: Padel sterktes ophalen
         env:
-          DISPLAY: :99
           KNLTB_BONDSNUMMER: ${{ secrets.KNLTB_BONDSNUMMER }}
           KNLTB_WACHTWOORD:  ${{ secrets.KNLTB_WACHTWOORD }}
           MAX_LEDEN:         ${{ github.event.inputs.max_leden || '0' }}
-        run: |
-          Xvfb :99 -screen 0 1280x900x24 &
-          sleep 2
-          python haal_padel_sterktes.py
+        run: python haal_padel_sterktes.py
 
       - name: leden.json committen
         run: |
@@ -47,7 +38,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add leden.json
           if git diff --cached --quiet; then
-            echo "Geen wijzigingen aan leden.json -- niets te committen."
+            echo "Geen wijzigingen -- niets te committen."
             exit 0
           fi
           git commit -m "Padel speelsterktes bijgewerkt"
@@ -57,17 +48,6 @@ jobs:
               echo "Push gelukt (poging $i)"
               exit 0
             fi
-            echo "Push poging $i mislukt -- opnieuw na ${i}s"
             sleep "$i"
           done
-          echo "Push faalde na 5 pogingen"
           exit 1
-
-      - name: Screenshots uploaden (altijd, voor diagnose)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: padel-sterktes-screenshots
-          path: '*.png'
-          if-no-files-found: ignore
-          retention-days: 3
