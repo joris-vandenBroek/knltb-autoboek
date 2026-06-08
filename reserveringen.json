@@ -1,24 +1,6 @@
 {
-  "bijgewerkt": "2026-06-08T13:44:25",
+  "bijgewerkt": "2026-06-08T21:54:13",
   "reserveringen": [
-    {
-      "id": "2026-06-08_1900_padel-2",
-      "datum": "2026-06-08",
-      "tijd": "19:00",
-      "baan": "Padel 2",
-      "tekst": "08-06-2026\t19:00 - 20:00\tPadel 2\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Jhon jairo Valdes escudero",
-        "Joris van den Broek",
-        "Toine Aanraad"
-      ]
-    },
     {
       "id": "2026-06-09_2100_padel-2",
       "datum": "2026-06-09",
