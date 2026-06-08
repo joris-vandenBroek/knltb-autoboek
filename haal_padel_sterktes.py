@@ -4,12 +4,14 @@ Haal padel speelsterktes op van mijnknltb.toernooi.nl en voeg toe aan leden.json
 Strategie:
 1. Lees leden.json (bevat naam + bondsnummer per lid)
 2. Login op mijnknltb.toernooi.nl met KNLTB-credentials
-3. Per lid: navigeer naar find/player?q={bondsnummer}
-4. Klik eerste profiellink, extraheer 'Padel Dubbel' speelsterkte
+3. Per lid: navigeer DIRECT naar spelersprofiel via base64-geconstrueerde URL
+   URL-patroon: /player/{ORG_GUID}/{base64('base64:'+bondsnummer)}
+   Dit omzeilt de AJAX-zoekpagina die in headless Chrome niet betrouwbaar werkt.
+4. Extraheer 'Padel Dubbel' speelsterkte van de profielpagina
 5. Schrijf sterktes terug naar leden.json
 """
 
-import os, sys, json, time, logging
+import os, sys, json, time, logging, base64
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -24,6 +26,18 @@ MIJNKNLTB_URL = "https://mijnknltb.toernooi.nl"
 BONDSNUMMER   = os.environ.get("KNLTB_BONDSNUMMER", "")
 WACHTWOORD    = os.environ.get("KNLTB_WACHTWOORD", "")
 MAX_LEDEN     = int(os.environ.get("MAX_LEDEN", "0") or "0")
+
+# ETV Volley / KNLTB organisatie-GUID (zichtbaar in suggesties op /find/player)
+ORG_GUID      = "630BAE5F-36FE-42EA-A2E5-999630ABFEB8"
+
+
+def speler_url(bondsnummer: str) -> str:
+    """
+    Construeer de directe speler-URL zonder zoekpagina.
+    mijnknltb gebruikt /player/{orgGuid}/{base64('base64:'+bondsnummer)}.
+    """
+    encoded = base64.b64encode(f"base64:{bondsnummer}".encode()).decode()
+    return f"{MIJNKNLTB_URL}/player/{ORG_GUID}/{encoded}"
 
 
 def screenshot(driver, naam):
@@ -110,94 +124,74 @@ def controleer_sessie(driver) -> bool:
     return "login" not in driver.current_url.lower()
 
 
-def herstel_sessie_indien_nodig(driver) -> bool:
-    """Herlogt in als de sessie verlopen is. Geeft True als sessie OK is."""
+def herstel_sessie_indien_nodig(driver, url_na_login: str = None) -> bool:
+    """Herlogt in als de sessie verlopen is. Navigeert daarna terug naar url_na_login."""
     if controleer_sessie(driver):
         return True
     log.warning("⚠️  Sessie verlopen — opnieuw inloggen...")
-    return login_mijnknltb(driver)
+    ok = login_mijnknltb(driver)
+    if ok and url_na_login:
+        log.info(f"  Herlogin geslaagd — opnieuw naar {url_na_login}")
+        driver.get(url_na_login)
+    return ok
 
 
 def haal_padel_sterkte(driver, bondsnummer: str, idx: int = 0) -> dict:
     """
-    Zoek spelersprofiel via bondsnummer op mijnknltb.toernooi.nl.
+    Haal padel sterkte op via directe speler-URL (geen zoekpagina nodig).
     Geeft {'sterkte': '7', 'rating': '7,32'} of {} bij mislukking.
-    idx wordt gebruikt voor unieke screenshot-namen.
     """
-    url = f"{MIJNKNLTB_URL}/find/player?q={bondsnummer}"
+    url = speler_url(bondsnummer)
     log.info(f"  → GET {url}")
     driver.get(url)
 
     # Detecteer sessie-verloop en herlogin indien nodig
-    if not herstel_sessie_indien_nodig(driver):
+    if not herstel_sessie_indien_nodig(driver, url_na_login=url):
         log.error("  Herlogin mislukt — sla dit lid over")
         return {}
-    # Als we net herlogd zijn, opnieuw navigeren
-    if driver.current_url != url:
-        log.info(f"  Herlogin geslaagd — opnieuw navigeren naar zoekpagina")
-        driver.get(url)
 
-    # Wacht tot zoekresultaten geladen zijn (max 8s)
+    # Na eventuele redirect: log huidige URL
+    log.info(f"  Huidige URL na navigatie: {driver.current_url}")
+
+    # Wacht tot profiel-pagina geladen is (player-profile redirect of directe pagina)
     try:
-        WebDriverWait(driver, 8).until(
-            lambda d: len(d.find_elements(
-                By.XPATH,
-                "//a[contains(@href,'player-profile') and not(normalize-space(.)='Mijn profiel')]"
-            )) > 0
+        WebDriverWait(driver, 10).until(
+            lambda d: (
+                "player-profile" in d.current_url or
+                "player" in d.current_url
+            ) and "login" not in d.current_url
         )
-        log.info(f"  Zoekresultaat geladen: {driver.current_url}")
+        log.info(f"  Profielpagina geladen: {driver.current_url}")
     except Exception:
-        log.warning(f"  Timeout wachten op profiellink voor {bondsnummer}")
-
-    screenshot(driver, f"s{idx:04d}_zoek_{bondsnummer}")
-
-    # Log paginatekst voor diagnose
-    page_snippet = driver.execute_script(
-        "return document.body ? document.body.innerText.slice(0, 300) : 'geen body'"
-    )
-    log.info(f"  Paginatekst: {page_snippet!r}")
-
-    profiel_links = driver.find_elements(
-        By.XPATH,
-        "//a[contains(@href,'player-profile') and not(normalize-space(.)='Mijn profiel')]"
-    )
-    log.info(f"  Profiellinks gevonden: {len(profiel_links)}")
-
-    if not profiel_links:
-        log.warning(f"  ❌ Geen profiel voor {bondsnummer} (url={driver.current_url})")
-        return {}
-
-    profiel_url = profiel_links[0].get_attribute("href")
-    log.info(f"  → Profiel: {profiel_url}")
-    driver.get(profiel_url)
-
-    if not herstel_sessie_indien_nodig(driver):
-        log.error("  Herlogin mislukt op profielpagina — sla dit lid over")
-        return {}
-    if driver.current_url != profiel_url:
-        driver.get(profiel_url)
-
-    # Wacht op padel sterkte element (max 8s)
-    try:
-        WebDriverWait(driver, 8).until(
-            lambda d: d.find_element(By.CSS_SELECTOR, 'span[title="Padel Dubbel"]')
-        )
-        log.info(f"  Padel Dubbel element gevonden")
-    except Exception:
-        log.warning(f"  Timeout wachten op 'Padel Dubbel' element")
+        log.warning(f"  Timeout wachten op profielpagina voor {bondsnummer}")
 
     screenshot(driver, f"s{idx:04d}_profiel_{bondsnummer}")
 
-    # Log alle tag-duo elementen voor diagnose
+    # Log paginatekst voor diagnose
+    page_snippet = driver.execute_script(
+        "return document.body ? document.body.innerText.slice(0, 400) : 'geen body'"
+    )
+    log.info(f"  Paginatekst: {page_snippet!r}")
+
+    # Log alle span[title] elementen voor diagnose
     tags = driver.execute_script("""
         var tags = [];
         document.querySelectorAll('span[title]').forEach(function(el) {
             var title = el.getAttribute('title');
-            if (title) tags.push({title: title, text: el.innerText});
+            if (title) tags.push({title: title, text: el.innerText ? el.innerText.trim() : ''});
         });
         return tags;
     """) or []
     log.info(f"  Gevonden title-spans: {tags}")
+
+    # Wacht op padel sterkte element (max 8s) — niet fataal als niet gevonden
+    try:
+        WebDriverWait(driver, 8).until(
+            lambda d: d.find_element(By.CSS_SELECTOR, 'span[title="Padel Dubbel"]')
+        )
+        log.info(f"  'Padel Dubbel' element gevonden")
+    except Exception:
+        log.warning(f"  Timeout wachten op 'Padel Dubbel' element (mogelijk geen padel-rating)")
 
     result = driver.execute_script("""
         var el = document.querySelector('span[title="Padel Dubbel"]');
@@ -214,7 +208,7 @@ def haal_padel_sterkte(driver, bondsnummer: str, idx: int = 0) -> dict:
         log.info(f"  ✅ {bondsnummer}: sterkte={result['sterkte']}, rating={result['rating']}")
         return result
 
-    log.warning(f"  ⚠️  {bondsnummer}: geen padel sterkte gevonden")
+    log.warning(f"  ⚠️  {bondsnummer}: geen padel sterkte gevonden op {driver.current_url}")
     return {}
 
 
@@ -243,6 +237,10 @@ def main():
 
     met_bondsnummer = [l for l in te_verwerken if l.get('bondsnummer', '').strip()]
     log.info(f"{len(te_verwerken)} leden te verwerken, {len(met_bondsnummer)} met bondsnummer")
+
+    # Controleer URL-constructie met voorbeeld
+    bnr_voorbeeld = met_bondsnummer[0]['bondsnummer'] if met_bondsnummer else "12345678"
+    log.info(f"URL-test: {speler_url(bnr_voorbeeld)}")
 
     driver = maak_driver()
     try:
