@@ -209,12 +209,12 @@ def main():
         for item in leden_lijst
     ]
 
+    te_verwerken = leden_lijst[:MAX_LEDEN] if MAX_LEDEN > 0 else leden_lijst
     if MAX_LEDEN > 0:
-        log.info(f"MAX_LEDEN={MAX_LEDEN} — verwerk alleen eerste {MAX_LEDEN} leden")
-        leden_lijst = leden_lijst[:MAX_LEDEN]
+        log.info(f"MAX_LEDEN={MAX_LEDEN} — verwerk alleen eerste {MAX_LEDEN} van {len(leden_lijst)} leden (rest blijft ongewijzigd)")
 
-    met_bondsnummer = [l for l in leden_lijst if l.get('bondsnummer', '').strip()]
-    log.info(f"{len(leden_lijst)} leden te verwerken, {len(met_bondsnummer)} met bondsnummer")
+    met_bondsnummer = [l for l in te_verwerken if l.get('bondsnummer', '').strip()]
+    log.info(f"{len(te_verwerken)} leden te verwerken, {len(met_bondsnummer)} met bondsnummer")
 
     driver = maak_driver()
     try:
@@ -222,7 +222,7 @@ def main():
             log.error("Login mislukt — script stopt")
             sys.exit(1)
 
-        for i, lid in enumerate(leden_lijst):
+        for i, lid in enumerate(te_verwerken):
             bnr = lid.get('bondsnummer', '').strip()
             if not bnr:
                 log.info(f"  [{i+1}/{len(leden_lijst)}] {lid['naam']}: geen bondsnummer")
@@ -242,6 +242,7 @@ def main():
             pass
         driver.quit()
 
+    # Schrijf altijd de volledige lijst terug (ook als MAX_LEDEN beperkt was)
     with open("leden.json", "w", encoding="utf-8") as f:
         json.dump(leden_lijst, f, ensure_ascii=False, indent=2)
 
