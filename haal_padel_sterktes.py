@@ -105,6 +105,19 @@ def login_mijnknltb(driver) -> bool:
         return False
 
 
+def controleer_sessie(driver) -> bool:
+    """Geeft True als sessie nog geldig is, False als we op loginpagina zitten."""
+    return "login" not in driver.current_url.lower()
+
+
+def herstel_sessie_indien_nodig(driver) -> bool:
+    """Herlogt in als de sessie verlopen is. Geeft True als sessie OK is."""
+    if controleer_sessie(driver):
+        return True
+    log.warning("⚠️  Sessie verlopen — opnieuw inloggen...")
+    return login_mijnknltb(driver)
+
+
 def haal_padel_sterkte(driver, bondsnummer: str, idx: int = 0) -> dict:
     """
     Zoek spelersprofiel via bondsnummer op mijnknltb.toernooi.nl.
@@ -114,6 +127,15 @@ def haal_padel_sterkte(driver, bondsnummer: str, idx: int = 0) -> dict:
     url = f"{MIJNKNLTB_URL}/find/player?q={bondsnummer}"
     log.info(f"  → GET {url}")
     driver.get(url)
+
+    # Detecteer sessie-verloop en herlogin indien nodig
+    if not herstel_sessie_indien_nodig(driver):
+        log.error("  Herlogin mislukt — sla dit lid over")
+        return {}
+    # Als we net herlogd zijn, opnieuw navigeren
+    if driver.current_url != url:
+        log.info(f"  Herlogin geslaagd — opnieuw navigeren naar zoekpagina")
+        driver.get(url)
 
     # Wacht tot zoekresultaten geladen zijn (max 8s)
     try:
@@ -148,6 +170,12 @@ def haal_padel_sterkte(driver, bondsnummer: str, idx: int = 0) -> dict:
     profiel_url = profiel_links[0].get_attribute("href")
     log.info(f"  → Profiel: {profiel_url}")
     driver.get(profiel_url)
+
+    if not herstel_sessie_indien_nodig(driver):
+        log.error("  Herlogin mislukt op profielpagina — sla dit lid over")
+        return {}
+    if driver.current_url != profiel_url:
+        driver.get(profiel_url)
 
     # Wacht op padel sterkte element (max 8s)
     try:
