@@ -1,4 +1,4 @@
-name: Padel speelsterktes ophalen
+﻿name: Padel speelsterktes ophalen
 
 # Draait automatisch na haal_leden_op.yml (via workflow_dispatch trigger daar)
 # en kan ook handmatig gestart worden.
@@ -28,7 +28,7 @@ jobs:
       - name: Installeer dependencies
         run: |
           sudo apt-get install -y xvfb
-          pip install undetected-chromedriver selenium
+          pip install undetected-chromedriver selenium requests
 
       - name: Padel sterktes ophalen
         env:
@@ -47,20 +47,20 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add leden.json
           if git diff --cached --quiet; then
-            echo "Geen wijzigingen aan leden.json — niets te committen."
+            echo "Geen wijzigingen aan leden.json â€” niets te committen."
             exit 0
           fi
           git commit -m "Padel speelsterktes bijgewerkt"
           for i in 1 2 3 4 5; do
             git pull --rebase origin main || true
             if git push; then
-              echo "✅ Push gelukt (poging $i)"
+              echo "âœ… Push gelukt (poging $i)"
               exit 0
             fi
-            echo "⚠️  Push poging $i mislukt — opnieuw na ${i}s"
+            echo "âš ï¸  Push poging $i mislukt â€” opnieuw na ${i}s"
             sleep "$i"
           done
-          echo "❌ Push faalde na 5 pogingen"
+          echo "âŒ Push faalde na 5 pogingen"
           exit 1
 
       - name: Screenshots uploaden (altijd, voor diagnose)
@@ -71,3 +71,4 @@ jobs:
           path: '*.png'
           if-no-files-found: ignore
           retention-days: 3
+
