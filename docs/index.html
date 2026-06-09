@@ -1090,10 +1090,6 @@
   /* ─── Mijn reserveringen (actieve ETV-reserveringen) ───────── */
   const RESERV_URL      = `https://raw.githubusercontent.com/${REPO}/main/reserveringen.json`;
   const BEHEER_WORKFLOW = 'beheer_reserveringen.yml';
-  // Auto-ververs TTL: als reserveringen.json ouder is dan dit, doen we bij
-  // PWA-open of tab-terugkomst een achtergrondrefresh. Voorkomt dat back-to-
-  // back opens elke keer een 1.5min-workflow triggeren.
-  const RESERV_STALE_MINUTES = 15;
   let _autoVerversBezig = false;
 
   /** Bouw HTML voor een reserveringen-lijst. */
@@ -1125,15 +1121,7 @@
     }).join('');
   }
 
-  /** Minuten sinds bijgewerkt-timestamp. Infinity als geen waarde. */
-  function _reservOuderdomMin(data) {
-    if (!data || !data.bijgewerkt) return Infinity;
-    const t = Date.parse(data.bijgewerkt);
-    if (isNaN(t)) return Infinity;
-    return (Date.now() - t) / 60000;
-  }
-
-  async function laadReserveringen(triggerWorkflowAlsStale = true) {
+async function laadReserveringen() {
     const lijst = document.getElementById('reservList');
     try {
       // cache: 'no-store' omzeilt GitHub raw cdn die ?t= soms negeert
@@ -1148,7 +1136,6 @@
       }
       const data = await r.json();
       const items = Array.isArray(data.reserveringen) ? data.reserveringen : [];
-      const ouder = _reservOuderdomMin(data);
       const bijTekst = data.bijgewerkt ? `Bijgewerkt: ${formatDDMMYYYY_HHMM(data.bijgewerkt) || '?'}` : '';
 
       if (items.length === 0) {
@@ -1157,11 +1144,6 @@
       } else {
         lijst.innerHTML = _renderReservList(items) +
           (bijTekst ? `<div class="reserv-footer">${bijTekst}</div>` : '');
-      }
-
-      // Workflow triggeren alleen als expliciet gevraagd én data echt oud is
-      if (triggerWorkflowAlsStale && ouder > RESERV_STALE_MINUTES && getPat() && !_autoVerversBezig) {
-        autoVerversReserveringen();
       }
     } catch (e) {
       lijst.innerHTML = '<div class="wachtrij-leeg">Kon reserveringen niet laden.</div>';
@@ -1186,7 +1168,7 @@
         if (r.ok) {
           const d = await r.json();
           if (d.bijgewerkt && d.bijgewerkt !== oudeTs) {
-            laadReserveringen(false);
+            laadReserveringen();
             laadWachtrij();
             return;
           }
@@ -1332,7 +1314,7 @@
   // Zorgt dat de lijst vanzelf bijgewerkt wordt zonder dat de gebruiker iets hoeft te doen.
   setInterval(() => {
     if (document.visibilityState === 'visible') {
-      laadReserveringen(false);
+      laadReserveringen();
       laadWachtrij();
     }
   }, 3 * 60 * 1000);
