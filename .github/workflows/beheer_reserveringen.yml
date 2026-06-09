@@ -14,11 +14,13 @@ on:
         required: false
         default: ''
 
-# Zelfde account-groep als boek.yml: 2 simultane Selenium-sessies op een
-# ETV-account is sowieso vragen om problemen.
+# Eigen concurrency-groep zodat scrapen/annuleren niet geblokkeerd wordt
+# door een wachtende boek.yml run. cancel-in-progress: true zodat een
+# nieuwe verversen-aanvraag de vorige (nog wachtende) weggooit i.p.v.
+# zelf weggegooid te worden.
 concurrency:
-  group: knltb-account-joris
-  cancel-in-progress: false
+  group: knltb-beheer-joris
+  cancel-in-progress: true
 
 jobs:
   beheer:
