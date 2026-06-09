@@ -125,6 +125,43 @@ jobs:
             # Tel weg-aantal uit de buffer-output (lokaal verloren door subshell)
           done
 
+          # pages-build-deployment staat niet in /actions/workflows (interne
+          # GitHub workflow), dus apart ophalen via /actions/runs?name=...
+          echo "── pages-build-deployment ──────────────────────"
+          pages_runs=$(gh api --paginate "/repos/$REPO/actions/runs?per_page=100" \
+            --jq '.workflow_runs[] | select(.name == "pages-build-deployment") | {id: .id, n: .run_number, created: .created_at, status: .status, concl: .conclusion}' \
+            | jq -s '.')
+          pages_aantal=$(echo "$pages_runs" | jq 'length')
+          echo "  Totaal runs: $pages_aantal"
+          te_beoordelen_pages=$(echo "$pages_runs" | jq ".[$KEEP_LAST:]")
+          beoordeel_pages=$(echo "$te_beoordelen_pages" | jq 'length')
+          if [ "$beoordeel_pages" = "0" ]; then
+            echo "  Niets te beoordelen (<= $KEEP_LAST runs totaal)"
+          else
+            echo "$te_beoordelen_pages" | jq -c '.[]' | while read -r r; do
+              id=$(echo "$r" | jq -r '.id')
+              n=$(echo "$r" | jq -r '.n')
+              created=$(echo "$r" | jq -r '.created')
+              status=$(echo "$r" | jq -r '.status')
+              concl=$(echo "$r" | jq -r '.concl')
+              created_epoch=$(date -d "$created" +%s)
+              if [ "$created_epoch" -ge "$drempel_epoch" ]; then continue; fi
+              if [ "$status" != "completed" ]; then
+                echo "  ⏭️  #$n ($created) — status=$status, skip"
+                continue
+              fi
+              if [ "$DRY_RUN" = "true" ]; then
+                echo "  🔍 [DRY] #$n ($created) $concl — zou verwijderd worden"
+              else
+                if gh api -X DELETE "/repos/$REPO/actions/runs/$id" 2>/dev/null; then
+                  echo "  🗑️  #$n ($created) $concl — verwijderd"
+                else
+                  echo "  ⚠️  #$n ($created) $concl — delete faalde"
+                fi
+              fi
+            done
+          fi
+
           echo ""
           if [ "$DRY_RUN" = "true" ]; then
             echo "✅ DRY-RUN voltooid. Run opnieuw met dry_run=false om écht te verwijderen."
