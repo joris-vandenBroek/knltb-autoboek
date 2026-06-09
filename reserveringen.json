@@ -1,5 +1,5 @@
 {
-  "bijgewerkt": "2026-06-09T07:12:31",
+  "bijgewerkt": "2026-06-09T07:22:24",
   "reserveringen": [
     {
       "id": "2026-06-09_2100_padel-2",
@@ -33,24 +33,6 @@
       },
       "spelers": [
         "Joris van den Broek",
-        "Peter Nijhof",
-        "Chris van Waardenburg"
-      ]
-    },
-    {
-      "id": "2026-06-11_1430_padel-3",
-      "datum": "2026-06-11",
-      "tijd": "14:30",
-      "baan": "Padel 3",
-      "tekst": "11-06-2026\t14:30 - 15:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
         "Peter Nijhof",
         "Chris van Waardenburg"
       ]
