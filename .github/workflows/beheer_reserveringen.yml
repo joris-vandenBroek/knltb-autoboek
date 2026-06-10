@@ -14,7 +14,7 @@ on:
         required: false
         default: ''
   schedule:
-    - cron: '0 7 * * *'  # Dagelijks 09:00 NL (CEST) / 08:00 (CET)
+    - cron: '30 5 * * *'  # Dagelijks 07:30 NL (CEST) / 06:30 (CET)
 
 # Eigen concurrency-groep zodat scrapen/annuleren niet geblokkeerd wordt
 # door een wachtende boek.yml run. cancel-in-progress: true zodat een
