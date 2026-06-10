@@ -9,7 +9,7 @@ on:
       gebruiker:
         description: 'Gebruiker-ID (uit gebruikers.json)'
         required: false
-        default: 'joris'
+        default: 'joris_van_den_broek'
       cancel_id:
         description: 'ID van te annuleren reservering (laat leeg om alleen te scrapen)'
         required: false
@@ -18,7 +18,7 @@ on:
     - cron: '30 5 * * *'  # Dagelijks 07:30 NL (CEST) / 06:30 (CET)
 
 concurrency:
-  group: knltb-beheer-${{ inputs.gebruiker || 'joris' }}
+  group: knltb-beheer-${{ inputs.gebruiker || 'joris_van_den_broek' }}
   cancel-in-progress: true
 
 jobs:
@@ -52,7 +52,7 @@ jobs:
           if [ "${{ github.event_name }}" = "schedule" ]; then
             echo "ALLE_GEBRUIKERS=true" >> $GITHUB_ENV
           else
-            gebruiker="${{ inputs.gebruiker || 'joris' }}"
+            gebruiker="${{ inputs.gebruiker || 'joris_van_den_broek' }}"
             bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].bondsnummer')
             wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].wachtwoord')
             naam=$(echo         "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].naam')

@@ -6,7 +6,7 @@ on:
       gebruiker:
         description: 'Gebruiker-ID (uit gebruikers.json)'
         required: true
-        default: 'joris'
+        default: 'joris_van_den_broek'
       datum:
         description: 'Speeldatum (YYYY-MM-DD)'
         required: true
