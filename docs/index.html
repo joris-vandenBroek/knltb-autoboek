@@ -539,8 +539,9 @@
       <p>ETV Volley — automatische reservering</p>
     </div>
   </div>
+  <button class="help-btn" onclick="openBeheerSheet()" title="Beheer" style="margin-right:2px">🛠️</button>
   <button class="help-btn" onclick="openHelpSheet()" title="Help">❓</button>
-  <button class="gear-btn" onclick="openPatSheet()" title="GitHub Token instellen">
+  <button class="gear-btn" onclick="openPatSheet()" title="Instellingen">
     <span id="gearIcoon">⚙️</span>
     <span class="pat-badge" id="patBadge" hidden></span>
   </button>
@@ -550,14 +551,46 @@
 <div class="overlay" id="patOverlay" onclick="if(event.target===this)sluitPatSheet()">
   <div class="sheet">
     <div class="sheet-handle"></div>
-    <h2>🔑 GitHub Token instellen</h2>
-    <p class="sheet-hint">Voer je GitHub Personal Access Token in. Wordt alleen lokaal opgeslagen op jouw telefoon.</p>
+    <h2>⚙️ Instellingen</h2>
+
+    <label class="field-label" for="gebruikerSelect" style="margin-top:4px">Gebruiker</label>
+    <select id="gebruikerSelect" class="pat-input" style="cursor:pointer"></select>
+
+    <h3 style="margin:18px 0 6px; font-size:0.95rem; color:var(--groen)">🔑 GitHub Token</h3>
+    <p class="sheet-hint">Wordt alleen lokaal opgeslagen op jouw telefoon.</p>
     <input type="password" id="patInput" class="pat-input"
            placeholder="ghp_…" autocomplete="off" autocorrect="off" spellcheck="false">
     <label class="field-label" for="patVerloopt" style="margin-top:14px">Verloopt op (optioneel)</label>
     <input type="date" id="patVerloopt" class="pat-input">
     <p class="sheet-hint" id="patVerloopHint" style="margin-top:6px"></p>
     <button class="btn-opslaan" onclick="slaPatOp()">Opslaan</button>
+  </div>
+</div>
+
+<!-- Beheer sheet -->
+<div class="overlay" id="beheerOverlay" onclick="if(event.target===this)sluitBeheerSheet()">
+  <div class="sheet" style="max-height:85vh; overflow-y:auto;">
+    <div class="sheet-handle"></div>
+    <h2>🛠️ Beheer</h2>
+
+    <div id="beheerLogin" style="display:none">
+      <p class="sheet-hint">Voer het beheer-wachtwoord in om gebruikers te beheren.</p>
+      <input type="password" id="beheerPwInput" class="pat-input"
+             placeholder="Wachtwoord…" autocomplete="off">
+      <button class="btn-opslaan" onclick="beheerLogin()" style="margin-top:10px">Inloggen</button>
+    </div>
+
+    <div id="beheerContent" style="display:none">
+      <p class="sheet-hint" style="margin-bottom:12px">Gebruikers in <code>gebruikers.json</code>. Wijzigingen worden via GitHub API opgeslagen.</p>
+      <div id="beheerGebruikersLijst"></div>
+
+      <h3 style="margin:18px 0 8px; font-size:0.95rem; color:var(--groen)">➕ Gebruiker toevoegen</h3>
+      <input type="text"     id="nieuweId"   class="pat-input" placeholder="ID (bijv. jan)" style="margin-bottom:6px">
+      <input type="text"     id="nieuweNaam" class="pat-input" placeholder="Naam (bijv. Jan Janssen)" style="margin-bottom:6px">
+      <button class="btn-opslaan" onclick="beheerVoegToe()" style="margin-top:4px">Toevoegen</button>
+
+      <p id="beheerStatus" class="sheet-hint" style="margin-top:12px; color:var(--groen)"></p>
+    </div>
   </div>
 </div>
 
@@ -730,9 +763,14 @@
   /* ─── Config ───────────────────────────────────────────── */
   const REPO        = 'joris-vandenBroek/knltb-autoboek';
   const WORKFLOW    = 'boek.yml';
-  const LEDEN_URL   = `https://raw.githubusercontent.com/${REPO}/main/leden.json`;
+  const LEDEN_URL       = `https://raw.githubusercontent.com/${REPO}/main/leden.json`;
+  const GEBRUIKERS_URL  = `https://raw.githubusercontent.com/${REPO}/main/gebruikers.json`;
   const PAT_KEY          = 'knltb_pat';
   const PAT_VERLOOPT_KEY = 'knltb_pat_verloopt';
+  const GEBRUIKER_KEY    = 'knltb_gebruiker';
+  const BEHEER_PW_KEY    = 'knltb_beheer_pw';
+
+  const getGebruiker = () => localStorage.getItem(GEBRUIKER_KEY) || 'joris';
   // Eenmalige opruim van legacy spelers-persistence (was 'knltb_spelers')
   localStorage.removeItem('knltb_spelers');
 
@@ -742,10 +780,36 @@
   const getPat         = () => localStorage.getItem(PAT_KEY) || '';
   const getPatVerloopt = () => localStorage.getItem(PAT_VERLOOPT_KEY) || '';
 
-  function openPatSheet() {
+  let _gebruikersCache = null;
+
+  async function laadGebruikers() {
+    if (_gebruikersCache) return _gebruikersCache;
+    try {
+      const r = await fetch(GEBRUIKERS_URL + '?t=' + Date.now());
+      _gebruikersCache = r.ok ? await r.json() : [{ id: 'joris', naam: 'Joris van den Broek' }];
+    } catch (_) {
+      _gebruikersCache = [{ id: 'joris', naam: 'Joris van den Broek' }];
+    }
+    return _gebruikersCache;
+  }
+
+  async function openPatSheet() {
     document.getElementById('patInput').value    = getPat();
     document.getElementById('patVerloopt').value = getPatVerloopt();
     updatePatVerloopHint();
+    // Vul gebruiker-select
+    const sel = document.getElementById('gebruikerSelect');
+    const gebruikers = await laadGebruikers();
+    sel.innerHTML = gebruikers.map(g =>
+      `<option value="${g.id}"${g.id === getGebruiker() ? ' selected' : ''}>${g.naam}</option>`
+    ).join('');
+    sel.onchange = () => {
+      localStorage.setItem(GEBRUIKER_KEY, sel.value);
+      // herlaad afhankelijke data
+      _gebruikersCache = null;
+      laadReserveringen();
+      laadWachtrij();
+    };
     document.getElementById('patOverlay').classList.add('show');
     setTimeout(() => document.getElementById('patInput').focus(), 350);
   }
@@ -757,6 +821,99 @@
   }
   function sluitHelpSheet() {
     document.getElementById('helpOverlay').classList.remove('show');
+  }
+
+  /* ─── Beheer sheet ───────────────────────────────────────── */
+  const BEHEER_PW = 'etv2025';  // simpel wachtwoord, client-side
+
+  function openBeheerSheet() {
+    const loggedIn = sessionStorage.getItem(BEHEER_PW_KEY) === '1';
+    document.getElementById('beheerLogin').style.display   = loggedIn ? 'none'  : '';
+    document.getElementById('beheerContent').style.display = loggedIn ? ''      : 'none';
+    document.getElementById('beheerPwInput').value = '';
+    if (loggedIn) _beheerLaadLijst();
+    document.getElementById('beheerOverlay').classList.add('show');
+  }
+  function sluitBeheerSheet() {
+    document.getElementById('beheerOverlay').classList.remove('show');
+  }
+  function beheerLogin() {
+    if (document.getElementById('beheerPwInput').value === BEHEER_PW) {
+      sessionStorage.setItem(BEHEER_PW_KEY, '1');
+      document.getElementById('beheerLogin').style.display   = 'none';
+      document.getElementById('beheerContent').style.display = '';
+      _beheerLaadLijst();
+    } else {
+      toonToast('error', '❌ Onjuist wachtwoord');
+    }
+  }
+
+  async function _beheerLaadLijst() {
+    _gebruikersCache = null;
+    const lijst = await laadGebruikers();
+    const el = document.getElementById('beheerGebruikersLijst');
+    el.innerHTML = lijst.map(g => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
+        <span>${g.naam} <small style="color:#888">(${g.id})</small></span>
+        <button onclick="beheerVerwijder('${g.id}')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#c00" title="Verwijder">🗑️</button>
+      </div>`).join('');
+  }
+
+  async function _beheerSlaOp(nieuwelijst) {
+    const pat = getPat();
+    if (!pat) { toonToast('error', '⚠️ PAT vereist voor beheer'); return false; }
+    // Haal huidige SHA op
+    const metaR = await fetch(
+      `https://api.github.com/repos/${REPO}/contents/gebruikers.json`,
+      { headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' } }
+    );
+    if (!metaR.ok) { toonToast('error', '❌ Kan gebruikers.json niet ophalen'); return false; }
+    const meta = await metaR.json();
+    const inhoud = btoa(unescape(encodeURIComponent(JSON.stringify(nieuwelijst, null, 2) + '\n')));
+    const saveR = await fetch(
+      `https://api.github.com/repos/${REPO}/contents/gebruikers.json`,
+      { method: 'PUT',
+        headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
+                   'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: 'beheer: gebruikers.json bijgewerkt', content: inhoud, sha: meta.sha }) }
+    );
+    if (saveR.ok) {
+      _gebruikersCache = nieuwelijst;
+      return true;
+    }
+    toonToast('error', '❌ Opslaan mislukt (' + saveR.status + ')');
+    return false;
+  }
+
+  async function beheerVoegToe() {
+    const id   = document.getElementById('nieuweId').value.trim().toLowerCase().replace(/\s+/g, '_');
+    const naam = document.getElementById('nieuweNaam').value.trim();
+    if (!id || !naam) { toonToast('error', '⚠️ Vul ID en naam in'); return; }
+    const lijst = await laadGebruikers();
+    if (lijst.find(g => g.id === id)) { toonToast('error', '⚠️ ID bestaat al'); return; }
+    const nieuwelijst = [...lijst, { id, naam }];
+    document.getElementById('beheerStatus').textContent = '⏳ Opslaan…';
+    const ok = await _beheerSlaOp(nieuwelijst);
+    if (ok) {
+      document.getElementById('nieuweId').value = '';
+      document.getElementById('nieuweNaam').value = '';
+      document.getElementById('beheerStatus').textContent = '✅ Opgeslagen';
+      _beheerLaadLijst();
+      toonToast('success', `✅ ${naam} toegevoegd`);
+    }
+  }
+
+  async function beheerVerwijder(id) {
+    const lijst = await laadGebruikers();
+    if (lijst.length <= 1) { toonToast('error', '⚠️ Minimaal 1 gebruiker vereist'); return; }
+    const nieuwelijst = lijst.filter(g => g.id !== id);
+    document.getElementById('beheerStatus').textContent = '⏳ Verwijderen…';
+    const ok = await _beheerSlaOp(nieuwelijst);
+    if (ok) {
+      document.getElementById('beheerStatus').textContent = '✅ Verwijderd';
+      _beheerLaadLijst();
+      toonToast('success', `🗑️ ${id} verwijderd`);
+    }
   }
   function slaPatOp() {
     const v = document.getElementById('patInput').value.trim();
@@ -968,7 +1125,7 @@
   laadLeden();
 
   /* ─── Ingeplande reserveringen (wachtrij) ──────────────── */
-  const WACHTRIJ_API = `https://api.github.com/repos/${REPO}/contents/wachtrij`;
+  const getWachtrijApi  = () => `https://api.github.com/repos/${REPO}/contents/wachtrij/${getGebruiker()}`;
   const NL_DAGEN  = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
   const NL_MAANDEN = ['januari','februari','maart','april','mei','juni',
                       'juli','augustus','september','oktober','november','december'];
@@ -1006,7 +1163,7 @@
       const headers = pat
         ? { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
         : { 'Accept': 'application/vnd.github+json' };
-      const r = await fetch(WACHTRIJ_API + '?t=' + Date.now(), { headers });
+      const r = await fetch(getWachtrijApi() + '?t=' + Date.now(), { headers });
       if (r.status === 404) {
         lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>' + bijTekst();
         return;
@@ -1138,7 +1295,7 @@
   laadWachtrij();
 
   /* ─── Mijn reserveringen (actieve ETV-reserveringen) ───────── */
-  const RESERV_URL      = `https://raw.githubusercontent.com/${REPO}/main/reserveringen.json`;
+  const getReservUrl    = () => `https://raw.githubusercontent.com/${REPO}/main/reserveringen_${getGebruiker()}.json`;
   const BEHEER_WORKFLOW = 'beheer_reserveringen.yml';
   let _autoVerversBezig = false;
 
@@ -1175,7 +1332,7 @@ async function laadReserveringen() {
     const lijst = document.getElementById('reservList');
     try {
       // cache: 'no-store' omzeilt GitHub raw cdn die ?t= soms negeert
-      const r = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      const r = await fetch(getReservUrl() + '?t=' + Date.now(), { cache: 'no-store' });
       if (r.status === 404) {
         lijst.innerHTML = '<div class="wachtrij-leeg">Nog geen lijst — tik 🔄 Verversen om je reserveringen op te halen.</div>';
         return;
@@ -1208,13 +1365,13 @@ async function laadReserveringen() {
   async function _startPollingNaBoek() {
     let oudeTs = null;
     try {
-      const r = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      const r = await fetch(getReservUrl() + '?t=' + Date.now(), { cache: 'no-store' });
       if (r.ok) { const d = await r.json(); oudeTs = d.bijgewerkt || null; }
     } catch (_) {}
     const start = Date.now();
     const poll = async () => {
       try {
-        const r = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
+        const r = await fetch(getReservUrl() + '?t=' + Date.now(), { cache: 'no-store' });
         if (r.ok) {
           const d = await r.json();
           if (d.bijgewerkt && d.bijgewerkt !== oudeTs) {
@@ -1242,7 +1399,7 @@ async function laadReserveringen() {
         { method: 'POST',
           headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
                      'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ref: 'main', inputs: { cancel_id: '' } }) }
+          body: JSON.stringify({ ref: 'main', inputs: { gebruiker: getGebruiker(), cancel_id: '' } }) }
       );
       if (r.status === 204) {
         toonToast('success', '🔄 Reserveringen worden bijgewerkt (~1.5 min).\nLijst ververst vanzelf.');
@@ -1266,12 +1423,12 @@ async function laadReserveringen() {
     const startTs = Date.now();
     let oldTs = null;
     try {
-      const r0 = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      const r0 = await fetch(getReservUrl() + '?t=' + Date.now(), { cache: 'no-store' });
       if (r0.ok) { const d0 = await r0.json(); oldTs = d0.bijgewerkt || null; }
     } catch (_) {}
     const poll = async () => {
       try {
-        const rN = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
+        const rN = await fetch(getReservUrl() + '?t=' + Date.now(), { cache: 'no-store' });
         if (rN.ok) {
           const dN = await rN.json();
           if (dN.bijgewerkt && dN.bijgewerkt !== oldTs) {
@@ -1296,7 +1453,7 @@ async function laadReserveringen() {
         { method: 'POST',
           headers: { 'Authorization': `Bearer ${getPat()}`, 'Accept': 'application/vnd.github+json',
                      'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ref: 'main', inputs: { cancel_id: '' } }) }
+          body: JSON.stringify({ ref: 'main', inputs: { gebruiker: getGebruiker(), cancel_id: '' } }) }
       );
       if (r.status !== 204) return;  // Stilletjes opgeven
       _pollingNaDispatch();
@@ -1315,7 +1472,7 @@ async function laadReserveringen() {
         { method: 'POST',
           headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
                      'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ref: 'main', inputs: { cancel_id: id } }) }
+          body: JSON.stringify({ ref: 'main', inputs: { gebruiker: getGebruiker(), cancel_id: id } }) }
       );
       if (r.status === 204) {
         toonToast('success', '🗑️ Annulering wordt verwerkt (~1.5 min).\nLijst ververst zelf.');
@@ -1568,6 +1725,7 @@ async function laadReserveringen() {
           headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
                      'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
           body: JSON.stringify({ ref: 'main', inputs: {
+            gebruiker: getGebruiker(),
             datum, tijd, speler2, speler3, speler4,
             dry_run: dryRun ? 'true' : 'false'
           }}) }

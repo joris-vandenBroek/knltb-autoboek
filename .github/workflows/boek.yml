@@ -3,6 +3,10 @@ name: Reserveer Padelbaan
 on:
   workflow_dispatch:
     inputs:
+      gebruiker:
+        description: 'Gebruiker-ID (uit gebruikers.json)'
+        required: true
+        default: 'joris'
       datum:
         description: 'Speeldatum (YYYY-MM-DD)'
         required: true
@@ -27,12 +31,8 @@ on:
           - 'false'
           - 'true'
 
-# Voorkom dat parallelle PWA-taps of cron + handmatige retry twee Selenium-
-# sessies tegen hetzelfde ETV-account aanjagen (race op reserveringen.json
-# commit + ETV "1 actieve reservering"-rule). Groep is per-user -- bij
-# toekomstige multi-user wordt 'joris' parameterized.
 concurrency:
-  group: knltb-account-joris
+  group: knltb-account-${{ inputs.gebruiker }}
   cancel-in-progress: false
 
 jobs:
@@ -42,7 +42,7 @@ jobs:
     permissions:
       contents: write
       issues:   write
-      actions:  write    # nodig om beheer_reserveringen.yml te triggeren na success
+      actions:  write
     env:
       TZ: Europe/Amsterdam
     steps:
@@ -58,13 +58,28 @@ jobs:
           pip install undetected-chromedriver selenium \
                       google-api-python-client google-auth
 
+      - name: Stel gebruiker-credentials in
+        env:
+          GEBRUIKERS_CONFIG: ${{ secrets.GEBRUIKERS_CONFIG }}
+        run: |
+          gebruiker="${{ inputs.gebruiker }}"
+          bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].bondsnummer')
+          wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].wachtwoord')
+          naam=$(echo         "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].naam')
+          if [ "$bondsnummer" = "null" ] || [ -z "$bondsnummer" ]; then
+            echo "Gebruiker '$gebruiker' niet gevonden in GEBRUIKERS_CONFIG"
+            exit 1
+          fi
+          echo "ETVVOLLEY_BONDSNUMMER=$bondsnummer" >> $GITHUB_ENV
+          echo "ETVVOLLEY_WACHTWOORD=$wachtwoord"  >> $GITHUB_ENV
+          echo "SPELER1_NAAM=$naam"                >> $GITHUB_ENV
+          echo "GEBRUIKER=$gebruiker"              >> $GITHUB_ENV
+
       - name: Reserveer baan
         env:
-          DISPLAY:                      :99
-          ETVVOLLEY_BONDSNUMMER:            ${{ secrets.ETVVOLLEY_BONDSNUMMER }}
-          ETVVOLLEY_WACHTWOORD:             ${{ secrets.ETVVOLLEY_WACHTWOORD }}
-          GOOGLE_CALENDAR_CREDENTIALS:  ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
-          GOOGLE_CALENDAR_ID:           ${{ secrets.GOOGLE_CALENDAR_ID }}
+          DISPLAY:                     :99
+          GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
+          GOOGLE_CALENDAR_ID:          ${{ secrets.GOOGLE_CALENDAR_ID }}
         run: |
           Xvfb :99 -screen 0 1280x900x24 &
           sleep 2
@@ -78,18 +93,14 @@ jobs:
             --speler4 "${{ inputs.speler4 }}" \
             $DRY_FLAG
 
-      - name: Trigger scrape reserveringen.json na succesvolle echte boeking
+      - name: Trigger scrape reserveringen na succesvolle echte boeking
         if: success() && inputs.dry_run != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Direct na een succesvolle boeking trigger beheer_reserveringen
-          # zodat reserveringen.json bijgewerkt wordt (incl. spelers via
-          # Wijzig-flow scrape). PWA polled vervolgens automatisch --
-          # geen handmatige Verversen-klik meer nodig.
-          # Concurrency-group serialiseert deze met andere account-runs.
-          gh workflow run beheer_reserveringen.yml --ref main || \
-            echo "::warning::beheer_reserveringen trigger faalde -- verversen-knop in PWA is fallback"
+          gh workflow run beheer_reserveringen.yml --ref main \
+            --field gebruiker="${{ inputs.gebruiker }}" || \
+            echo "::warning::beheer_reserveringen trigger faalde"
 
       - name: Screenshots bij fout
         if: failure()
@@ -105,17 +116,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          titel="boek.yml faalt: ${{ inputs.datum }} ${{ inputs.tijd }} (run #${{ github.run_number }})"
+          titel="boek.yml faalt: ${{ inputs.gebruiker }} ${{ inputs.datum }} ${{ inputs.tijd }} (run #${{ github.run_number }})"
           body=$(cat <<EOF
           Run faalde -- automatisch gemeld door boek.yml.
 
+          - **Gebruiker:** ${{ inputs.gebruiker }}
           - **Speeldatum:** ${{ inputs.datum }}
           - **Tijd:** ${{ inputs.tijd }}
           - **Spelers:** ${{ inputs.speler2 }}, ${{ inputs.speler3 }}, ${{ inputs.speler4 }}
           - **Run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          - **Screenshots-artifact:** beschikbaar 3 dagen
 
-          Sluit dit issue zodra je het bekeken hebt. Een nieuwe failure maakt een nieuw issue.
+          Sluit dit issue zodra je het bekeken hebt.
           EOF
           )
           gh issue create --title "$titel" --body "$body" --label "auto-failure,boek" || \

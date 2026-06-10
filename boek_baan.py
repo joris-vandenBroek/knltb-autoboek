@@ -39,7 +39,8 @@ RESERVEER_URL = "https://www.etv-volley.nl/mijn/Reservations"
 
 BONDSNUMMER  = os.environ.get("ETVVOLLEY_BONDSNUMMER", "")
 WACHTWOORD   = os.environ.get("ETVVOLLEY_WACHTWOORD", "")
-SPELER1      = "Joris van den Broek"
+GEBRUIKER    = os.environ.get("GEBRUIKER", "joris")
+SPELER1      = os.environ.get("SPELER1_NAAM", "Joris van den Broek")
 
 GOOGLE_CREDENTIALS = os.environ.get("GOOGLE_CALENDAR_CREDENTIALS", "")
 GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
@@ -1753,14 +1754,15 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
     """
     import subprocess
     tijd_slug = tijd.replace(":", "")
-    bestand = f"wachtrij/{datum}_{tijd_slug}.json"
+    bestand = f"wachtrij/{GEBRUIKER}/{datum}_{tijd_slug}.json"
     payload = {
+        "gebruiker": GEBRUIKER,
         "datum":     datum,
         "tijd":      tijd,
         "spelers":   [SPELER1, speler2, speler3, speler4],
         "ingediend": datetime.now().isoformat(timespec="seconds"),
     }
-    os.makedirs("wachtrij", exist_ok=True)
+    os.makedirs(f"wachtrij/{GEBRUIKER}", exist_ok=True)
     with open(bestand, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
         fh.write("\n")

@@ -1,14 +1,15 @@
 name: Beheer Reserveringen
 
-# Workflow_dispatch met optionele cancel_id input.
-# - Zonder cancel_id: scrape reserveringen en update reserveringen.json
-# - Met cancel_id (formaat YYYY-MM-DD_HHMM_baan-slug): annuleer die reservering,
-#   dan scrape opnieuw en update reserveringen.json.
-# Wordt aangeroepen door de PWA (verversen-knop + prullenbakje per reservering).
+# - Zonder cancel_id: scrape reserveringen en update reserveringen_{gebruiker}.json
+# - Met cancel_id: annuleer die reservering, dan scrape opnieuw
 
 on:
   workflow_dispatch:
     inputs:
+      gebruiker:
+        description: 'Gebruiker-ID (uit gebruikers.json)'
+        required: false
+        default: 'joris'
       cancel_id:
         description: 'ID van te annuleren reservering (laat leeg om alleen te scrapen)'
         required: false
@@ -16,12 +17,8 @@ on:
   schedule:
     - cron: '30 5 * * *'  # Dagelijks 07:30 NL (CEST) / 06:30 (CET)
 
-# Eigen concurrency-groep zodat scrapen/annuleren niet geblokkeerd wordt
-# door een wachtende boek.yml run. cancel-in-progress: true zodat een
-# nieuwe verversen-aanvraag de vorige (nog wachtende) weggooit i.p.v.
-# zelf weggegooid te worden.
 concurrency:
-  group: knltb-beheer-joris
+  group: knltb-beheer-${{ inputs.gebruiker || 'joris' }}
   cancel-in-progress: true
 
 jobs:
@@ -46,20 +43,66 @@ jobs:
           pip install undetected-chromedriver selenium \
                       google-api-python-client google-auth
 
-      - name: Beheer reserveringen
+      - name: Stel gebruiker-credentials in
+        env:
+          GEBRUIKERS_CONFIG: ${{ secrets.GEBRUIKERS_CONFIG }}
+        run: |
+          # Bij schedule: loop alle gebruikers langs
+          # Bij dispatch: gebruik de opgegeven gebruiker
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "ALLE_GEBRUIKERS=true" >> $GITHUB_ENV
+          else
+            gebruiker="${{ inputs.gebruiker || 'joris' }}"
+            bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].bondsnummer')
+            wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].wachtwoord')
+            naam=$(echo         "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].naam')
+            if [ "$bondsnummer" = "null" ] || [ -z "$bondsnummer" ]; then
+              echo "Gebruiker '$gebruiker' niet gevonden in GEBRUIKERS_CONFIG"
+              exit 1
+            fi
+            echo "ETVVOLLEY_BONDSNUMMER=$bondsnummer" >> $GITHUB_ENV
+            echo "ETVVOLLEY_WACHTWOORD=$wachtwoord"  >> $GITHUB_ENV
+            echo "SPELER1_NAAM=$naam"                >> $GITHUB_ENV
+            echo "GEBRUIKER=$gebruiker"              >> $GITHUB_ENV
+            echo "ALLE_GEBRUIKERS=false"             >> $GITHUB_ENV
+          fi
+
+      - name: Beheer reserveringen (per gebruiker)
         env:
           DISPLAY:                     :99
-          ETVVOLLEY_BONDSNUMMER:       ${{ secrets.ETVVOLLEY_BONDSNUMMER }}
-          ETVVOLLEY_WACHTWOORD:        ${{ secrets.ETVVOLLEY_WACHTWOORD }}
           GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
           GOOGLE_CALENDAR_ID:          ${{ secrets.GOOGLE_CALENDAR_ID }}
+          GEBRUIKERS_CONFIG:           ${{ secrets.GEBRUIKERS_CONFIG }}
         run: |
           Xvfb :99 -screen 0 1280x900x24 &
           sleep 2
-          if [ -n "${{ inputs.cancel_id }}" ]; then
-            python lees_reserveringen.py --cancel "${{ inputs.cancel_id }}"
+
+          run_voor_gebruiker() {
+            local gebruiker="$1"
+            local bondsnummer wachtwoord naam
+            bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].bondsnummer')
+            wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].wachtwoord')
+            naam=$(echo         "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].naam')
+            export ETVVOLLEY_BONDSNUMMER="$bondsnummer"
+            export ETVVOLLEY_WACHTWOORD="$wachtwoord"
+            export SPELER1_NAAM="$naam"
+            export GEBRUIKER="$gebruiker"
+            echo "--- Beheer voor: $gebruiker ($naam) ---"
+            if [ -n "${{ inputs.cancel_id }}" ]; then
+              python lees_reserveringen.py --cancel "${{ inputs.cancel_id }}"
+            else
+              python lees_reserveringen.py
+            fi
+          }
+
+          if [ "$ALLE_GEBRUIKERS" = "true" ]; then
+            # Schedule: alle gebruikers uit gebruikers.json
+            gebruikers=$(jq -r '.[].id' gebruikers.json)
+            for gebruiker in $gebruikers; do
+              run_voor_gebruiker "$gebruiker" || echo "::warning::Beheer faalde voor $gebruiker"
+            done
           else
-            python lees_reserveringen.py
+            run_voor_gebruiker "$GEBRUIKER"
           fi
 
       - name: Screenshots bij fout
@@ -76,14 +119,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
+          gebruiker="${{ inputs.gebruiker || 'schedule-alle' }}"
           actie="scrape"
           if [ -n "${{ inputs.cancel_id }}" ]; then actie="annuleer ${{ inputs.cancel_id }}"; fi
-          titel="beheer_reserveringen faalt: $actie (run #${{ github.run_number }})"
+          titel="beheer_reserveringen faalt: $gebruiker $actie (run #${{ github.run_number }})"
           body="Beheer-actie gefaald.
 
+          - Gebruiker: $gebruiker
           - Actie: $actie
           - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-          reserveringen.json is mogelijk niet ge-update. Probeer verversen in de PWA."
+          reserveringen.json is mogelijk niet ge-update."
           gh issue create --title "$titel" --body "$body" --label "auto-failure,beheer" || \
             gh issue create --title "$titel" --body "$body"

@@ -48,6 +48,8 @@ BONDSNUMMER         = os.environ.get("ETVVOLLEY_BONDSNUMMER", "")
 WACHTWOORD          = os.environ.get("ETVVOLLEY_WACHTWOORD", "")
 GOOGLE_CREDENTIALS  = os.environ.get("GOOGLE_CALENDAR_CREDENTIALS", "")
 GOOGLE_CALENDAR_ID  = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
+GEBRUIKER           = os.environ.get("GEBRUIKER", "joris")
+RESERVERINGEN_FILE  = f"reserveringen_{GEBRUIKER}.json"
 TIMEOUT             = 20
 
 
@@ -699,7 +701,7 @@ def ruim_wachtrij_op(reserveringen: list) -> list:
     import glob
     geboekte_slots = {(r['datum'], r['tijd']) for r in reserveringen}
     verwijderd = []
-    for f in sorted(glob.glob('wachtrij/*.json')):
+    for f in sorted(glob.glob(f'wachtrij/{GEBRUIKER}/*.json')):
         try:
             with open(f, encoding='utf-8') as fh:
                 item = json.load(fh)
@@ -757,7 +759,7 @@ def main():
                 del r[k]
 
         # Schrijf JSON
-        with open("reserveringen.json", "w", encoding="utf-8") as fh:
+        with open(RESERVERINGEN_FILE, "w", encoding="utf-8") as fh:
             json.dump({
                 "bijgewerkt": datetime.now().isoformat(timespec="seconds"),
                 "reserveringen": reserveringen,
@@ -770,7 +772,7 @@ def main():
     finally:
         driver.quit()
 
-    te_committen = ["reserveringen.json"] + verwijderde_wachtrij
+    te_committen = [RESERVERINGEN_FILE] + verwijderde_wachtrij
     actie = f"annuleer {args.cancel}" if args.cancel else "lees lijst"
     if verwijderde_wachtrij:
         actie += f"; wachtrij opgeruimd: {', '.join(verwijderde_wachtrij)}"
