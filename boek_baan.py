@@ -103,13 +103,13 @@ def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
         datum_nl = start_dt.strftime("%d-%m-%Y")
 
         event = {
-            "summary": f"ðŸŽ¾ Padel â€“ {baan} â€“ ETV Volley",
+            “summary”: f”🎾 Padel – {baan} – ETV Volley”,
             "location": "ETV Volley, Swaardvenstraat 10, 5048 AV Tilburg",
             "description": (
                 f"Padelbaan automatisch gereserveerd.\n\n"
                 f"Baan:    {baan}\n"
                 f"Datum:   {datum_nl}\n"
-                f"Tijd:    {tijd} â€“ {eind_dt.strftime('%H:%M')}\n\n"
+                f”Tijd:    {tijd} – {eind_dt.strftime('%H:%M')}\n\n”
                 f"Spelers:\n" +
                 "\n".join(f"  {i+1}. {s}" for i, s in enumerate(spelers))
             ),
