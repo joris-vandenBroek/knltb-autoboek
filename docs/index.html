@@ -582,8 +582,11 @@
       <div id="beheerGebruikersLijst"></div>
 
       <h3 style="margin:18px 0 8px; font-size:0.95rem; color:var(--groen)">➕ Gebruiker toevoegen</h3>
-      <input type="text"     id="nieuweId"   class="pat-input" placeholder="ID (bijv. jan)" style="margin-bottom:6px">
-      <input type="text"     id="nieuweNaam" class="pat-input" placeholder="Naam (bijv. Jan Janssen)" style="margin-bottom:6px">
+      <select id="nieuweLid" class="pat-input" style="margin-bottom:6px; cursor:pointer" onchange="beheerVulId()">
+        <option value="">— Selecteer lid —</option>
+      </select>
+      <label class="field-label" for="nieuweId" style="margin-top:4px">ID (automatisch, aanpasbaar)</label>
+      <input type="text" id="nieuweId" class="pat-input" placeholder="voornaam_achternaam" style="margin-bottom:6px" autocomplete="off" autocorrect="off" spellcheck="false">
       <button class="btn-opslaan" onclick="beheerVoegToe()" style="margin-top:4px">Toevoegen</button>
 
       <p id="beheerStatus" class="sheet-hint" style="margin-top:12px; color:var(--groen)"></p>
@@ -825,7 +828,7 @@
     const toegang = getGebruiker() === BEHEER_EIGENAAR;
     document.getElementById('beheerGeenToegang').style.display = toegang ? 'none' : '';
     document.getElementById('beheerContent').style.display     = toegang ? ''     : 'none';
-    if (toegang) _beheerLaadLijst();
+    if (toegang) { _beheerLaadLijst(); beheerVulLidDropdown(); }
     document.getElementById('beheerOverlay').classList.add('show');
   }
   function sluitBeheerSheet() {
@@ -869,10 +872,22 @@
     return false;
   }
 
+  function beheerVulLidDropdown() {
+    const sel = document.getElementById('nieuweLid');
+    const huidig = sel.value;
+    sel.innerHTML = '<option value="">— Selecteer lid —</option>' +
+      alleLedenLijst.map(l => `<option value="${l.naam}"${l.naam === huidig ? ' selected' : ''}>${l.naam}</option>`).join('');
+  }
+
+  function beheerVulId() {
+    const naam = document.getElementById('nieuweLid').value;
+    document.getElementById('nieuweId').value = naam.toLowerCase().replace(/\s+/g, '_');
+  }
+
   async function beheerVoegToe() {
+    const naam = document.getElementById('nieuweLid').value.trim();
     const id   = document.getElementById('nieuweId').value.trim().toLowerCase().replace(/\s+/g, '_');
-    const naam = document.getElementById('nieuweNaam').value.trim();
-    if (!id || !naam) { toonToast('error', '⚠️ Vul ID en naam in'); return; }
+    if (!naam || !id) { toonToast('error', '⚠️ Selecteer een lid en controleer het ID'); return; }
     const lijst = await laadGebruikers();
     if (lijst.find(g => g.id === id)) { toonToast('error', '⚠️ ID bestaat al'); return; }
     const nieuwelijst = [...lijst, { id, naam }];
@@ -881,8 +896,8 @@
     if (ok) {
       document.getElementById('beheerStatus').textContent = '⏳ Wachtrij-map aanmaken…';
       await _beheerMaakWachtrij(id);
+      document.getElementById('nieuweLid').value = '';
       document.getElementById('nieuweId').value = '';
-      document.getElementById('nieuweNaam').value = '';
       document.getElementById('beheerStatus').textContent = '✅ Opgeslagen';
       _beheerLaadLijst();
       toonToast('success', `✅ ${naam} toegevoegd`);
