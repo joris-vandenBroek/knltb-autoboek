@@ -842,7 +842,7 @@
     el.innerHTML = lijst.map(g => `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)">
         <span>${g.naam} <small style="color:#888">(${g.id})</small></span>
-        <button onclick="beheerVerwijder('${g.id}')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#c00" title="Verwijder">🗑️</button>
+        ${g.id !== BEHEER_EIGENAAR ? `<button onclick="beheerVerwijder('${g.id}')" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#c00" title="Verwijder">🗑️</button>` : ''}
       </div>`).join('');
   }
 
