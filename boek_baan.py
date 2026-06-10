@@ -33,7 +33,7 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# â”€â”€ Instellingen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Instellingen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 LOGIN_URL    = "https://www.etv-volley.nl/mijn"
 RESERVEER_URL = "https://www.etv-volley.nl/mijn/Reservations"
 
@@ -47,7 +47,7 @@ GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
 
 PADEL_BANEN   = ["Padel 1", "Padel 2", "Padel 3", "Padel 4", "Padel 5", "Padel 6"]
 WACHT_TIMEOUT = 15
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 
 def genereer_tijden(voorkeur_tijd: str) -> list:
@@ -80,11 +80,11 @@ def dagdeel(tijd: str) -> str:
     else:          return "Avond"
 
 
-# â”€â”€ Google Agenda â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Google Agenda â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
     """Maak een afspraak aan in Google Agenda via Service Account."""
     if not GOOGLE_CREDENTIALS:
-        log.warning("âš ï¸  GOOGLE_CALENDAR_CREDENTIALS niet ingesteld â€” agenda overgeslagen.")
+        log.warning("âš ï¸  GOOGLE_CALENDAR_CREDENTIALS niet ingesteld â€" agenda overgeslagen.")
         return
 
     try:
@@ -103,13 +103,13 @@ def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
         datum_nl = start_dt.strftime("%d-%m-%Y")
 
         event = {
-            “summary”: f”🎾 Padel – {baan} – ETV Volley”,
+            "summary": f"\U0001f3be Padel – {baan} – ETV Volley",
             "location": "ETV Volley, Swaardvenstraat 10, 5048 AV Tilburg",
             "description": (
                 f"Padelbaan automatisch gereserveerd.\n\n"
                 f"Baan:    {baan}\n"
                 f"Datum:   {datum_nl}\n"
-                f”Tijd:    {tijd} – {eind_dt.strftime('%H:%M')}\n\n”
+                f"Tijd:    {tijd} – {eind_dt.strftime('%H:%M')}\n\n"
                 f"Spelers:\n" +
                 "\n".join(f"  {i+1}. {s}" for i, s in enumerate(spelers))
             ),
@@ -121,7 +121,7 @@ def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
                 "dateTime": eind_dt.isoformat(),
                 "timeZone": "Europe/Amsterdam",
             },
-            "colorId": "10",   # Groen (Sage) â€” passend bij padel
+            "colorId": "10",   # Groen (Sage) â€" passend bij padel
             "reminders": {
                 "useDefault": False,
                 "overrides": [
@@ -143,7 +143,7 @@ def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
         log.error(f"âŒ Google Agenda bijwerken mislukt: {e}")
 
 
-# â”€â”€ Selenium driver â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Selenium driver â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def chrome_major_versie() -> int | None:
     """Detecteer de geÃ¯nstalleerde Chrome major versie zodat UC de juiste driver downloadt."""
     import subprocess, re
@@ -158,7 +158,7 @@ def chrome_major_versie() -> int | None:
                 return v
         except Exception:
             pass
-    log.warning("Chrome versie niet detecteerbaar â€” UC bepaalt zelf de driver versie")
+    log.warning("Chrome versie niet detecteerbaar â€" UC bepaalt zelf de driver versie")
     return None
 
 
@@ -184,7 +184,7 @@ def wacht_op(driver, by, waarde, timeout=WACHT_TIMEOUT):
 
 def screenshot(driver, naam):
     driver.save_screenshot(f"{naam}.png")
-    log.info(f"ðŸ“¸ Screenshot: {naam}.png | URL: {driver.current_url}")
+    log.info(f"ðŸ"¸ Screenshot: {naam}.png | URL: {driver.current_url}")
 
 
 def _log_zichtbare_spelers(driver, spelers, label: str):
@@ -211,17 +211,17 @@ def _log_zichtbare_spelers(driver, spelers, label: str):
     counts = {s: body.count(s) for s in spelers}
     aanwezig = [s for s, c in counts.items() if c > 0]
     missend  = [s for s, c in counts.items() if c == 0]
-    log.info(f"ðŸ“Š SPELERS-CHECK [{label}] URL={url}")
-    log.info(f"   âœ“ Aanwezig ({len(aanwezig)}/{len(spelers)}): {aanwezig}")
+    log.info(f"ðŸ"Š SPELERS-CHECK [{label}] URL={url}")
+    log.info(f"   âœ" Aanwezig ({len(aanwezig)}/{len(spelers)}): {aanwezig}")
     if missend:
         if spelers_zichtbaar_pagina:
             log.warning(f"   âœ— MIST ({len(missend)}): {missend}")
         else:
-            log.info(f"   (deze pagina toont geen spelerslijst â€” "
+            log.info(f"   (deze pagina toont geen spelerslijst â€" "
                      f"{len(missend)} 'missend' is verwacht)")
 
 
-# â”€â”€ STAP 1: Inloggen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ STAP 1: Inloggen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def login(driver: uc.Chrome) -> bool:
     # TODO: vervang door `from etv_common import login as _common_login` zodra
     # de huidige cron-flow stabiel bewezen is (>3 succesvolle runs zonder
@@ -269,7 +269,7 @@ def login(driver: uc.Chrome) -> bool:
         log.info(f"Gebruikersveld: name='{gebruiker_veld.get_attribute('name')}' "
                  f"id='{gebruiker_veld.get_attribute('id')}'")
 
-        # Vul in via JS â€” triggert ook React/Vue native input events
+        # Vul in via JS â€" triggert ook React/Vue native input events
         driver.execute_script("""
             var el = arguments[0], val = arguments[1];
             var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -318,7 +318,7 @@ def login(driver: uc.Chrome) -> bool:
             driver.execute_script("arguments[0].click();", submit_knop)
             log.info("Submit-knop geklikt via JS")
         else:
-            log.warning("Geen submit-knop gevonden â€” gebruik Keys.RETURN als fallback")
+            log.warning("Geen submit-knop gevonden â€" gebruik Keys.RETURN als fallback")
             ww_veld.send_keys(Keys.RETURN)
 
         time.sleep(6)
@@ -341,7 +341,7 @@ def login(driver: uc.Chrome) -> bool:
         try:
             pw = driver.find_element(By.XPATH, "//input[@type='password']")
             if pw.is_displayed():
-                log.error("âŒ Inloggen mislukt â€” wachtwoordveld nog zichtbaar")
+                log.error("âŒ Inloggen mislukt â€" wachtwoordveld nog zichtbaar")
                 screenshot(driver, "02b_login_mislukt")
                 return False
         except Exception:
@@ -357,7 +357,7 @@ def login(driver: uc.Chrome) -> bool:
                                   "temporarily unavailable", "we zijn zo weer bij je terug",
                                   "be right back"]
             if any(kw in body for kw in onderhoud_keywords):
-                log.warning("âš ï¸ ETV toont onderhoudspagina â€” site tijdelijk niet beschikbaar")
+                log.warning("âš ï¸ ETV toont onderhoudspagina â€" site tijdelijk niet beschikbaar")
                 screenshot(driver, "login_fout_onderhoud")
                 return 'ONDERHOUD'
         except Exception:
@@ -367,7 +367,7 @@ def login(driver: uc.Chrome) -> bool:
         return False
 
 
-# â”€â”€ STAP 2: Baan afhangen klikken â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ STAP 2: Baan afhangen klikken â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def klik_baan_afhangen(driver: uc.Chrome) -> bool:
     log.info("Navigeer naar reserveringspagina...")
     driver.get(RESERVEER_URL)
@@ -389,7 +389,7 @@ def klik_baan_afhangen(driver: uc.Chrome) -> bool:
         return False
 
 
-# â”€â”€ Navigatie-hulpfunctie â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Navigatie-hulpfunctie â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def _zoek_knop(driver: uc.Chrome, labels: list) -> object:
     """
@@ -412,7 +412,7 @@ def _zoek_knop(driver: uc.Chrome, labels: list) -> object:
     return None
 
 
-# â”€â”€ STAP 3: Spelers toevoegen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ STAP 3: Spelers toevoegen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def _zoek_veld_spelers(driver: uc.Chrome):
     """Geef het eerste zichtbare text/search-input terug op de spelerspagina."""
@@ -434,7 +434,7 @@ def _ruim_onverwachte_spelers_op(driver: uc.Chrome, verwachte_data_ids: set) -> 
     Achtergrond: bij zoekterm "Daniel Enderink" toont ETV's typeahead Ã³Ã³k
     substring-matches zoals "Ellen Daniels" en "Danse Cleij". In runs #68
     en #69 verschenen die OOK in #youPlayWith zonder dat het script erop
-    klikte â€” vermoedelijk via een hover-/focus-event in de typeahead-flow.
+    klikte â€" vermoedelijk via een hover-/focus-event in de typeahead-flow.
     Resultaat: #youPlayWith zit vol (max 3) voor we onze 3 gewenste spelers
     erin krijgen â†’ volgende speler kan niet meer worden toegevoegd.
 
@@ -471,7 +471,7 @@ def _ruim_onverwachte_spelers_op(driver: uc.Chrome, verwachte_data_ids: set) -> 
             did = item.get('dataId')
             naam = item.get('naam', '?')
             log.warning(f"  âš ï¸ Onverwachte speler in #youPlayWith: '{naam}' "
-                        f"(data-id={did}) â€” wordt verwijderd")
+                        f"(data-id={did}) â€" wordt verwijderd")
             try:
                 # jQuery .trigger('click') werkt voor ETV's verwijder-handler;
                 # zelfde patroon als de speler-toevoegen fallback.
@@ -505,7 +505,7 @@ def _ruim_onverwachte_spelers_op(driver: uc.Chrome, verwachte_data_ids: set) -> 
 def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
                       verwachte_data_ids: set) -> str:
     """
-    Selecteer EXCLUSIEF de opgegeven speler â€” definitieve implementatie
+    Selecteer EXCLUSIEF de opgegeven speler â€" definitieve implementatie
     gebaseerd op echte ETV/KNLTB.Club HTML.
 
     verwachte_data_ids: set van data-ids die OK zijn in #youPlayWith
@@ -549,7 +549,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
     3. Klik die card via ActionChains
     4. Verifieer dat #youPlayWith een element met DIE SPECIFIEKE data-id
        bevat. Niet alleen op naam, maar op de exacte UUID die we klikten.
-       Zo voorkomen we ELKE vorm van verkeerde selectie â€” ook als ETV
+       Zo voorkomen we ELKE vorm van verkeerde selectie â€" ook als ETV
        ooit een naam dubbel zou tonen.
     """
     woorden    = speler.split()
@@ -568,7 +568,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
 
         BELANGRIJK: returnt ALLEEN de data-id (string), niet het element.
         Element-refs die uit execute_script komen verstalen onmiddellijk
-        wanneer de typeahead-DOM ververst â€” wat ETV doet binnen ~300ms.
+        wanneer de typeahead-DOM ververst â€" wat ETV doet binnen ~300ms.
         Door alleen het stabiele data-id terug te geven, kunnen we daarna
         het element VERS via Selenium opzoeken en direct klikken.
         """
@@ -660,21 +660,21 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
         data_id, tekst = _vind_addplayer_data_id()
         if not data_id:
             continue
-        log.info(f"  âœ“ Card gevonden: data-id={data_id}, tekst='{tekst}'")
+        log.info(f"  âœ" Card gevonden: data-id={data_id}, tekst='{tekst}'")
 
         # Pre-klik check: staat deze speler AL in #youPlayWith? Dan was
         # 'ie in een vorige booking-poging al toegevoegd en blijft hangen
         # in ETV's session-state. Beschouw als success en ga door.
         if _is_in_youplaywith(data_id):
             log.info(f"  â„¹ï¸ {speler} stond al in 'Je gaat spelen met' "
-                     f"(leftover van eerdere booking-poging) â€” skip click")
+                     f"(leftover van eerdere booking-poging) â€" skip click")
             # Ruim eventuele mystery-spelers op
             _ruim_onverwachte_spelers_op(driver, verwachte_data_ids | {data_id})
             return data_id
 
         # Vind het element VERS via Selenium met de stabiele data-id.
         # JS-returns van execute_script verstalen meteen wanneer ETV's
-        # typeahead de DOM ververst (gebeurt binnen ~300ms â€” bewezen in
+        # typeahead de DOM ververst (gebeurt binnen ~300ms â€" bewezen in
         # run #61 waar alle 3 zoektermen StaleElementReferenceException
         # gaven). Selenium's eigen find_element returnt een live ref.
         try:
@@ -685,13 +685,13 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
             log.warning(f"  Element met data-id={data_id} niet gevonden: {e}")
             continue
 
-        # â”€â”€ Klik-strategie met 3 fallbacks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Klik-strategie met 3 fallbacks â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         # Run #64 (30-05 manueel-retry) bewees dat ActionChains-click niet
         # altijd ETV's jQuery-handler triggert: visible click, geen toevoeging
         # aan #youPlayWith. Daarom 3 strategieÃ«n met tussentijdse checks:
         #   1. ActionChains (echte muis-events, isTrusted=true)
-        #   2. jQuery .trigger('click') â€” invokes alle jQuery-handlers ongeacht binding
-        #   3. DOM element.click() â€” laatste redmiddel
+        #   2. jQuery .trigger('click') â€" invokes alle jQuery-handlers ongeacht binding
+        #   3. DOM element.click() â€" laatste redmiddel
         # Tussen elke stap kijken we of #youPlayWith de data-id nu bevat;
         # zo ja â†’ klaar.
 
@@ -705,7 +705,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
 
         # Strategie 2 (als 1 niet werkte): jQuery trigger
         if not _is_in_youplaywith(data_id):
-            log.info(f"  ActionChains registreerde niet â€” jQuery .trigger('click') fallback")
+            log.info(f"  ActionChains registreerde niet â€" jQuery .trigger('click') fallback")
             try:
                 driver.execute_script(
                     'if (window.jQuery) '
@@ -717,7 +717,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
 
         # Strategie 3 (als 1+2 niet werkten): DOM click
         if not _is_in_youplaywith(data_id):
-            log.info(f"  jQuery trigger ook geen effect â€” DOM element.click() fallback")
+            log.info(f"  jQuery trigger ook geen effect â€" DOM element.click() fallback")
             try:
                 driver.execute_script(
                     f'var el=document.querySelector(\'.addPlayer[data-id="{data_id}"]\'); '
@@ -727,7 +727,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
                 log.warning(f"  DOM click faalde: {e}")
             time.sleep(1.5)
 
-        # â”€â”€ VERIFICATIE: #youPlayWith MOET deze data-id bevatten â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ VERIFICATIE: #youPlayWith MOET deze data-id bevatten â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         verified = False
         for verif_poging in range(1, 5):
             if _is_in_youplaywith(data_id):
@@ -747,7 +747,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
 
         # data-id niet in youPlayWith â†’ speler niet toegevoegd. ABORT.
         log.error(f"  âŒ Speler NIET in 'Je gaat spelen met' na 4 verifieer-pogingen "
-                  f"â€” data-id {data_id} niet aanwezig. ETV heeft de selectie "
+                  f"â€" data-id {data_id} niet aanwezig. ETV heeft de selectie "
                   f"geweigerd of de click landde verkeerd.")
         screenshot(driver, f"05d_niet_in_youplaywith_{achternaam}")
         return ""
@@ -774,7 +774,7 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
     try:
         driver.refresh()
         time.sleep(3)
-        log.info(f"  ðŸ”„ ReservationsPlayers ververst â€” URL: {driver.current_url}")
+        log.info(f"  ðŸ"„ ReservationsPlayers ververst â€" URL: {driver.current_url}")
     except Exception as e:
         log.warning(f"  Refresh mislukt ({e}), doorgaan op huidige page state")
 
@@ -801,21 +801,21 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
     # Track data-ids van succesvol toegevoegde spelers. Wordt aan
     # _voeg_speler_toe meegegeven zodat die de Ã— kan klikken bij
     # ELKE andere data-id in #youPlayWith (mystery-spelers uit
-    # ETV's typeahead-substring-matches â€” bug uit run #68/#69).
+    # ETV's typeahead-substring-matches â€" bug uit run #68/#69).
     toegevoegde_data_ids = set()
     for i, speler in enumerate([speler2, speler3, speler4], start=2):
         log.info(f"Speler {i} toevoegen: '{speler}'")
         # 2-poging retry. Bij fail (network glitch, ETV typeahead die niet laadt,
         # of een onverwacht ETV-foutgeval): refresh + opnieuw. De defensieve
         # cleanup uit commit ae2bfbd zorgt dat een halve eerdere poging geen
-        # state-vervuiling achterlaat â€” opnieuw beginnen is veilig.
+        # state-vervuiling achterlaat â€" opnieuw beginnen is veilig.
         nieuwe_id = ""
         for spelers_poging in range(1, 3):
             nieuwe_id = _voeg_speler_toe(driver, speler, i, toegevoegde_data_ids)
             if nieuwe_id:
                 break
             if spelers_poging < 2:
-                log.warning(f"  âš ï¸ Speler {i} ('{speler}') faalde op poging {spelers_poging} â€” "
+                log.warning(f"  âš ï¸ Speler {i} ('{speler}') faalde op poging {spelers_poging} â€" "
                             f"refresh + retry...")
                 try:
                     driver.refresh()
@@ -826,7 +826,7 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
                 except Exception as e:
                     log.warning(f"  Refresh tussen pogingen faalde: {e}")
         if not nieuwe_id:
-            log.error(f"  âŒ Speler {i} ('{speler}') na 2 pogingen niet toegevoegd â€” abort")
+            log.error(f"  âŒ Speler {i} ('{speler}') na 2 pogingen niet toegevoegd â€" abort")
             return False
         toegevoegde_data_ids.add(nieuwe_id)
 
@@ -856,9 +856,9 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
     return False
 
 
-# â”€â”€ STAP 4: Dag en dagdeel kiezen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ STAP 4: Dag en dagdeel kiezen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def _vind_daypart(driver, datum: str, gewenst_dagdeel: str):
-    """Vind het div.daypart-element voor (datum, dagdeel). Idempotent â€” re-callable."""
+    """Vind het div.daypart-element voor (datum, dagdeel). Idempotent â€" re-callable."""
     return driver.execute_script("""
         var targetDate = arguments[0];
         var dagdeel    = arguments[1];
@@ -877,7 +877,7 @@ def _vind_daypart(driver, datum: str, gewenst_dagdeel: str):
 
 
 def _vind_volgende_knop(driver):
-    """Vind de Volgende submit-knop. Idempotent â€” re-callable na DOM-update."""
+    """Vind de Volgende submit-knop. Idempotent â€" re-callable na DOM-update."""
     return driver.execute_script("""
         var alle = Array.from(document.querySelectorAll('button, a, [role="button"]'))
             .filter(function(el) {
@@ -941,14 +941,14 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     except Exception:
         pass
 
-    # â”€â”€ Retry-loop: max 3 pogingen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Retry-loop: max 3 pogingen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     for poging in range(1, 4):
-        log.info(f"â”â”â”â” kies_dag poging {poging}/3 â”â”â”â”")
+        log.info(f"â"â"â"â" kies_dag poging {poging}/3 â"â"â"â"")
 
         # Recover: als we op spelers-pagina staan, klik Volgende om door te gaan
         url_nu = driver.current_url
         if "ReservationsPlayers" in url_nu:
-            log.info("  Op ReservationsPlayers â€” klik Volgende om naar dag-pagina terug te gaan")
+            log.info("  Op ReservationsPlayers â€" klik Volgende om naar dag-pagina terug te gaan")
             try:
                 sp_volg = _zoek_knop(driver, ["Volgende", "Next"])
                 if sp_volg:
@@ -958,7 +958,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
                     )
                     time.sleep(1)
                 else:
-                    log.warning("  Geen Volgende op spelers-pagina â€” kan niet recoveren")
+                    log.warning("  Geen Volgende op spelers-pagina â€" kan niet recoveren")
                     continue
             except Exception as e:
                 log.warning(f"  Recovery naar dag-pagina mislukt: {e}")
@@ -987,10 +987,10 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             data_date = driver.execute_script("return arguments[0].getAttribute('data-date');", daypart_el)
             log.info(f"  Daypart gevonden: data-date={data_date}")
         except Exception:
-            log.warning("  Daypart ref werd stale tijdens read â€” retry")
+            log.warning("  Daypart ref werd stale tijdens read â€" retry")
             continue
 
-        # â”€â”€ Klik daypart via ActionChains (isTrusted=true) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Klik daypart via ActionChains (isTrusted=true) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         # ETV's jQuery-handlers filteren synthetische events (isTrusted=false) weg.
         # Zonder echte muis-click registreert de server de selectie niet en stuurt
         # je terug naar de spelers-pagina. Zelfde patroon als spelers-fix 29e25f5.
@@ -1041,7 +1041,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
         screenshot(driver, f"08_dag_geselecteerd_poging{poging}")
 
-        # â”€â”€ Volgende-knop opnieuw fetchen (kan na DOM-update stale zijn) â”€â”€â”€â”€
+        # â"€â"€ Volgende-knop opnieuw fetchen (kan na DOM-update stale zijn) â"€â"€â"€â"€
         try:
             volgende = _vind_volgende_knop(driver)
         except Exception as e:
@@ -1053,7 +1053,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             time.sleep(2)
             continue
 
-        # â”€â”€ Submit Volgende + wacht op outcome (max 15s) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Submit Volgende + wacht op outcome (max 15s) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         try:
             methode = _submit_knop(driver, volgende)
             log.info(f"  Volgende methode: {methode}")
@@ -1080,7 +1080,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         except Exception:
             body_na = ""
 
-        # â”€â”€ Beoordeel uitkomst â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Beoordeel uitkomst â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         if "ReservationsCourt" in url_na:
             log.info(f"âœ… Op baankeuze: {url_na}")
             return True
@@ -1090,13 +1090,13 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             return True
 
         if "ReservationsPlayers" in url_na:
-            log.warning(f"  âŒ Server stuurde terug naar spelers â€” daypart selectie geweigerd. "
+            log.warning(f"  âŒ Server stuurde terug naar spelers â€" daypart selectie geweigerd. "
                         f"Retry (poging {poging+1}/3)")
             screenshot(driver, f"terug_naar_spelers_poging{poging}")
             time.sleep(2)
             continue
 
-        # Nog steeds ReservationsDay of onbekend â€” submit blijkbaar mislukt
+        # Nog steeds ReservationsDay of onbekend â€" submit blijkbaar mislukt
         log.warning(f"  Geen navigatie. URL: {url_na} | body[:200]: {body_na[:200]}")
         screenshot(driver, f"geen_nav_poging{poging}")
         time.sleep(2)
@@ -1106,12 +1106,12 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     return False
 
 
-# â”€â”€ STAP 5: Baan en tijd kiezen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ STAP 5: Baan en tijd kiezen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def _sluit_cookie_banner(driver: uc.Chrome):
     """
     Sluit de cookie-banner als die zichtbaar is.
     Zet implicit_wait tijdelijk op 0 zodat find_elements() direct terugkeert als er
-    geen banner is â€” anders wacht Selenium 5s per XPATH = 25s totaal voor niets.
+    geen banner is â€" anders wacht Selenium 5s per XPATH = 25s totaal voor niets.
     """
     driver.implicitly_wait(0)
     try:
@@ -1144,7 +1144,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     pakt de JS-loop alle tijdcellen met die tijd uit de DOM en kiest degene die
     Y-dichtstbij een Padel-label staat. ETV toont bezette tijdcellen niet op de
     pagina, dus na een verse load is een door iemand anders zojuist geboekte
-    baan automatisch verdwenen â€” geen expliciete uitsluit-lijst nodig.
+    baan automatisch verdwenen â€" geen expliciete uitsluit-lijst nodig.
     """
     log.info("Baankeuze pagina laden...")
 
@@ -1157,14 +1157,14 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
         log.info("âœ… Tijdslot-pagina geladen (tijden zichtbaar)")
     except TimeoutException:
         try:
-            log.warning(f"âš ï¸ Tijdslot-pagina niet geladen na 30s â€” bodytekst: "
+            log.warning(f"âš ï¸ Tijdslot-pagina niet geladen na 30s â€" bodytekst: "
                         f"{driver.find_element(By.TAG_NAME,'body').text[:500]}")
         except Exception:
-            log.warning("âš ï¸ Tijdslot-pagina niet geladen na 30s â€” body niet leesbaar")
+            log.warning("âš ï¸ Tijdslot-pagina niet geladen na 30s â€" body niet leesbaar")
 
     time.sleep(1)
 
-    # â”€â”€ Sluit cookie-banner vÃ³Ã³r we iets klikken â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Sluit cookie-banner vÃ³Ã³r we iets klikken â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     _sluit_cookie_banner(driver)
 
     screenshot(driver, "09_baan_pagina")
@@ -1179,7 +1179,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     except Exception:
         pass
 
-    # â”€â”€ Scroll naar padel-rijen zodat getBoundingClientRect() klopt â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Scroll naar padel-rijen zodat getBoundingClientRect() klopt â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     # Padel-banen staan onderaan het grid; scroll ze eerst in beeld zodat de
     # browser hun layout berekend heeft en de Y-coÃ¶rdinaten kloppen.
     try:
@@ -1239,7 +1239,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
                 var btn = court.querySelector('button.btn-link');
                 if (!btn) return;
                 var courtNaam = (btn.innerText || '').trim();
-                // Match "Padel N" â€” voorbeeld button-text: "9 Padel 1Padel"
+                // Match "Padel N" â€" voorbeeld button-text: "9 Padel 1Padel"
                 var m = courtNaam.match(/Padel \\d/);
                 if (!m) return;
                 var padelLabel = m[0];
@@ -1293,7 +1293,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
         # NIET _sluit_cookie_banner() aanroepen hier: de cookie-banner is al gesloten
         # en find_elements() wacht met implicit_wait=5s per XPATH = 25s voor niets.
 
-        # â”€â”€ Klik via ActionChains (real mouse event, NIET JS click) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Klik via ActionChains (real mouse event, NIET JS click) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         try:
             ActionChains(driver).move_to_element(cel).click().perform()
             log.info(f"  âœ… ActionChains klik op {tijd}, baan={baan}")
@@ -1308,7 +1308,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
         time.sleep(2)
         screenshot(driver, "10_baan_geselecteerd")
 
-        # â”€â”€ Controleer of de selectie geregistreerd is â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Controleer of de selectie geregistreerd is â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         # Na een geldige klik op een tijdslot verandert de klasse (bijv. 'selected')
         # of verschijnen er foutmeldingen. Log de celstatus en controleer pagina.
         selectie_ok = driver.execute_script("""
@@ -1350,7 +1350,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
     return "", ""
 
 
-# â”€â”€ STAP 6: Bevestigen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ STAP 6: Bevestigen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def _submit_knop(driver: uc.Chrome, knop) -> str:
     """Dien een form in via requestSubmit â†’ form.submit() â†’ ActionChains â†’ JS click."""
     methode = driver.execute_script("""
@@ -1381,11 +1381,11 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
     Stap 6: klik Volgende â†’ ga naar bevestigingspagina â†’ klik 'Bevestigen'.
 
     Returnt een string-code:
-      'OK'    â€” reservering succesvol gemaakt (of bij dry_run=True: simulatie OK)
-      'BEZET' â€” server zegt 'niet gevonden' (baan werd net door iemand anders
-                geboekt, of vergelijkbare race-conditie) â€” main() kan terug
+      'OK'    â€" reservering succesvol gemaakt (of bij dry_run=True: simulatie OK)
+      'BEZET' â€" server zegt 'niet gevonden' (baan werd net door iemand anders
+                geboekt, of vergelijkbare race-conditie) â€" main() kan terug
                 naar baan-keuze en een andere baan proberen
-      'FOUT'  â€” andere fout, geen retry mogelijk
+      'FOUT'  â€" andere fout, geen retry mogelijk
 
     dry_run=True: Loopt door alle stappen behalve de Bevestig-knop-klik.
                   Logt ðŸ§ª DRY-RUN-merker, maakt een screenshot 'dry_run_zou_klikken'
@@ -1394,14 +1394,14 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
 
     De bevestigingsknop is een <a id="confirmReservationButton"
     data-url="/Ajax/Profile/SaveReservation" data-redirect="/me/Reservations">.
-    Geen form â€” de knop triggert een AJAX-call via een jQuery click-handler.
+    Geen form â€" de knop triggert een AJAX-call via een jQuery click-handler.
     """
     log.info("Bevestigen...")
 
     def _wacht_op_redirect(max_sec=25):
         """
         True als de URL niet langer ReservationsConfirm is binnen max_sec seconden.
-        LET OP: check op 'ReservationsConfirm', NIET op 'ReservationsCourt' â€”
+        LET OP: check op 'ReservationsConfirm', NIET op 'ReservationsCourt' â€"
         want we starten al op de Confirm-pagina en die URL bevat al geen 'Court'.
         """
         try:
@@ -1413,7 +1413,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             return False
 
     try:
-        # â”€â”€ Stap 1: Volgende â†’ bevestigingspagina â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Stap 1: Volgende â†’ bevestigingspagina â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         url_voor = driver.current_url
         volgende = _zoek_knop(driver, ["Volgende", "Next"])
         if volgende:
@@ -1439,11 +1439,11 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             # Controleer of we op de juiste pagina zijn (ReservationsConfirm)
             if "ReservationsConfirm" not in url_na_vol:
                 log.error(f"âŒ Volgende bracht ons naar {url_na_vol} i.p.v. ReservationsConfirm "
-                          f"â€” court-selectie mogelijk niet geregistreerd")
+                          f"â€" court-selectie mogelijk niet geregistreerd")
                 screenshot(driver, "bevestig_fout_verkeerde_pagina")
                 return False
 
-        # â”€â”€ Stap 2: zoek confirmReservationButton (op id of data-url) â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Stap 2: zoek confirmReservationButton (op id of data-url) â"€â"€â"€â"€â"€â"€â"€
         knop_info = driver.execute_script("""
             var btn = document.getElementById('confirmReservationButton')
                    || document.querySelector('[data-url*="SaveReservation"]')
@@ -1479,15 +1479,15 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             screenshot(driver, "bevestig_fout")
             return False
 
-        # â”€â”€ DRY-RUN: stop hier, ga niet daadwerkelijk reserveren â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ DRY-RUN: stop hier, ga niet daadwerkelijk reserveren â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         if dry_run:
-            log.info("ðŸ§ª DRY-RUN: Bevestig-knop gevonden en klaar voor klik â€” STOP HIER")
+            log.info("ðŸ§ª DRY-RUN: Bevestig-knop gevonden en klaar voor klik â€" STOP HIER")
             log.info(f"ðŸ§ª Zou clicken: id={knop_info.get('id')} data-url={data_url}")
             screenshot(driver, "dry_run_zou_klikken")
             log.info("ðŸ§ª Geen echte reservering gemaakt. Returnt 'OK' (simulatie geslaagd).")
             return 'OK'
 
-        # â”€â”€ Stap 3A: Intercept jQuery handler â†’ haal POST-params op â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Stap 3A: Intercept jQuery handler â†’ haal POST-params op â"€â"€â"€â"€â"€â"€â"€â"€â"€
         # De site's jQuery click-handler op de bevestig-knop stuurt de reservering-
         # data (court-id, datum, spelers) mee als POST-body. We:
         #   1. Overschrijven jQuery.ajax tijdelijk om de params te onderscheppen.
@@ -1556,7 +1556,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             or "reeds geboekt" in ajax_response.lower()
             or "niet meer beschikbaar" in ajax_response.lower()
         ):
-            log.warning(f"  âš ï¸ Server wees reservering af (Poging A): '{ajax_response}' â€” "
+            log.warning(f"  âš ï¸ Server wees reservering af (Poging A): '{ajax_response}' â€" "
                         f"vermoedelijk net door iemand anders gereserveerd")
             screenshot(driver, "bevestig_baan_bezet")
             return 'BEZET'
@@ -1574,9 +1574,9 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             return 'OK'
 
         url_na = driver.current_url
-        log.warning(f"  Poging A geen redirect â€” URL: {url_na}")
+        log.warning(f"  Poging A geen redirect â€" URL: {url_na}")
 
-        # â”€â”€ Stap 3B: jQuery.ajax() met onderschepte params (of leeg) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Stap 3B: jQuery.ajax() met onderschepte params (of leeg) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         log.warning("  Poging B: jQuery.ajax() met POST-data naar SaveReservation...")
         ajax_start = driver.execute_script("""
             var url      = arguments[0];
@@ -1658,7 +1658,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
                 )
             ):
                 log.warning(f"  âš ï¸ Server wees reservering ook af (Poging B): "
-                            f"'{b_fout or b_resp}' â€” vermoedelijk baan bezet")
+                            f"'{b_fout or b_resp}' â€" vermoedelijk baan bezet")
                 screenshot(driver, "bevestig_baan_bezet_b")
                 return 'BEZET'
 
@@ -1673,7 +1673,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             body_na2 = driver.find_element(By.TAG_NAME, "body").text
         except Exception:
             body_na2 = ""
-        log.error(f"âŒ Bevestigen definitief mislukt â€” "
+        log.error(f"âŒ Bevestigen definitief mislukt â€" "
                   f"status={status} fout={fout} url={url_na2}")
         log.error(f"   Body: {body_na2[:400]}")
         screenshot(driver, "bevestig_fout")
@@ -1685,7 +1685,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
         return 'FOUT'
 
 
-# â”€â”€ STAP 7: Verificatie â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ STAP 7: Verificatie â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
     """
     Controleer of de reservering zichtbaar is op de reserveringspagina.
@@ -1698,7 +1698,7 @@ def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
     datum_nl   = f"{datum_obj.day}-{datum_obj.month}"   # bijv. "29-5"
     datum_nl2  = f"{datum_obj.day} mei"                  # bijv. "29 mei"
     datum_nl3  = f"{datum_obj.day:02d}-{datum_obj.month:02d}-{datum_obj.year}"  # "29-05-2026"
-    # Let op: gebruik GEEN losse tijdstring als zoekterm â€” die matcht ook op reserveringen
+    # Let op: gebruik GEEN losse tijdstring als zoekterm â€" die matcht ook op reserveringen
     # van andere datums (bijv. een bestaande reservering op een andere dag om 15:00).
     # Vereiste: datum Ã‰N tijd moeten allebei aanwezig zijn op de pagina.
     datum_tekens = [datum, datum_nl, datum_nl2, datum_nl3]
@@ -1744,11 +1744,11 @@ def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
     return ""
 
 
-# â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Main â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4: str) -> bool:
     """
     Schrijf een wachtrij-bestand voor latere verwerking en push naar de repo.
-    Wordt gebruikt als de speeldatum nog meer dan 2 dagen weg ligt â€” de
+    Wordt gebruikt als de speeldatum nog meer dan 2 dagen weg ligt â€" de
     verwerk_wachtrij.yml workflow pikt het bestand op om 07:00 NL op de reserveringsdatum
     en triggert boek.yml opnieuw met deze inputs.
     """
@@ -1766,7 +1766,7 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
     with open(bestand, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
-    log.info(f"ðŸ“¥ Wachtrij-bestand geschreven: {bestand}")
+    log.info(f"ðŸ"¥ Wachtrij-bestand geschreven: {bestand}")
 
     try:
         subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
@@ -1783,7 +1783,7 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
         if subprocess.run(["git", "push"]).returncode == 0:
             log.info(f"âœ… Wachtrij-bestand gecommit en gepusht (poging {poging})")
             return True
-        log.warning(f"âš ï¸  Push poging {poging} mislukt â€” retry na {poging}s")
+        log.warning(f"âš ï¸  Push poging {poging} mislukt â€" retry na {poging}s")
         time.sleep(poging)
     log.error("âŒ Push voor wachtrij faalde na 5 pogingen")
     return False
@@ -1802,7 +1802,7 @@ def main():
     args = parser.parse_args()
     if args.dry_run:
         log.info("=" * 50)
-        log.info("ðŸ§ª DRY-RUN MODE â€” er wordt GEEN echte reservering gemaakt.")
+        log.info("ðŸ§ª DRY-RUN MODE â€" er wordt GEEN echte reservering gemaakt.")
         log.info("=" * 50)
 
     if not BONDSNUMMER or not WACHTWOORD:
@@ -1820,22 +1820,22 @@ def main():
     nu            = datetime.now()
     reserveringsdatum = speeldatum - timedelta(days=2)
     dag_verschil  = (speeldatum.date() - nu.date()).days
-    log.info(f"ðŸ“… Speeldatum dag+{dag_verschil} | reserveringsdatum: {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00")
+    log.info(f"ðŸ"… Speeldatum dag+{dag_verschil} | reserveringsdatum: {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00")
 
     if nu.date() < reserveringsdatum.date():
-        log.info(f"â³ Te vroeg om direct te reserveren â€” speeldatum is over {dag_verschil} dagen. "
+        log.info(f"â³ Te vroeg om direct te reserveren â€" speeldatum is over {dag_verschil} dagen. "
                  f"Reserveringsdatum: {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
-        log.info("ðŸ“¥ Zet in wachtrij voor automatische reservering op de reserveringsdatum.")
+        log.info("ðŸ"¥ Zet in wachtrij voor automatische reservering op de reserveringsdatum.")
         if _zet_in_wachtrij(args.datum, args.tijd, args.speler2, args.speler3, args.speler4):
-            log.info(f"âœ… In wachtrij gezet â€” verwerk_wachtrij workflow start de reservering "
+            log.info(f"âœ… In wachtrij gezet â€" verwerk_wachtrij workflow start de reservering "
                      f"automatisch op {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
             sys.exit(0)
-        log.error("âŒ Kon wachtrij-bestand niet opslaan â€” reservering NIET ingepland")
+        log.error("âŒ Kon wachtrij-bestand niet opslaan â€" reservering NIET ingepland")
         sys.exit(1)
     else:
         log.info(f"âœ… Reserveren! (dag+{dag_verschil}, reserveringsdatum bereikt)")
         if nu.date() == reserveringsdatum.date() and (nu.hour < 7 or (nu.hour == 7 and nu.minute < 1)):
-            log.info(f"   Cron is vroeg gestart â€” login/spelers/dag/baan worden NU al "
+            log.info(f"   Cron is vroeg gestart â€" login/spelers/dag/baan worden NU al "
                      f"voorbereid, bevestig-klik volgt pas op 07:01 NL.")
 
     log.info("=" * 50)
@@ -1859,7 +1859,7 @@ def main():
                 break
             if login_result == 'ONDERHOUD':
                 if login_poging < MAX_LOGIN_POGINGEN:
-                    log.warning(f"â³ ETV in onderhoud â€” wacht {ONDERHOUD_WACHT_SEC}s en probeer opnieuw "
+                    log.warning(f"â³ ETV in onderhoud â€" wacht {ONDERHOUD_WACHT_SEC}s en probeer opnieuw "
                                 f"(poging {login_poging}/{MAX_LOGIN_POGINGEN})")
                     time.sleep(ONDERHOUD_WACHT_SEC)
                     driver.get(LOGIN_URL)
@@ -1868,17 +1868,17 @@ def main():
                 log.error("ðŸš« ETV bleef in onderhoud na alle login-pogingen")
                 sys.exit(1)
             else:
-                log.error("ðŸš« Inloggen mislukt â€” controleer ETVVOLLEY_BONDSNUMMER en ETVVOLLEY_WACHTWOORD")
+                log.error("ðŸš« Inloggen mislukt â€" controleer ETVVOLLEY_BONDSNUMMER en ETVVOLLEY_WACHTWOORD")
                 sys.exit(1)
 
         alle_spelers = [SPELER1, args.speler2, args.speler3, args.speler4]
 
-        # â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
+        # â•"â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
         # â•‘ OUTER-RETRY: volledige wizard-restart bij ETV-restricties        â•‘
         # â•‘                                                                  â•‘
         # â•‘ Achtergrond (run #74, 01-06): ETV gaf na Volgende-klik op de     â•‘
         # â•‘ dag-keuze geen navigatie terug. Doeldatum (03-06, dag+2) bleek   â•‘
-        # â•‘ op die pagina als 'grijs/disabled' getoond â€” vermoedelijk omdat  â•‘
+        # â•‘ op die pagina als 'grijs/disabled' getoond â€" vermoedelijk omdat  â•‘
         # â•‘ er al een actieve reservering bestond ('1 actieve reservering'  â•‘
         # â•‘ vermoeden uit valkuil 11.9) of omdat ETV de dag+2-slot op een    â•‘
         # â•‘ tragere cadens vrijgeeft dan precies 07:00.                      â•‘
@@ -1894,7 +1894,7 @@ def main():
         gereserveerde_tijd = ""
 
         for outer_poging in range(1, MAX_OUTER_POGINGEN + 1):
-            log.info(f"â•”â•â• BOEK-POGING {outer_poging}/{MAX_OUTER_POGINGEN} â•â•â•—")
+            log.info(f"â•"â•â• BOEK-POGING {outer_poging}/{MAX_OUTER_POGINGEN} â•â•â•—")
 
             if outer_poging > 1:
                 log.info("â³ Wacht 30s en restart wizard vanaf 'Baan afhangen'...")
@@ -1910,7 +1910,7 @@ def main():
                 continue  # outer retry
 
             if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4):
-                log.error("ðŸš« Speler niet gevonden â€” controleer spelernamen")
+                log.error("ðŸš« Speler niet gevonden â€" controleer spelernamen")
                 sys.exit(1)  # credentials/lid-issue, geen retry zinvol
 
             _log_zichtbare_spelers(driver, alle_spelers,
@@ -1928,10 +1928,10 @@ def main():
                     log.info(f"â³ Wacht {wacht_sec} sec tot 07:01 NL vÃ³Ã³r dag-selectie "
                              f"(ETV opent het slot om 07:00, buffer voor klok-skew)...")
                     time.sleep(wacht_sec)
-                    log.info(f"â° {datetime.now().strftime('%H:%M:%S')} NL â€” boekvenster open.")
+                    log.info(f"â° {datetime.now().strftime('%H:%M:%S')} NL â€" boekvenster open.")
 
             if not kies_dag(driver, args.datum, args.tijd):
-                log.warning(f"âš ï¸ Dag {args.datum} niet selecteerbaar in poging {outer_poging} â€” "
+                log.warning(f"âš ï¸ Dag {args.datum} niet selecteerbaar in poging {outer_poging} â€" "
                             f"mogelijk ETV restrictie (dag+2 nog niet open of 1-actieve-reservering-rule). "
                             f"Outer-retry.")
                 continue  # outer retry
@@ -1939,7 +1939,7 @@ def main():
             _log_zichtbare_spelers(driver, alle_spelers,
                 "na kies_dag (baan-grid; spelers mogelijk niet meer zichtbaar)")
 
-            # â”€â”€ Innerlijke retry: baan + tijd kiezen + bevestigen â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            # â"€â"€ Innerlijke retry: baan + tijd kiezen + bevestigen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
             # Race-conditie: tussen kies_baan_en_tijd en bevestig kan iemand
             # anders nÃ©t sneller zijn. ETV toont bezette tijdcel daarna niet
             # meer; kies_baan_en_tijd pakt automatisch de volgende baan voor
@@ -1948,7 +1948,7 @@ def main():
             bevestig_ok = False
 
             for baan_poging in range(1, MAX_BAAN_POGINGEN + 1):
-                log.info(f"â”â”â”â” Baan-poging {baan_poging}/{MAX_BAAN_POGINGEN} â”â”â”â”")
+                log.info(f"â"â"â"â" Baan-poging {baan_poging}/{MAX_BAAN_POGINGEN} â"â"â"â"")
                 baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd)
                 if not baan:
                     log.warning(f"ðŸš« Geen padelbaan beschikbaar in baan-poging {baan_poging}")
@@ -1976,7 +1976,7 @@ def main():
                     try:
                         driver.get("https://www.etv-volley.nl/me/ReservationsCourt")
                         time.sleep(2)
-                        log.info("âŸ³ Forceer expliciete refresh â€” garandeert verse DOM van ETV")
+                        log.info("âŸ³ Forceer expliciete refresh â€" garandeert verse DOM van ETV")
                         driver.refresh()
                         time.sleep(2)
                     except Exception as e:
@@ -1984,8 +1984,8 @@ def main():
                         break  # naar outer-retry
                     continue
 
-                # resultaat == 'FOUT' â€” outer-retry kan misschien helpen
-                log.warning(f"âš ï¸ Bevestigen mislukt (FOUT) op baan-poging {baan_poging} â€” outer-retry.")
+                # resultaat == 'FOUT' â€" outer-retry kan misschien helpen
+                log.warning(f"âš ï¸ Bevestigen mislukt (FOUT) op baan-poging {baan_poging} â€" outer-retry.")
                 break
 
             if bevestig_ok:
@@ -1993,16 +1993,16 @@ def main():
                 break  # outer-retry-loop verlaten
 
             # Hier zonder bevestig_ok: vol of fout â†’ outer-retry
-            log.warning(f"âš ï¸ Boek-poging {outer_poging} niet gelukt â€” wacht + restart.")
+            log.warning(f"âš ï¸ Boek-poging {outer_poging} niet gelukt â€" wacht + restart.")
 
         if not boek_gelukt:
             log.error(f"ðŸš« Na {MAX_OUTER_POGINGEN} boek-pogingen nog geen reservering gelukt")
             sys.exit(1)
 
-        # â”€â”€ Verificeer dat reservering zichtbaar is op Mijn Reserveringen â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Verificeer dat reservering zichtbaar is op Mijn Reserveringen â"€â"€â"€â"€â"€â"€â"€â"€
         geverifieerde_baan = verifieer_reservering(driver, args.datum, gereserveerde_tijd)
         if not geverifieerde_baan:
-            log.error("ðŸš« Reservering niet zichtbaar op reserveringspagina â€” agenda NIET bijgewerkt")
+            log.error("ðŸš« Reservering niet zichtbaar op reserveringspagina â€" agenda NIET bijgewerkt")
             sys.exit(1)
 
         # Gebruik geverifieerde baan-naam (betrouwbaarder dan detectie tijdens grid-klik)
@@ -2011,7 +2011,7 @@ def main():
     finally:
         driver.quit()
 
-    # â”€â”€ Succes: Google Agenda bijwerken â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Succes: Google Agenda bijwerken â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     spelers = [SPELER1, args.speler2, args.speler3, args.speler4]
     datum_nl = speeldatum.strftime("%d-%m-%Y")
     tijdsverschil = f" (voorkeur was {args.tijd})" if gereserveerde_tijd != args.tijd else ""
