@@ -60,10 +60,12 @@ jobs:
               echo "Gebruiker '$gebruiker' niet gevonden in GEBRUIKERS_CONFIG"
               exit 1
             fi
+            calendar_id=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].calendar_id // empty')
             echo "ETVVOLLEY_BONDSNUMMER=$bondsnummer" >> $GITHUB_ENV
             echo "ETVVOLLEY_WACHTWOORD=$wachtwoord"  >> $GITHUB_ENV
             echo "SPELER1_NAAM=$naam"                >> $GITHUB_ENV
             echo "GEBRUIKER=$gebruiker"              >> $GITHUB_ENV
+            echo "GOOGLE_CALENDAR_ID=$calendar_id"   >> $GITHUB_ENV
             echo "ALLE_GEBRUIKERS=false"             >> $GITHUB_ENV
           fi
 
@@ -83,10 +85,13 @@ jobs:
             bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].bondsnummer')
             wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].wachtwoord')
             naam=$(echo         "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].naam')
+            local calendar_id
+            calendar_id=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].calendar_id // empty')
             export ETVVOLLEY_BONDSNUMMER="$bondsnummer"
             export ETVVOLLEY_WACHTWOORD="$wachtwoord"
             export SPELER1_NAAM="$naam"
             export GEBRUIKER="$gebruiker"
+            export GOOGLE_CALENDAR_ID="$calendar_id"
             echo "--- Beheer voor: $gebruiker ($naam) ---"
             if [ -n "${{ inputs.cancel_id }}" ]; then
               python lees_reserveringen.py --cancel "${{ inputs.cancel_id }}"

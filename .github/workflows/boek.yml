@@ -70,10 +70,12 @@ jobs:
             echo "Gebruiker '$gebruiker' niet gevonden in GEBRUIKERS_CONFIG"
             exit 1
           fi
+          calendar_id=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].calendar_id // empty')
           echo "ETVVOLLEY_BONDSNUMMER=$bondsnummer" >> $GITHUB_ENV
           echo "ETVVOLLEY_WACHTWOORD=$wachtwoord"  >> $GITHUB_ENV
           echo "SPELER1_NAAM=$naam"                >> $GITHUB_ENV
           echo "GEBRUIKER=$gebruiker"              >> $GITHUB_ENV
+          echo "GOOGLE_CALENDAR_ID=$calendar_id"   >> $GITHUB_ENV
 
       - name: Reserveer baan
         env:
