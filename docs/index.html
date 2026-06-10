@@ -55,6 +55,14 @@
     .header-logo   { width: 64px; height: 64px; border-radius: 14px; flex-shrink: 0; }
     .header h1     { font-size: 1.7rem; font-weight: 700; line-height: 1.2; }
     .header p      { font-size: 1rem; opacity: 0.82; margin-top: 5px; }
+    .help-btn {
+      position: absolute; top: 20px; right: 70px;
+      padding-top: max(0px, env(safe-area-inset-top));
+      background: rgba(255,255,255,0.2);
+      border: none; border-radius: 50%;
+      padding: 10px 14px; font-size: 1.25rem;
+      cursor: pointer; color: white;
+    }
     .gear-btn {
       position: absolute; top: 20px; right: 18px;
       padding-top: max(0px, env(safe-area-inset-top));
@@ -531,6 +539,7 @@
       <p>ETV Volley — automatische reservering</p>
     </div>
   </div>
+  <button class="help-btn" onclick="openHelpSheet()" title="Help">❓</button>
   <button class="gear-btn" onclick="openPatSheet()" title="GitHub Token instellen">
     <span id="gearIcoon">⚙️</span>
     <span class="pat-badge" id="patBadge" hidden></span>
@@ -549,6 +558,41 @@
     <input type="date" id="patVerloopt" class="pat-input">
     <p class="sheet-hint" id="patVerloopHint" style="margin-top:6px"></p>
     <button class="btn-opslaan" onclick="slaPatOp()">Opslaan</button>
+  </div>
+</div>
+
+<!-- Help sheet -->
+<div class="overlay" id="helpOverlay" onclick="if(event.target===this)sluitHelpSheet()">
+  <div class="sheet" style="max-height:85vh; overflow-y:auto;">
+    <div class="sheet-handle"></div>
+    <h2>❓ Help</h2>
+
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">📅 Wanneer</h3>
+    <p class="sheet-hint">Kies de datum en tijd waarop je wil spelen.</p>
+
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">👥 Spelers</h3>
+    <p class="sheet-hint">Selecteer 3 medespelers via de zoekboxen. Jij (Joris) bent altijd speler 1.</p>
+
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">🎾 Baan reserveren</h3>
+    <p class="sheet-hint">Tik op de groene knop onderin. Afhankelijk van de speeldatum:</p>
+    <ul style="margin:6px 0 0 18px; font-size:0.9rem; color:#4a5568; line-height:1.7">
+      <li><strong>Dag 0 t/m dag+2</strong> — boekt direct (mail van ETV binnen 5 min)</li>
+      <li><strong>Dag+3 of verder</strong> — wordt ingepland; automatisch gereserveerd op de reserveringsdatum om 07:01</li>
+    </ul>
+
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">📋 Mijn reserveringen</h3>
+    <p class="sheet-hint">Toont je actieve reserveringen. Wordt dagelijks om 09:00 bijgewerkt. Tik 🔄 voor een directe refresh (~1.5 min). Tik 🗑️ om een reservering te annuleren.</p>
+
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">🕒 Ingeplande reserveringen</h3>
+    <p class="sheet-hint">Reserveringen die nog te ver in de toekomst liggen. Worden automatisch verwerkt op de reserveringsdatum om 07:01. Tik 🗑️ om een geplande reservering te verwijderen.</p>
+
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">⚙️ GitHub Token</h3>
+    <p class="sheet-hint">Vereist voor alle acties. Maak een classic PAT aan op <strong>github.com/settings/tokens</strong> met scope <code>workflow</code>. Eenmalig instellen via het tandwiel-icoon.</p>
+
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">🔴 Rode badge op ⚙️</h3>
+    <p class="sheet-hint">Je GitHub Token verloopt binnenkort of is verlopen. Genereer een nieuwe en sla op via het tandwiel-icoon.</p>
+
+    <button class="btn-opslaan" onclick="sluitHelpSheet()" style="margin-top:20px">Sluiten</button>
   </div>
 </div>
 
@@ -707,6 +751,12 @@
   }
   function sluitPatSheet() {
     document.getElementById('patOverlay').classList.remove('show');
+  }
+  function openHelpSheet() {
+    document.getElementById('helpOverlay').classList.add('show');
+  }
+  function sluitHelpSheet() {
+    document.getElementById('helpOverlay').classList.remove('show');
   }
   function slaPatOp() {
     const v = document.getElementById('patInput').value.trim();
