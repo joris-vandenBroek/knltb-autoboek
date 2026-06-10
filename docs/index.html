@@ -680,7 +680,7 @@
 
   <div class="field-group">
     <label class="field-label">Speler 1</label>
-    <div class="speler1-veld" id="speler1Veld">Joris van den Broek</div>
+    <div class="speler1-veld" id="speler1Veld">…</div>
   </div>
 
   <div class="field-group">
@@ -795,6 +795,12 @@
   const BEHEER_EIGENAAR  = 'joris_van_den_broek';
 
   const getGebruiker = () => localStorage.getItem(GEBRUIKER_KEY) || 'joris_van_den_broek';
+
+  async function updateSpeler1() {
+    const lijst = await laadGebruikers();
+    const g = lijst.find(g => g.id === getGebruiker());
+    document.getElementById('speler1Veld').textContent = g ? g.naam : getGebruiker();
+  }
   // Eenmalige opruim van legacy spelers-persistence (was 'knltb_spelers')
   localStorage.removeItem('knltb_spelers');
 
@@ -829,8 +835,8 @@
     ).join('');
     sel.onchange = () => {
       localStorage.setItem(GEBRUIKER_KEY, sel.value);
-      // herlaad afhankelijke data
       _gebruikersCache = null;
+      updateSpeler1();
       laadReserveringen();
       laadWachtrij();
     };
@@ -1611,6 +1617,7 @@ async function laadReserveringen() {
     }
   }
 
+  updateSpeler1();
   laadReserveringen();
 
   // Bij tab-terugkomst opnieuw checken (mobile multitasking, lock-screen)
