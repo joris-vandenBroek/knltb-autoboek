@@ -1,23 +1,4 @@
 {
-  "bijgewerkt": "2026-06-09T18:22:41",
-  "reserveringen": [
-    {
-      "id": "2026-06-09_2100_padel-2",
-      "datum": "2026-06-09",
-      "tijd": "21:00",
-      "baan": "Padel 2",
-      "tekst": "09-06-2026\t21:00 - 22:00\tPadel 2\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Chris van Waardenburg",
-        "Toine Aanraad",
-        "Jan van Bragt"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-06-10T19:10:12",
+  "reserveringen": []
 }
