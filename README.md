@@ -46,8 +46,9 @@ Gehost als Progressive Web App op GitHub Pages.
 | `haal_leden_op.py` | Scrape de ledenlijst -> `leden.json` |
 | `haal_padel_sterktes.py` | Haal padel speelsterktes op van mijnknltb.toernooi.nl -> `leden.json` |
 | `leden.json` | Cache van alle ETV-leden met padel speelsterktes (autocomplete bron voor PWA) |
-| `reserveringen.json` | Cache van actieve reserveringen (incl. spelers per item via Wijzig-flow scrape) |
-| `wachtrij/*.json` | Reserveringen voor speeldatums verder dan dag+2 weg |
+| `gebruikers.json` | Lijst van actieve gebruikers met ID en naam (niet-gevoelig, in repo) |
+| `reserveringen_<gebruiker>.json` | Cache van actieve reserveringen per gebruiker (bijv. `reserveringen_joris.json`) |
+| `wachtrij/<gebruiker>/*.json` | Reserveringen per gebruiker voor speeldatums verder dan dag+2 weg |
 | `docs/` | PWA-bronbestanden (index.html, sw.js, manifest.json, icons) |
 | `.github/workflows/boek.yml` | Voert een reservering uit (getriggerd door PWA of wachtrij) |
 | `.github/workflows/verwerk_wachtrij.yml` | Werkt 's ochtends 07:00 NL de wachtrij af |
@@ -162,7 +163,7 @@ In de PWA-kaart "Mijn reserveringen":
 - **🔄 Verversen** -> handmatig scrapen vanuit de PWA, resultaat zichtbaar na ~1.5 min
 - **🗑️ per reservering** -> annuleert op ETV-site + verwijdert matching agenda-event
 
-De PWA haalt bij elke open en elke 3 minuten de laatste `reserveringen.json` op van GitHub (snelle fetch, geen workflow). De 🔄 Verversen-knop en de dagelijkse cron zijn de enige momenten dat de ETV-site opnieuw gescrapet wordt.
+De PWA haalt bij elke open en elke 3 minuten de laatste `reserveringen_<gebruiker>.json` op van GitHub (snelle fetch, geen workflow). De 🔄 Verversen-knop en de dagelijkse cron zijn de enige momenten dat de ETV-site opnieuw gescrapet wordt.
 
 ---
 
@@ -198,21 +199,34 @@ De PWA toont onder het ledenaantal "Laatst ververst op DD-MM-YYYY".
 
 ---
 
-## Toekomstige features
+## Multi-user setup
 
-### Multi-user support (een repo, meerdere ETV-leden)
+Meerdere ETV-leden kunnen dezelfde repo gebruiken. Credentials staan in één GitHub Secret (`GEBRUIKERS_CONFIG`), de gebruikerslijst in `gebruikers.json` (niet-gevoelig, in repo).
 
-Op dit moment is `boek_baan.py` hardcoded op `SPELER1 = "Joris van den Broek"` en zijn de ETV Volley-credentials enkelvoudig. Toekomstige refactor om meerdere clubgenoten te ondersteunen **zonder fork**:
+### Secret aanmaken
 
-- **Per-user GitHub Secrets** (`ETVVOLLEY_BONDSNUMMER_JORIS`, `ETVVOLLEY_BONDSNUMMER_TOINE`, etc.)
-- **Workflows** krijgen extra input `gebruiker`; conditional env-vars selecteren de juiste secrets per run
-- **`SPELER1`** via env-var `SPELER1_NAAM` ipv hardcoded constante
-- **Data-isolatie**: `reserveringen_<user>.json` + `wachtrij/<user>/<datum>.json` (leden.json blijft shared -- zelfde club)
-- **PWA** krijgt gebruiker-selector + dynamische URLs
-- **Google Agenda**: shared service-account werkt voor meerdere agendas -- Toine deelt zijn agenda met het service-account email (~2 min setup ipv eigen Google Cloud project)
+Ga naar **Settings → Secrets and variables → Actions** en maak `GEBRUIKERS_CONFIG` aan met:
 
-Geraamd werk: ~1.5 uur engineering aan repo + ~5 min setup per extra gebruiker.
+```json
+{
+  "joris": { "bondsnummer": "1234567", "wachtwoord": "...", "naam": "Joris van den Broek" },
+  "toine": { "bondsnummer": "7654321", "wachtwoord": "...", "naam": "Toine Aanraad" }
+}
+```
 
-Volledige technische uitwerking staat in [`knltb-autoboek.md` sectie "Multi-user setup"](knltb-autoboek.md#13-toekomstige-features-multi-user-setup).
+### Gebruiker toevoegen
+
+1. Open de PWA → 🛠️ → wachtwoord `etv2025` → vul ID en naam in → Toevoegen  
+   _(of pas `gebruikers.json` rechtstreeks aan in de repo)_
+2. Voeg de credentials toe aan het `GEBRUIKERS_CONFIG` secret
+3. Maak map `wachtrij/<id>/` aan in de repo (leeg bestand `.gitkeep` voldoet)
+
+### Hoe het werkt
+
+- `boek.yml` / `beheer_reserveringen.yml` / `verwerk_wachtrij.yml` krijgen `gebruiker` als input
+- Credentials worden per run gelezen uit `GEBRUIKERS_CONFIG` via `jq`
+- Data-isolatie: `reserveringen_<gebruiker>.json` + `wachtrij/<gebruiker>/`
+- PWA: gebruiker-selector in ⚙️ Instellingen; alle workflow-dispatches sturen `gebruiker` mee
+- Concurrency per gebruiker: `knltb-account-<gebruiker>` / `knltb-beheer-<gebruiker>`
 
 ---
