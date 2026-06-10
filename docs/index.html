@@ -603,8 +603,6 @@
           <div class="pf-list" id="beheerLidLijst"></div>
         </div>
       </div>
-      <label class="field-label" for="nieuweId" style="margin-top:4px">ID (automatisch, aanpasbaar)</label>
-      <input type="text" id="nieuweId" class="pat-input" placeholder="voornaam_achternaam" style="margin-bottom:6px" autocomplete="off" autocorrect="off" spellcheck="false">
       <button class="btn-opslaan" onclick="beheerVoegToe()" style="margin-top:4px">Toevoegen</button>
 
       <p id="beheerStatus" class="sheet-hint" style="margin-top:12px; color:var(--groen)"></p>
@@ -930,7 +928,6 @@
     _beheerLidGeselecteerd = '';
     document.getElementById('beheerLidTekst').textContent = '— Selecteer lid —';
     document.getElementById('beheerLidTekst').style.color = '#b0bec5';
-    document.getElementById('nieuweId').value = '';
     renderBeheerLidLijst('');
   }
 
@@ -984,17 +981,16 @@
     const tekst = document.getElementById('beheerLidTekst');
     tekst.textContent = naam;
     tekst.style.color = '';
-    document.getElementById('nieuweId').value = naam.toLowerCase().replace(/\s+/g, '_');
     document.getElementById('beheerLidTrigger').classList.remove('open');
     document.getElementById('beheerLidPanel').classList.remove('open');
   }
 
   async function beheerVoegToe() {
     const naam = _beheerLidGeselecteerd.trim();
-    const id   = document.getElementById('nieuweId').value.trim().toLowerCase().replace(/\s+/g, '_');
-    if (!naam || !id) { toonToast('error', '⚠️ Selecteer een lid en controleer het ID'); return; }
+    if (!naam) { toonToast('error', '⚠️ Selecteer eerst een lid'); return; }
+    const id   = naam.toLowerCase().replace(/\s+/g, '_');
     const lijst = await laadGebruikers();
-    if (lijst.find(g => g.id === id)) { toonToast('error', '⚠️ ID bestaat al'); return; }
+    if (lijst.find(g => g.id === id || g.naam === naam)) { toonToast('error', `⚠️ ${naam} bestaat al`); return; }
     const nieuwelijst = [...lijst, { id, naam }];
     document.getElementById('beheerStatus').textContent = '⏳ Opslaan…';
     const ok = await _beheerSlaOp(nieuwelijst);
