@@ -51,7 +51,7 @@ Gehost als Progressive Web App op GitHub Pages.
 | `docs/` | PWA-bronbestanden (index.html, sw.js, manifest.json, icons) |
 | `.github/workflows/boek.yml` | Voert een reservering uit (getriggerd door PWA of wachtrij) |
 | `.github/workflows/verwerk_wachtrij.yml` | Werkt 's ochtends 07:00 NL de wachtrij af |
-| `.github/workflows/beheer_reserveringen.yml` | Scrape of annuleer een reservering (vanuit PWA) |
+| `.github/workflows/beheer_reserveringen.yml` | Scrape of annuleer een reservering -- dagelijks 09:00 NL + vanuit PWA |
 | `.github/workflows/haal_leden_op.yml` | Wekelijkse ledenlijst-refresh (maandag 07:00) -- triggert daarna automatisch haal_padel_sterktes.yml |
 | `.github/workflows/haal_padel_sterktes.yml` | Haal padel speelsterktes op via mijnknltb.toernooi.nl (getriggerd na ledenlijst-refresh) |
 
@@ -158,10 +158,11 @@ Login + spelers gebeurt tijdens de wachttijd voor 07:00. Pas vanaf 07:01 (1 min 
 ### Mijn reserveringen / annuleren
 
 In de PWA-kaart "Mijn reserveringen":
-- **Verversen** -> scrape `/mijn/Reservations` en update `reserveringen.json`
-- **per reservering** -> annuleert op ETV-site + verwijdert matching agenda-event
+- **Automatisch** -> elke ochtend om 09:00 NL scrapet `beheer_reserveringen.yml` de actuele stand; verlopen reserveringen verdwijnen vanzelf
+- **🔄 Verversen** -> handmatig scrapen vanuit de PWA, resultaat zichtbaar na ~1.5 min
+- **🗑️ per reservering** -> annuleert op ETV-site + verwijdert matching agenda-event
 
-Beide via `beheer_reserveringen.yml` workflow (workflow_dispatch).
+De PWA haalt bij elke open en elke 3 minuten de laatste `reserveringen.json` op van GitHub (snelle fetch, geen workflow). De 🔄 Verversen-knop en de dagelijkse cron zijn de enige momenten dat de ETV-site opnieuw gescrapet wordt.
 
 ---
 
