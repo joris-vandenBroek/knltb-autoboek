@@ -1246,7 +1246,7 @@ async function laadReserveringen() {
       );
       if (r.status === 204) {
         toonToast('success', '🔄 Reserveringen worden bijgewerkt (~1.5 min).\nLijst ververst vanzelf.');
-        autoVerversReserveringen();
+        _pollingNaDispatch();
       } else {
         let detail = '';
         try { const j = await r.json(); detail = j.message ? `\n${j.message}` : ''; } catch (_) {}
@@ -1259,14 +1259,37 @@ async function laadReserveringen() {
     btn.textContent = '🔄 Verversen';
   }
 
-  /**
-   * Stille achtergrond-ververs. Triggert beheer_reserveringen workflow
-   * (~1.5 min) en herlaadt de lijst zodra reserveringen.json bijgewerkt is.
-   * Geen visuele indicatie — lijst springt vanzelf op verse data.
-   */
-  async function autoVerversReserveringen() {
+  /** Poll reserveringen.json elke 30s tot bijgewerkt-timestamp veranderd is (max 3 min). */
+  async function _pollingNaDispatch() {
     if (_autoVerversBezig) return;
     _autoVerversBezig = true;
+    const startTs = Date.now();
+    let oldTs = null;
+    try {
+      const r0 = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
+      if (r0.ok) { const d0 = await r0.json(); oldTs = d0.bijgewerkt || null; }
+    } catch (_) {}
+    const poll = async () => {
+      try {
+        const rN = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
+        if (rN.ok) {
+          const dN = await rN.json();
+          if (dN.bijgewerkt && dN.bijgewerkt !== oldTs) {
+            await laadReserveringen();
+            _autoVerversBezig = false;
+            return;
+          }
+        }
+      } catch (_) {}
+      if (Date.now() - startTs < 180000) setTimeout(poll, 30000);
+      else _autoVerversBezig = false;
+    };
+    setTimeout(poll, 30000);
+  }
+
+  /** Na boeking: dispatch beheer_reserveringen en poll tot JSON bijgewerkt is. */
+  async function autoVerversReserveringen() {
+    if (_autoVerversBezig) return;
     try {
       const r = await fetch(
         `https://api.github.com/repos/${REPO}/actions/workflows/${BEHEER_WORKFLOW}/dispatches`,
@@ -1275,41 +1298,10 @@ async function laadReserveringen() {
                      'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
           body: JSON.stringify({ ref: 'main', inputs: { cancel_id: '' } }) }
       );
-      if (r.status !== 204) {
-        _autoVerversBezig = false;
-        return;  // Stilletjes opgeven; gebruiker kan handmatig op 🔄 tikken
-      }
-      // Pol elke 30s tot data.bijgewerkt vernieuwd is, max 3 minuten
-      const startTs = Date.now();
-      let oldTs = null;
-      try {
-        const r0 = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
-        if (r0.ok) { const d0 = await r0.json(); oldTs = d0.bijgewerkt || null; }
-      } catch (_) {}
-      const poll = async () => {
-        try {
-          const rN = await fetch(RESERV_URL + '?t=' + Date.now(), { cache: 'no-store' });
-          if (rN.ok) {
-            const dN = await rN.json();
-            if (dN.bijgewerkt && dN.bijgewerkt !== oldTs) {
-              await laadReserveringen();
-              _autoVerversBezig = false;
-              return;
-            }
-          }
-        } catch (_) {}
-        if (Date.now() - startTs < 180000) {
-          setTimeout(poll, 30000);
-        } else {
-          _autoVerversBezig = false;
-        }
-      };
-      setTimeout(poll, 60000);  // Eerste poll na 1 minuut
-    } catch (e) {
-      _autoVerversBezig = false;
-    }
+      if (r.status !== 204) return;  // Stilletjes opgeven
+      _pollingNaDispatch();
+    } catch (_) {}
   }
-
 
   async function annuleerReservering(btn, id, datum, tijd) {
     const pat = getPat();
