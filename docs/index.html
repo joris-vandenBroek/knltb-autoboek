@@ -886,7 +886,6 @@
   }
 
   async function _beheerLaadLijst() {
-    _gebruikersCache = null;
     const lijst = await laadGebruikers();
     const el = document.getElementById('beheerGebruikersLijst');
     el.innerHTML = lijst.map(g => `
@@ -990,7 +989,12 @@
     if (!naam) { toonToast('error', '⚠️ Selecteer eerst een lid'); return; }
     const id   = naam.toLowerCase().replace(/\s+/g, '_');
     const lijst = await laadGebruikers();
-    if (lijst.find(g => g.id === id || g.naam === naam)) { toonToast('error', `⚠️ ${naam} bestaat al`); return; }
+    if (lijst.find(g => g.id === id || g.naam === naam)) {
+      document.getElementById('beheerStatus').style.color = 'var(--fout)';
+      document.getElementById('beheerStatus').textContent = `⚠️ ${naam} bestaat al`;
+      return;
+    }
+    document.getElementById('beheerStatus').style.color = 'var(--groen)';
     const nieuwelijst = [...lijst, { id, naam }];
     document.getElementById('beheerStatus').textContent = '⏳ Opslaan…';
     const ok = await _beheerSlaOp(nieuwelijst);
@@ -998,8 +1002,8 @@
       document.getElementById('beheerStatus').textContent = '⏳ Wachtrij-map aanmaken…';
       await _beheerMaakWachtrij(id);
       beheerVulLidDropdown();
+      await _beheerLaadLijst();
       document.getElementById('beheerStatus').textContent = '✅ Opgeslagen';
-      _beheerLaadLijst();
       toonToast('success', `✅ ${naam} toegevoegd`);
     }
   }
