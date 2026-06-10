@@ -573,11 +573,8 @@
     <div class="sheet-handle"></div>
     <h2>🛠️ Beheer</h2>
 
-    <div id="beheerLogin" style="display:none">
-      <p class="sheet-hint">Voer het beheer-wachtwoord in om gebruikers te beheren.</p>
-      <input type="password" id="beheerPwInput" class="pat-input"
-             placeholder="Wachtwoord…" autocomplete="off">
-      <button class="btn-opslaan" onclick="beheerLogin()" style="margin-top:10px">Inloggen</button>
+    <div id="beheerGeenToegang" style="display:none">
+      <p class="sheet-hint">Beheer is alleen beschikbaar voor Joris van den Broek.</p>
     </div>
 
     <div id="beheerContent" style="display:none">
@@ -768,7 +765,7 @@
   const PAT_KEY          = 'knltb_pat';
   const PAT_VERLOOPT_KEY = 'knltb_pat_verloopt';
   const GEBRUIKER_KEY    = 'knltb_gebruiker';
-  const BEHEER_PW_KEY    = 'knltb_beheer_pw';
+  const BEHEER_EIGENAAR  = 'joris_van_den_broek';
 
   const getGebruiker = () => localStorage.getItem(GEBRUIKER_KEY) || 'joris_van_den_broek';
   // Eenmalige opruim van legacy spelers-persistence (was 'knltb_spelers')
@@ -824,28 +821,15 @@
   }
 
   /* ─── Beheer sheet ───────────────────────────────────────── */
-  const BEHEER_PW = 'etv2025';  // simpel wachtwoord, client-side
-
   function openBeheerSheet() {
-    const loggedIn = sessionStorage.getItem(BEHEER_PW_KEY) === '1';
-    document.getElementById('beheerLogin').style.display   = loggedIn ? 'none'  : '';
-    document.getElementById('beheerContent').style.display = loggedIn ? ''      : 'none';
-    document.getElementById('beheerPwInput').value = '';
-    if (loggedIn) _beheerLaadLijst();
+    const toegang = getGebruiker() === BEHEER_EIGENAAR;
+    document.getElementById('beheerGeenToegang').style.display = toegang ? 'none' : '';
+    document.getElementById('beheerContent').style.display     = toegang ? ''     : 'none';
+    if (toegang) _beheerLaadLijst();
     document.getElementById('beheerOverlay').classList.add('show');
   }
   function sluitBeheerSheet() {
     document.getElementById('beheerOverlay').classList.remove('show');
-  }
-  function beheerLogin() {
-    if (document.getElementById('beheerPwInput').value === BEHEER_PW) {
-      sessionStorage.setItem(BEHEER_PW_KEY, '1');
-      document.getElementById('beheerLogin').style.display   = 'none';
-      document.getElementById('beheerContent').style.display = '';
-      _beheerLaadLijst();
-    } else {
-      toonToast('error', '❌ Onjuist wachtwoord');
-    }
   }
 
   async function _beheerLaadLijst() {
