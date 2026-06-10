@@ -589,9 +589,20 @@
       <div id="beheerGebruikersLijst"></div>
 
       <h3 style="margin:18px 0 8px; font-size:0.95rem; color:var(--groen)">➕ Gebruiker toevoegen</h3>
-      <select id="nieuweLid" class="pat-input" style="margin-bottom:6px; cursor:pointer" onchange="beheerVulId()">
-        <option value="">— Selecteer lid —</option>
-      </select>
+      <div class="pf-wrap" id="beheerLidWrap" style="margin-bottom:6px">
+        <div class="pf-trigger" id="beheerLidTrigger" onclick="toggleBeheerLid()">
+          <span id="beheerLidTekst" style="color:#b0bec5">— Selecteer lid —</span>
+          <span class="pf-arrow">▼</span>
+        </div>
+        <div class="pf-panel" id="beheerLidPanel">
+          <div class="pf-search-wrap">
+            <input type="text" class="pf-search" id="beheerLidZoek"
+                   placeholder="🔍  Begin te typen…"
+                   oninput="renderBeheerLidLijst(this.value)" autocomplete="off" autocorrect="off">
+          </div>
+          <div class="pf-list" id="beheerLidLijst"></div>
+        </div>
+      </div>
       <label class="field-label" for="nieuweId" style="margin-top:4px">ID (automatisch, aanpasbaar)</label>
       <input type="text" id="nieuweId" class="pat-input" placeholder="voornaam_achternaam" style="margin-bottom:6px" autocomplete="off" autocorrect="off" spellcheck="false">
       <button class="btn-opslaan" onclick="beheerVoegToe()" style="margin-top:4px">Toevoegen</button>
@@ -907,20 +918,73 @@
     return false;
   }
 
+  let _beheerLidGeselecteerd = '';
+
   function beheerVulLidDropdown() {
-    const sel = document.getElementById('nieuweLid');
-    const huidig = sel.value;
-    sel.innerHTML = '<option value="">— Selecteer lid —</option>' +
-      alleLedenLijst.map(l => `<option value="${l.naam}"${l.naam === huidig ? ' selected' : ''}>${l.naam}</option>`).join('');
+    _beheerLidGeselecteerd = '';
+    document.getElementById('beheerLidTekst').textContent = '— Selecteer lid —';
+    document.getElementById('beheerLidTekst').style.color = '#b0bec5';
+    document.getElementById('nieuweId').value = '';
+    renderBeheerLidLijst('');
   }
 
-  function beheerVulId() {
-    const naam = document.getElementById('nieuweLid').value;
+  function toggleBeheerLid() {
+    const trigger = document.getElementById('beheerLidTrigger');
+    const panel   = document.getElementById('beheerLidPanel');
+    const wasOpen = panel.classList.contains('open');
+    if (!wasOpen) {
+      trigger.classList.add('open');
+      panel.classList.add('open');
+      document.getElementById('beheerLidZoek').value = '';
+      renderBeheerLidLijst('');
+      setTimeout(() => document.getElementById('beheerLidZoek').focus(), 50);
+    } else {
+      trigger.classList.remove('open');
+      panel.classList.remove('open');
+    }
+  }
+
+  function renderBeheerLidLijst(query) {
+    const q      = query.trim().toLowerCase();
+    const lijst  = document.getElementById('beheerLidLijst');
+    const header = document.createElement('div');
+    header.className = 'pf-list-header';
+    header.textContent = _beheerLidGeselecteerd || 'Lid selecteren';
+    lijst.innerHTML = '';
+    lijst.appendChild(header);
+
+    const gefilterd = q
+      ? alleLedenLijst.filter(l => l.naam.toLowerCase().includes(q))
+      : alleLedenLijst;
+
+    if (gefilterd.length === 0) {
+      const el = document.createElement('div');
+      el.className = 'pf-item empty-item';
+      el.textContent = alleLedenLijst.length === 0 ? 'Geen ledenlijst — tik 🔄 Verversen' : 'Geen resultaten';
+      lijst.appendChild(el);
+    } else {
+      gefilterd.forEach(lid => {
+        const el = document.createElement('div');
+        el.className = 'pf-item' + (lid.naam === _beheerLidGeselecteerd ? ' selected' : '');
+        el.textContent = lid.sterkte_padel ? `${lid.naam} (${lid.sterkte_padel})` : lid.naam;
+        el.addEventListener('click', () => selecteerBeheerLid(lid.naam));
+        lijst.appendChild(el);
+      });
+    }
+  }
+
+  function selecteerBeheerLid(naam) {
+    _beheerLidGeselecteerd = naam;
+    const tekst = document.getElementById('beheerLidTekst');
+    tekst.textContent = naam;
+    tekst.style.color = '';
     document.getElementById('nieuweId').value = naam.toLowerCase().replace(/\s+/g, '_');
+    document.getElementById('beheerLidTrigger').classList.remove('open');
+    document.getElementById('beheerLidPanel').classList.remove('open');
   }
 
   async function beheerVoegToe() {
-    const naam = document.getElementById('nieuweLid').value.trim();
+    const naam = _beheerLidGeselecteerd.trim();
     const id   = document.getElementById('nieuweId').value.trim().toLowerCase().replace(/\s+/g, '_');
     if (!naam || !id) { toonToast('error', '⚠️ Selecteer een lid en controleer het ID'); return; }
     const lijst = await laadGebruikers();
@@ -931,8 +995,7 @@
     if (ok) {
       document.getElementById('beheerStatus').textContent = '⏳ Wachtrij-map aanmaken…';
       await _beheerMaakWachtrij(id);
-      document.getElementById('nieuweLid').value = '';
-      document.getElementById('nieuweId').value = '';
+      beheerVulLidDropdown();
       document.getElementById('beheerStatus').textContent = '✅ Opgeslagen';
       _beheerLaadLijst();
       toonToast('success', `✅ ${naam} toegevoegd`);
@@ -1629,7 +1692,11 @@ async function laadReserveringen() {
   }
 
   document.addEventListener('click', e => {
-    if (!e.target.closest('.pf-wrap')) sluitAlles(null);
+    if (!e.target.closest('.pf-wrap')) {
+      sluitAlles(null);
+      document.getElementById('beheerLidTrigger')?.classList.remove('open');
+      document.getElementById('beheerLidPanel')?.classList.remove('open');
+    }
   });
 
   function filterPf(nr) {
