@@ -577,6 +577,13 @@
       <p class="sheet-hint">Beheer is alleen beschikbaar voor Joris van den Broek.</p>
     </div>
 
+    <div id="beheerLogin" style="display:none">
+      <p class="sheet-hint">Voer het beheer-wachtwoord in.</p>
+      <input type="password" id="beheerPwInput" class="pat-input"
+             placeholder="Wachtwoord…" autocomplete="off">
+      <button class="btn-opslaan" onclick="beheerLogin()" style="margin-top:10px">Inloggen</button>
+    </div>
+
     <div id="beheerContent" style="display:none">
       <p class="sheet-hint" style="margin-bottom:12px">Gebruikers in <code>gebruikers.json</code>. Wijzigingen worden via GitHub API opgeslagen.</p>
       <div id="beheerGebruikersLijst"></div>
@@ -824,15 +831,37 @@
   }
 
   /* ─── Beheer sheet ───────────────────────────────────────── */
+  const BEHEER_PW_HASH   = 'b66d92118977670391f7f7cd7fa20320a565dd3ada5398bb55593f2c46328de5';
+  const BEHEER_PW_KEY    = 'knltb_beheer_auth';
+
+  async function _sha256(tekst) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tekst));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
   function openBeheerSheet() {
-    const toegang = getGebruiker() === BEHEER_EIGENAAR;
-    document.getElementById('beheerGeenToegang').style.display = toegang ? 'none' : '';
-    document.getElementById('beheerContent').style.display     = toegang ? ''     : 'none';
-    if (toegang) { _beheerLaadLijst(); beheerVulLidDropdown(); }
+    const gebruikerOk = getGebruiker() === BEHEER_EIGENAAR;
+    const ingelogd    = sessionStorage.getItem(BEHEER_PW_KEY) === '1';
+    document.getElementById('beheerGeenToegang').style.display = gebruikerOk ? 'none' : '';
+    document.getElementById('beheerLogin').style.display       = gebruikerOk && !ingelogd ? '' : 'none';
+    document.getElementById('beheerContent').style.display     = gebruikerOk && ingelogd  ? '' : 'none';
+    if (gebruikerOk && !ingelogd) setTimeout(() => document.getElementById('beheerPwInput').focus(), 350);
+    if (gebruikerOk && ingelogd)  { _beheerLaadLijst(); beheerVulLidDropdown(); }
     document.getElementById('beheerOverlay').classList.add('show');
   }
   function sluitBeheerSheet() {
     document.getElementById('beheerOverlay').classList.remove('show');
+  }
+  async function beheerLogin() {
+    const hash = await _sha256(document.getElementById('beheerPwInput').value);
+    if (hash === BEHEER_PW_HASH) {
+      sessionStorage.setItem(BEHEER_PW_KEY, '1');
+      document.getElementById('beheerLogin').style.display   = 'none';
+      document.getElementById('beheerContent').style.display = '';
+      _beheerLaadLijst(); beheerVulLidDropdown();
+    } else {
+      toonToast('error', '❌ Onjuist wachtwoord');
+    }
   }
 
   async function _beheerLaadLijst() {
