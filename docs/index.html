@@ -610,8 +610,11 @@
     <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">📅 Wanneer</h3>
     <p class="sheet-hint">Kies de datum en tijd waarop je wil spelen.</p>
 
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">👤 Gebruiker</h3>
+    <p class="sheet-hint">Selecteer jouw naam via ⚙️ Instellingen. Reserveringen en wachtrij worden per gebruiker bijgehouden.</p>
+
     <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">👥 Spelers</h3>
-    <p class="sheet-hint">Selecteer 3 medespelers via de zoekboxen. Jij (Joris) bent altijd speler 1.</p>
+    <p class="sheet-hint">Selecteer 3 medespelers via de zoekboxen. De geselecteerde gebruiker is altijd speler 1.</p>
 
     <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">🎾 Baan reserveren</h3>
     <p class="sheet-hint">Tik op de groene knop onderin. Afhankelijk van de speeldatum:</p>
@@ -621,13 +624,16 @@
     </ul>
 
     <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">📋 Mijn reserveringen</h3>
-    <p class="sheet-hint">Toont je actieve reserveringen. Wordt dagelijks om 07:30 bijgewerkt. Tik 🔄 voor een directe refresh (~1.5 min). Tik 🗑️ om een reservering te annuleren.</p>
+    <p class="sheet-hint">Toont de actieve reserveringen van de geselecteerde gebruiker. Wordt dagelijks om 07:30 bijgewerkt. Tik 🔄 voor een directe refresh (~1.5 min). Tik 🗑️ om een reservering te annuleren.</p>
 
     <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">🕒 Ingeplande reserveringen</h3>
     <p class="sheet-hint">Reserveringen die nog te ver in de toekomst liggen. Worden automatisch verwerkt op de reserveringsdatum om 07:01. Tik 🗑️ om een geplande reservering te verwijderen.</p>
 
-    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">⚙️ GitHub Token</h3>
-    <p class="sheet-hint">Vereist voor alle acties. Maak een classic PAT aan op <strong>github.com/settings/tokens</strong> met scope <code>workflow</code>. Eenmalig instellen via het tandwiel-icoon.</p>
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">⚙️ Instellingen</h3>
+    <p class="sheet-hint">Stel hier je gebruiker en GitHub Token in. Het token is vereist voor alle acties. Maak een classic PAT aan op <strong>github.com/settings/tokens</strong> met scope <code>workflow</code>. Eenmalig instellen per apparaat.</p>
+
+    <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">🛠️ Beheer</h3>
+    <p class="sheet-hint">Alleen voor Joris van den Broek (wachtwoord vereist). Voeg gebruikers toe of verwijder ze. Nieuwe gebruiker moet in de ledenlijst staan. Na toevoegen ook de credentials toevoegen aan het <code>GEBRUIKERS_CONFIG</code> secret in GitHub.</p>
 
     <h3 style="margin:16px 0 6px; font-size:1rem; color:var(--groen)">🔴 Rode badge op ⚙️</h3>
     <p class="sheet-hint">Je GitHub Token verloopt binnenkort of is verlopen. Genereer een nieuwe en sla op via het tandwiel-icoon.</p>
