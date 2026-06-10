@@ -917,6 +917,7 @@
   }
 
   async function beheerVerwijder(id) {
+    if (id === BEHEER_EIGENAAR) { toonToast('error', '⚠️ Joris van den Broek kan niet verwijderd worden'); return; }
     const lijst = await laadGebruikers();
     if (lijst.length <= 1) { toonToast('error', '⚠️ Minimaal 1 gebruiker vereist'); return; }
     const nieuwelijst = lijst.filter(g => g.id !== id);
