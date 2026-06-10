@@ -879,12 +879,26 @@
     document.getElementById('beheerStatus').textContent = '⏳ Opslaan…';
     const ok = await _beheerSlaOp(nieuwelijst);
     if (ok) {
+      document.getElementById('beheerStatus').textContent = '⏳ Wachtrij-map aanmaken…';
+      await _beheerMaakWachtrij(id);
       document.getElementById('nieuweId').value = '';
       document.getElementById('nieuweNaam').value = '';
       document.getElementById('beheerStatus').textContent = '✅ Opgeslagen';
       _beheerLaadLijst();
       toonToast('success', `✅ ${naam} toegevoegd`);
     }
+  }
+
+  async function _beheerMaakWachtrij(id) {
+    const pat = getPat();
+    const inhoud = btoa('');  // leeg bestand
+    await fetch(
+      `https://api.github.com/repos/${REPO}/contents/wachtrij/${id}/.gitkeep`,
+      { method: 'PUT',
+        headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
+                   'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `beheer: wachtrij-map aangemaakt voor ${id}`, content: inhoud }) }
+    );
   }
 
   async function beheerVerwijder(id) {
