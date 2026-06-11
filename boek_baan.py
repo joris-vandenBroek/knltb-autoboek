@@ -1762,7 +1762,11 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
         "spelers":   [SPELER1, speler2, speler3, speler4],
         "ingediend": datetime.now().isoformat(timespec="seconds"),
     }
-    os.makedirs(f"wachtrij/{GEBRUIKER}", exist_ok=True)
+    map_pad = f"wachtrij/{GEBRUIKER}"
+    os.makedirs(map_pad, exist_ok=True)
+    gitkeep = f"{map_pad}/.gitkeep"
+    if not os.path.exists(gitkeep):
+        open(gitkeep, "w").close()
     with open(bestand, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
         fh.write("\n")
@@ -1771,7 +1775,7 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
     try:
         subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
         subprocess.run(["git", "config", "user.name",  "knltb-autoboek-bot"], check=True)
-        subprocess.run(["git", "add", bestand], check=True)
+        subprocess.run(["git", "add", gitkeep, bestand], check=True)
         subprocess.run(["git", "commit", "-m", f"wachtrij: voeg {datum} om {tijd} toe"], check=True)
     except subprocess.CalledProcessError as e:
         log.error(f" Git commit voor wachtrij mislukt: {e}")
