@@ -900,12 +900,15 @@
 
 <!-- ── Ingeplande reserveringen (wachtrij) ──────────────── -->
 <div class="card">
-  <div class="card-header">🕒 Ingeplande reserveringen</div>
+  <div class="card-header">🕒 Mijn ingeplande reserveringen</div>
   <div class="wachtrij-list" id="wachtrijList">
     <div class="skeleton-item"><div class="skeleton-line" style="width:55%"></div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:40%"></div></div>
     <div class="skeleton-item"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:75%"></div><div class="skeleton-line" style="width:40%"></div></div>
   </div>
 </div>
+
+<!-- ── Reserveringen andere gebruikers (alleen zichtbaar voor Joris) ── -->
+<div id="andereGebruikersSection" style="display:none"></div>
 
 <!-- Boek-knop -->
 <div class="btn-wrap">
@@ -987,6 +990,7 @@
       updateSpeler1();
       laadReserveringen();
       laadWachtrij();
+      laadAndereGebruikers();
     };
     document.getElementById('patOverlay').classList.add('show');
     setTimeout(() => document.getElementById('patInput').focus(), 350);
@@ -1584,6 +1588,100 @@
   }
 
   laadWachtrij();
+
+  /* ─── Andere gebruikers (alleen zichtbaar voor Joris) ──────── */
+  async function laadAndereGebruikers() {
+    const sectie = document.getElementById('andereGebruikersSection');
+    if (getGebruiker() !== BEHEER_EIGENAAR) { sectie.style.display = 'none'; return; }
+
+    const gebruikers = await laadGebruikers();
+    const anderen = gebruikers.filter(g => g.id !== BEHEER_EIGENAAR);
+    if (anderen.length === 0) { sectie.style.display = 'none'; return; }
+
+    sectie.style.display = '';
+    sectie.innerHTML = anderen.map(g => `
+      <div class="card">
+        <div class="leden-row" style="padding: 18px 18px 0 22px;">
+          <div class="card-header" style="padding: 0; flex: 1;">📅 Reserveringen ${escapeHtml(g.naam)}</div>
+        </div>
+        <div class="wachtrij-list" id="reservList_${g.id}">
+          <div class="skeleton-item"><div class="skeleton-line" style="width:55%"></div><div class="skeleton-line" style="width:80%"></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header">🕒 Ingeplande reserveringen ${escapeHtml(g.naam)}</div>
+        <div class="wachtrij-list" id="wachtrijList_${g.id}">
+          <div class="skeleton-item"><div class="skeleton-line" style="width:55%"></div><div class="skeleton-line" style="width:80%"></div></div>
+        </div>
+      </div>
+    `).join('');
+
+    const pat = getPat();
+    const ghHeaders = pat
+      ? { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
+      : { 'Accept': 'application/vnd.github+json' };
+
+    for (const g of anderen) {
+      // Reserveringen
+      (async () => {
+        const el = document.getElementById(`reservList_${g.id}`);
+        try {
+          const url = `https://raw.githubusercontent.com/${REPO}/main/reserveringen_${g.id}.json`;
+          const r = await fetch(url + '?t=' + Date.now(), { cache: 'no-store' });
+          if (r.status === 404) {
+            el.innerHTML = '<div class="wachtrij-leeg">Nog geen lijst — klik 🔄 Verversen bij die gebruiker om op te halen.</div>';
+          } else if (!r.ok) {
+            el.innerHTML = `<div class="wachtrij-leeg">Kon reserveringen niet laden (HTTP ${r.status}).</div>`;
+          } else {
+            const data = await r.json();
+            const items = Array.isArray(data.reserveringen) ? data.reserveringen : [];
+            el.innerHTML = items.length === 0
+              ? `<div class="leeg-staat"><div class="leeg-staat-icoon">🎾</div><div class="leeg-staat-titel">Geen actieve reserveringen</div></div>`
+              : _renderReservList(items);
+          }
+        } catch (_) { el.innerHTML = '<div class="wachtrij-leeg">Kon reserveringen niet laden.</div>'; }
+      })();
+
+      // Wachtrij
+      (async () => {
+        const el = document.getElementById(`wachtrijList_${g.id}`);
+        try {
+          const url = `https://api.github.com/repos/${REPO}/contents/wachtrij/${g.id}`;
+          const r = await fetch(url + '?t=' + Date.now(), { headers: ghHeaders });
+          if (r.status === 404) {
+            el.innerHTML = `<div class="leeg-staat"><div class="leeg-staat-icoon">🕒</div><div class="leeg-staat-titel">Geen ingeplande reserveringen</div></div>`;
+            return;
+          }
+          if (!r.ok) { el.innerHTML = `<div class="wachtrij-leeg">Kon wachtrij niet laden (HTTP ${r.status}).</div>`; return; }
+          const files = await r.json();
+          const jsons = files.filter(f => f.name.endsWith('.json') && f.name !== '.gitkeep');
+          if (jsons.length === 0) {
+            el.innerHTML = `<div class="leeg-staat"><div class="leeg-staat-icoon">🕒</div><div class="leeg-staat-titel">Geen ingeplande reserveringen</div></div>`;
+            return;
+          }
+          const entries = (await Promise.all(jsons.map(async f => {
+            try { const cr = await fetch(f.download_url); return { file: f, content: await cr.json() }; }
+            catch (_) { return null; }
+          }))).filter(Boolean);
+          entries.sort((a, b) => (a.content.datum + a.content.tijd).localeCompare(b.content.datum + b.content.tijd));
+          el.innerHTML = entries.map(({ content: c, file: f }) => {
+            const datum = formatNL(c.datum);
+            const spelers = (c.spelers || []).map(escapeHtml).join(', ');
+            const boektOp = c.reserveringsdatum ? `Boekt op ${formatNL(c.reserveringsdatum)}` : '';
+            return `<div class="wachtrij-item">
+              <div class="wachtrij-item-inhoud">
+                <div class="wachtrij-datum">🕒 ${datum} om ${escapeHtml(c.tijd || '')}</div>
+                <div class="wachtrij-spelers">${spelers}</div>
+                ${boektOp ? `<div class="wachtrij-boekt">${escapeHtml(boektOp)}</div>` : ''}
+              </div>
+            </div>`;
+          }).join('');
+        } catch (_) { el.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>'; }
+      })();
+    }
+  }
+
+  laadAndereGebruikers();
 
   /* ─── Mijn reserveringen (actieve ETV-reserveringen) ───────── */
   const getReservUrl    = () => `https://raw.githubusercontent.com/${REPO}/main/reserveringen_${getGebruiker()}.json`;
