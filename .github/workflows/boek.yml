@@ -95,6 +95,28 @@ jobs:
             --speler4 "${{ inputs.speler4 }}" \
             $DRY_FLAG
 
+      - name: Ruim wachtrij-bestand op na succesvolle boeking
+        if: success() && inputs.dry_run != 'true'
+        run: |
+          gebruiker="${{ inputs.gebruiker }}"
+          datum="${{ inputs.datum }}"
+          tijd="${{ inputs.tijd }}"
+          tijd_slug="${tijd/:/}"
+          bestand="wachtrij/${gebruiker}/${datum}_${tijd_slug}.json"
+          if [ -f "$bestand" ]; then
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git config user.name  "knltb-autoboek-bot"
+            git rm "$bestand"
+            git commit -m "wachtrij: verwijder ${datum} om ${tijd} na succesvolle boeking"
+            for i in 1 2 3 4 5; do
+              git pull --rebase origin main && git push && break
+              echo "Push poging $i mislukt, retry..."
+              sleep $i
+            done
+          else
+            echo "Geen wachtrij-bestand gevonden voor ${gebruiker} ${datum} ${tijd} -- niets op te ruimen."
+          fi
+
       - name: Trigger scrape reserveringen na succesvolle echte boeking
         if: success() && inputs.dry_run != 'true'
         env:
