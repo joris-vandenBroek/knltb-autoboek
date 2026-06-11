@@ -1829,6 +1829,10 @@ def main():
         if _zet_in_wachtrij(args.datum, args.tijd, args.speler2, args.speler3, args.speler4):
             log.info(f" In wachtrij gezet  verwerk_wachtrij workflow start de reservering "
                      f"automatisch op {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
+            github_output = os.environ.get("GITHUB_OUTPUT", "")
+            if github_output:
+                with open(github_output, "a") as f:
+                    f.write("boek_resultaat=wachtrij\n")
             sys.exit(0)
         log.error(" Kon wachtrij-bestand niet opslaan  reservering NIET ingepland")
         sys.exit(1)

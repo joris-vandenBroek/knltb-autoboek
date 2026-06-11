@@ -78,6 +78,7 @@ jobs:
           echo "GOOGLE_CALENDAR_ID=$calendar_id"   >> $GITHUB_ENV
 
       - name: Reserveer baan
+        id: boek
         env:
           DISPLAY:                     :99
           GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
@@ -96,7 +97,7 @@ jobs:
             $DRY_FLAG
 
       - name: Ruim wachtrij-bestand op na succesvolle boeking
-        if: success() && inputs.dry_run != 'true'
+        if: success() && inputs.dry_run != 'true' && steps.boek.outputs.boek_resultaat != 'wachtrij'
         run: |
           gebruiker="${{ inputs.gebruiker }}"
           datum="${{ inputs.datum }}"
@@ -118,7 +119,7 @@ jobs:
           fi
 
       - name: Trigger scrape reserveringen na succesvolle echte boeking
-        if: success() && inputs.dry_run != 'true'
+        if: success() && inputs.dry_run != 'true' && steps.boek.outputs.boek_resultaat != 'wachtrij'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
