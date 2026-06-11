@@ -1664,15 +1664,25 @@
             catch (_) { return null; }
           }))).filter(Boolean);
           entries.sort((a, b) => (a.content.datum + a.content.tijd).localeCompare(b.content.datum + b.content.tijd));
-          el.innerHTML = entries.map(({ content: c, file: f }) => {
-            const datum = formatNL(c.datum);
-            const spelers = (c.spelers || []).map(escapeHtml).join(', ');
-            const boektOp = c.reserveringsdatum ? `Boekt op ${formatNL(c.reserveringsdatum)}` : '';
-            return `<div class="wachtrij-item">
+          const nu2 = new Date();
+          const vandaag2 = new Date(nu2); vandaag2.setHours(0,0,0,0);
+          const drempel07b = new Date(vandaag2); drempel07b.setHours(7,0,0,0);
+          el.innerHTML = entries.map(({ content: c }) => {
+            const datum    = escapeHtml(`${formatNL(c.datum)} om ${c.tijd || ''}`);
+            const spelers  = (c.spelers || []).map(escapeHtml).join(', ');
+            const boekDatum = minusDagen(c.datum, 2);
+            const [by, bm, bd] = boekDatum.split('-').map(Number);
+            const boekDt = new Date(by, bm - 1, bd);
+            const gefaald = (boekDt < vandaag2) ||
+                            (boekDt.getTime() === vandaag2.getTime() && nu2 > drempel07b);
+            const statusBadge = gefaald
+              ? `<span class="status-badge gefaald">❌ Niet gelukt</span>`
+              : `<span class="status-badge gepland">🕒 Gepland voor ${escapeHtml(formatNL(boekDatum))} 07:00</span>`;
+            return `<div class="wachtrij-item${gefaald ? ' wachtrij-failed' : ''}">
               <div class="wachtrij-item-inhoud">
-                <div class="wachtrij-datum">🕒 ${datum} om ${escapeHtml(c.tijd || '')}</div>
+                <div class="wachtrij-datum">${gefaald ? '❌' : '🗓️'} ${datum}</div>
                 <div class="wachtrij-spelers">${spelers}</div>
-                ${boektOp ? `<div class="wachtrij-boekt">${escapeHtml(boektOp)}</div>` : ''}
+                <div class="wachtrij-boekt">${statusBadge}</div>
               </div>
             </div>`;
           }).join('');
