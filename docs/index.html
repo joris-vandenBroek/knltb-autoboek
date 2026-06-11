@@ -526,6 +526,134 @@
       opacity: 0.85;
       border-top: 1px solid var(--border);
     }
+
+    /* ── Header actions ─────────────────────────────────────── */
+    .header-actions {
+      display: flex;
+      gap: 4px;
+      position: absolute;
+      top: 14px;
+      right: 12px;
+      padding-top: max(0px, env(safe-area-inset-top));
+    }
+    .header-action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      background: rgba(255,255,255,0.12);
+      border: none;
+      border-radius: 10px;
+      padding: 8px 10px 6px;
+      cursor: pointer;
+      color: white;
+      min-width: 52px;
+      position: relative;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .header-action-btn:active { background: rgba(255,255,255,0.25); }
+    .header-action-icon  { font-size: 1.25rem; line-height: 1; }
+    .header-action-label { font-size: 0.6rem; font-weight: 600; opacity: 0.88; letter-spacing: 0.03em; text-transform: uppercase; }
+
+    /* ── Speler 1 readonly ──────────────────────────────────── */
+    .speler1-veld {
+      background: #f0fff4 !important;
+      border-color: var(--border-focus) !important;
+      gap: 10px;
+    }
+    .speler1-avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: var(--groen-btn);
+      color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 700;
+      flex-shrink: 0;
+    }
+    .speler1-naam { flex: 1; }
+    .speler1-lock { font-size: 0.85rem; opacity: 0.4; flex-shrink: 0; }
+
+    /* ── Skeleton loading ───────────────────────────────────── */
+    @keyframes shimmer {
+      0%   { background-position: -400px 0; }
+      100% { background-position:  400px 0; }
+    }
+    .skeleton-item {
+      padding: 14px 22px;
+      border-bottom: 1px solid var(--border);
+    }
+    .skeleton-item:last-child { border-bottom: none; }
+    .skeleton-line {
+      height: 13px;
+      border-radius: 7px;
+      background: linear-gradient(90deg, #e2e8f0 25%, #edf2f7 50%, #e2e8f0 75%);
+      background-size: 800px 100%;
+      animation: shimmer 1.4s infinite;
+      margin-bottom: 8px;
+    }
+    .skeleton-line:last-child { margin-bottom: 0; }
+
+    /* ── Lege staat ─────────────────────────────────────────── */
+    .leeg-staat {
+      padding: 28px 22px 26px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      text-align: center;
+    }
+    .leeg-staat-icoon { font-size: 2.2rem; opacity: 0.35; }
+    .leeg-staat-titel { font-size: 0.95rem; font-weight: 600; color: #4a5568; }
+    .leeg-staat-hint  { font-size: 0.88rem; color: var(--grijs); line-height: 1.5; }
+
+    /* ── Status badge ───────────────────────────────────────── */
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-top: 6px;
+    }
+    .status-badge.gepland { background: #ebf8ff; color: #2b6cb0; }
+    .status-badge.gefaald { background: #fff5f5; color: #c53030; }
+    .wachtrij-actie {
+      display: inline-flex; align-items: center; gap: 5px;
+      margin-top: 8px;
+      background: none;
+      border: 1.5px solid var(--fout);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 0.82rem; font-weight: 600;
+      color: var(--fout);
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .wachtrij-actie:active { background: #fff5f5; }
+
+    /* ── Dry-run microoptie ─────────────────────────────────── */
+    .dryrun-micro {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      margin-top: 10px;
+      font-size: 0.8rem;
+      color: var(--grijs);
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      padding: 4px 8px;
+      border-radius: 8px;
+    }
+    .dryrun-micro input { transform: scale(1.1); cursor: pointer; }
+    .dryrun-micro.actief { color: #92400e; font-weight: 600; }
+
+    /* ── Globale footer ─────────────────────────────────────── */
+    .global-footer {
+      padding: 10px 22px 8px;
+      font-size: 0.76rem;
+      color: var(--grijs);
+      opacity: 0.65;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -539,12 +667,21 @@
       <p>ETV Volley — automatische reservering</p>
     </div>
   </div>
-  <button class="help-btn" onclick="openBeheerSheet()" title="Beheer" style="right:122px">🛠️</button>
-  <button class="help-btn" onclick="openHelpSheet()" title="Help" style="right:70px">❓</button>
-  <button class="gear-btn" onclick="openPatSheet()" title="Instellingen">
-    <span id="gearIcoon">⚙️</span>
-    <span class="pat-badge" id="patBadge" hidden></span>
-  </button>
+  <div class="header-actions">
+    <button class="header-action-btn" onclick="openBeheerSheet()" title="Beheer">
+      <span class="header-action-icon">🛠️</span>
+      <span class="header-action-label">Beheer</span>
+    </button>
+    <button class="header-action-btn" onclick="openHelpSheet()" title="Help">
+      <span class="header-action-icon">❓</span>
+      <span class="header-action-label">Help</span>
+    </button>
+    <button class="header-action-btn" onclick="openPatSheet()" title="Instellingen">
+      <span class="header-action-icon" id="gearIcoon">⚙️</span>
+      <span class="header-action-label">Instellingen</span>
+      <span class="pat-badge" id="patBadge" hidden></span>
+    </button>
+  </div>
 </div>
 
 <!-- PAT sheet -->
@@ -756,7 +893,8 @@
     <button class="btn-refresh-mini" id="verversReservBtn" onclick="verversReserveringen()">🔄&nbsp;Verversen</button>
   </div>
   <div class="wachtrij-list" id="reservList">
-    <div class="wachtrij-leeg">Reserveringen laden…</div>
+    <div class="skeleton-item"><div class="skeleton-line" style="width:55%"></div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:40%"></div></div>
+    <div class="skeleton-item"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:75%"></div><div class="skeleton-line" style="width:40%"></div></div>
   </div>
 </div>
 
@@ -764,21 +902,23 @@
 <div class="card">
   <div class="card-header">🕒 Ingeplande reserveringen</div>
   <div class="wachtrij-list" id="wachtrijList">
-    <div class="wachtrij-leeg">Wachtrij laden…</div>
+    <div class="skeleton-item"><div class="skeleton-line" style="width:55%"></div><div class="skeleton-line" style="width:80%"></div><div class="skeleton-line" style="width:40%"></div></div>
+    <div class="skeleton-item"><div class="skeleton-line" style="width:60%"></div><div class="skeleton-line" style="width:75%"></div><div class="skeleton-line" style="width:40%"></div></div>
   </div>
 </div>
 
 <!-- Boek-knop -->
 <div class="btn-wrap">
-  <label class="dryrun-toggle">
-    <input type="checkbox" id="dryRunToggle" onchange="updateDryRunUi()">
-    <span class="dryrun-label">🧪 Dry-run (test zonder echte reservering)</span>
-  </label>
   <button class="btn-boek" id="boekBtn" onclick="boekBaan()">
     <span id="btnTekst">🎾&nbsp; Baan reserveren</span>
   </button>
+  <label class="dryrun-micro" id="dryrunMicro">
+    <input type="checkbox" id="dryRunToggle" onchange="updateDryRunUi()">
+    <span class="dryrun-label">🧪 Testmodus — geen echte reservering</span>
+  </label>
 </div>
 
+<div class="global-footer" id="globalFooter"></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -797,7 +937,17 @@
   async function updateSpeler1() {
     const lijst = await laadGebruikers();
     const g = lijst.find(g => g.id === getGebruiker());
-    document.getElementById('speler1Veld').textContent = g ? g.naam : getGebruiker();
+    const naam = g ? g.naam : getGebruiker();
+    const initiaal = naam.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    document.getElementById('speler1Veld').innerHTML =
+      `<div class="speler1-avatar">${initiaal}</div>` +
+      `<span class="speler1-naam">${escapeHtml(naam)}</span>` +
+      `<span class="speler1-lock">🔒</span>`;
+  }
+
+  function _updateGlobalFooter() {
+    const el = document.getElementById('globalFooter');
+    if (el) el.textContent = `Bijgewerkt: ${formatDDMMYYYY_HHMM(new Date().toISOString())}`;
   }
   // Eenmalige opruim van legacy spelers-persistence (was 'knltb_spelers')
   localStorage.removeItem('knltb_spelers');
@@ -1272,30 +1422,26 @@
 
   async function laadWachtrij() {
     const lijst = document.getElementById('wachtrijList');
-    const bijTekst = () => `<div class="reserv-footer">Bijgewerkt: ${formatDDMMYYYY_HHMM(new Date().toISOString())}</div>`;
     try {
-      // Gebruik authenticated request bij beschikbaar PAT — voorkomt
-      // GitHub's unauthenticated rate-limit (60/uur per IP) die anders
-      // bij intensief PWA-gebruik tot 403's leidt + lege lijst.
       const pat = getPat();
       const headers = pat
         ? { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
         : { 'Accept': 'application/vnd.github+json' };
       const r = await fetch(getWachtrijApi() + '?t=' + Date.now(), { headers });
       if (r.status === 404) {
-        lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>' + bijTekst();
-        return;
+        lijst.innerHTML = `<div class="leeg-staat"><div class="leeg-staat-icoon">🕒</div><div class="leeg-staat-titel">Geen ingeplande reserveringen</div><div class="leeg-staat-hint">Reserveringen ver in de toekomst worden hier gepland</div></div>`;
+        _updateGlobalFooter(); return;
       }
       if (!r.ok) {
         const hint = r.status === 403 ? ' (rate-limit — zet je PAT in via ⚙️ of wacht een uur)' : '';
-        lijst.innerHTML = `<div class="wachtrij-leeg">Kon wachtrij niet laden (HTTP ${r.status})${hint}</div>` + bijTekst();
-        return;
+        lijst.innerHTML = `<div class="wachtrij-leeg">Kon wachtrij niet laden (HTTP ${r.status})${hint}</div>`;
+        _updateGlobalFooter(); return;
       }
       const files = await r.json();
       const json = files.filter(f => f.name.endsWith('.json') && f.name !== '.gitkeep');
       if (json.length === 0) {
-        lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>' + bijTekst();
-        return;
+        lijst.innerHTML = `<div class="leeg-staat"><div class="leeg-staat-icoon">🕒</div><div class="leeg-staat-titel">Geen ingeplande reserveringen</div><div class="leeg-staat-hint">Reserveringen ver in de toekomst worden hier gepland</div></div>`;
+        _updateGlobalFooter(); return;
       }
       const entries = await Promise.all(json.map(async f => {
         try {
@@ -1308,23 +1454,12 @@
         e && e.content && e.content.datum && e.content.tijd && Array.isArray(e.content.spelers)
       );
       if (geldig.length === 0) {
-        lijst.innerHTML = '<div class="wachtrij-leeg">Geen ingeplande reserveringen.</div>' + bijTekst();
-        return;
+        lijst.innerHTML = `<div class="leeg-staat"><div class="leeg-staat-icoon">🕒</div><div class="leeg-staat-titel">Geen ingeplande reserveringen</div><div class="leeg-staat-hint">Reserveringen ver in de toekomst worden hier gepland</div></div>`;
+        _updateGlobalFooter(); return;
       }
       geldig.sort((a, b) =>
         (a.content.datum + a.content.tijd).localeCompare(b.content.datum + b.content.tijd)
       );
-      // Detect 'verwerking gefaald': reserveringsdatum (= speeldag - 2d)
-      // ligt in het verleden, of is vandaag maar de cron is al langs.
-      // Sinds verwerk_wachtrij.yml (commit a5dd3d4) de file pas verwijdert
-      // bij boek-success, betekent 'nog aanwezig op/na reserveringsdatum'
-      // dat de boek-flow gefaald is.
-      //
-      // Logica:
-      //   - boekDt <  vandaag                         → gefaald
-      //   - boekDt == vandaag EN nu > 07:00 NL        → gefaald
-      //     (cron triggert 06:50, boek loopt tot ~07:10; na 07:00 is
-      //     de flow gestart en als 'ie geslaagd was, was 't bestand weg)
       const nu = new Date();
       const vandaag = new Date(nu); vandaag.setHours(0,0,0,0);
       const drempel07 = new Date(vandaag); drempel07.setHours(7,0,0,0);
@@ -1336,32 +1471,70 @@
         const datum     = escapeHtml(`${formatNL(item.datum)} om ${item.tijd}`);
         const path      = escapeHtml(e.file.path);
         const sha       = escapeHtml(e.file.sha);
+        const s2        = escapeHtml(item.spelers[1] || '');
+        const s3        = escapeHtml(item.spelers[2] || '');
+        const s4        = escapeHtml(item.spelers[3] || '');
+        const datumRaw  = escapeHtml(item.datum);
+        const tijdRaw   = escapeHtml(item.tijd);
 
-        // Bepaal status
         const [by, bm, bd] = boekDatum.split('-').map(Number);
         const boekDt = new Date(by, bm - 1, bd);
         const gefaald = (boekDt < vandaag) ||
                         (boekDt.getTime() === vandaag.getTime() && nu > drempel07);
 
-        const icoon = gefaald ? '❌' : '🗓️';
+        const icoon     = gefaald ? '❌' : '🗓️';
         const itemClass = gefaald ? 'wachtrij-item wachtrij-failed' : 'wachtrij-item';
-        const boektTekst = gefaald
-          ? `⚠️ Verwerking gefaald op ${formatNL(boekDatum)} — boek handmatig of verwijder`
-          : escapeHtml(`Reserveert automatisch op ${formatNL(boekDatum)} om 07:00`);
+        const statusBadge = gefaald
+          ? `<span class="status-badge gefaald">❌ Niet gelukt</span>`
+          : `<span class="status-badge gepland">🕒 Gepland voor ${escapeHtml(formatNL(boekDatum))} 07:00</span>`;
+        const actieKnop = gefaald
+          ? `<br><button class="wachtrij-actie" onclick="herboekWachtrij(this,'${datumRaw}','${tijdRaw}','${s2}','${s3}','${s4}')">🔄 Opnieuw proberen</button>`
+          : '';
 
         return `
           <div class="${itemClass}">
             <div class="wachtrij-item-inhoud">
               <div class="wachtrij-datum">${icoon} ${datum}</div>
               <div class="wachtrij-spelers">${spelers}</div>
-              <div class="wachtrij-boekt">${boektTekst}</div>
+              <div class="wachtrij-boekt">${statusBadge}${actieKnop}</div>
             </div>
             <button class="wachtrij-del" title="Verwijder deze ingeplande reservering"
                     onclick="verwijderWachtrij(this,'${path}','${sha}')">🗑️</button>
           </div>`;
-      }).join('') + bijTekst();
+      }).join('');
+      _updateGlobalFooter();
     } catch (e) {
-      lijst.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>' + bijTekst();
+      lijst.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>';
+    }
+  }
+
+  async function herboekWachtrij(btn, datum, tijd, speler2, speler3, speler4) {
+    const pat = getPat();
+    if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
+    btn.disabled = true;
+    btn.textContent = '⏳ Bezig…';
+    try {
+      const r = await fetch(
+        `https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches`,
+        { method: 'POST',
+          headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
+                     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref: 'main', inputs: {
+            gebruiker: getGebruiker(), datum, tijd, speler2, speler3, speler4, dry_run: 'false'
+          }}) }
+      );
+      if (r.status === 204) {
+        toonToast('success', `✅ Opnieuw gestart!\nJe ontvangt een e-mail zodra de baan gereserveerd is.`);
+        btn.textContent = '✅ Gestart';
+      } else {
+        toonToast('error', `❌ Mislukt (${r.status})`);
+        btn.disabled = false;
+        btn.textContent = '🔄 Opnieuw proberen';
+      }
+    } catch (e) {
+      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+      btn.disabled = false;
+      btn.textContent = '🔄 Opnieuw proberen';
     }
   }
 
@@ -1464,12 +1637,11 @@ async function laadReserveringen() {
       const bijTekst = data.bijgewerkt ? `Bijgewerkt: ${formatDDMMYYYY_HHMM(data.bijgewerkt) || '?'}` : '';
 
       if (items.length === 0) {
-        const bij = data.bijgewerkt ? `<br><small style="opacity:0.7">${bijTekst}</small>` : '';
-        lijst.innerHTML = `<div class="wachtrij-leeg">Geen actieve reserveringen.${bij}</div>`;
+        lijst.innerHTML = `<div class="leeg-staat"><div class="leeg-staat-icoon">🎾</div><div class="leeg-staat-titel">Geen actieve reserveringen</div><div class="leeg-staat-hint">Kies een datum hierboven en boek je eerste baan</div></div>`;
       } else {
-        lijst.innerHTML = _renderReservList(items) +
-          (bijTekst ? `<div class="reserv-footer">${bijTekst}</div>` : '');
+        lijst.innerHTML = _renderReservList(items);
       }
+      _updateGlobalFooter();
     } catch (e) {
       lijst.innerHTML = '<div class="wachtrij-leeg">Kon reserveringen niet laden.</div>';
     }
@@ -1894,11 +2066,9 @@ async function laadReserveringen() {
   function updateDryRunUi() {
     const aan = document.getElementById('dryRunToggle').checked;
     document.getElementById('boekBtn').classList.toggle('dryrun-actief', aan);
-    document.querySelector('.dryrun-toggle').classList.toggle('actief', aan);
+    document.getElementById('dryrunMicro').classList.toggle('actief', aan);
     document.getElementById('btnTekst').textContent =
       aan ? '🧪  Dry-run baan reserveren' : '🎾  Baan reserveren';
-    // Bewust GEEN localStorage-persistence: dry-run is per-tap een bewuste keuze,
-    // niet een persistent setting. Bij refresh start je weer in de echte modus.
   }
 
   /* ─── Bottom-padding sync ──────────────────────────────────
