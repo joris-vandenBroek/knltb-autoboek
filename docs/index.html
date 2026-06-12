@@ -1637,7 +1637,7 @@
             const items = Array.isArray(data.reserveringen) ? data.reserveringen : [];
             el.innerHTML = items.length === 0
               ? `<div class="leeg-staat"><div class="leeg-staat-icoon">🎾</div><div class="leeg-staat-titel">Geen actieve reserveringen</div></div>`
-              : _renderReservList(items);
+              : _renderReservList(items, false);
           }
         } catch (_) { el.innerHTML = '<div class="wachtrij-leeg">Kon reserveringen niet laden.</div>'; }
       })();
@@ -1699,22 +1699,22 @@
   let _autoVerversBezig = false;
 
   /** Bouw HTML voor een reserveringen-lijst. */
-  function _renderReservList(items) {
+  function _renderReservList(items, toonDel = true) {
     items.sort((a, b) => (a.datum + a.tijd).localeCompare(b.datum + b.tijd));
     return items.map(rv => {
       const datum = escapeHtml(`${formatNL(rv.datum)} om ${rv.tijd}`);
       const baan  = rv.baan || 'baan onbekend';
       const id    = escapeHtml(rv.id || '');
 
-      // Spelers achter baan op 1 regel — uit rv.spelers (gescrapet door
-      // lees_reserveringen.py via Wijzig-flow). Bij ontbreken: alleen baan.
       const medespelers = (Array.isArray(rv.spelers) && rv.spelers.length) ? rv.spelers : null;
       const baanRegel = medespelers
         ? `${escapeHtml(baan)} <span class="reserv-met">— met ${escapeHtml(medespelers.join(', '))}</span>`
         : escapeHtml(baan);
 
-      const delBtn = `<button class="wachtrij-del" title="Annuleer deze reservering"
-                  onclick="annuleerReservering(this,'${id}','${escapeHtml(rv.datum)}','${escapeHtml(rv.tijd)}')">🗑️</button>`;
+      const delBtn = toonDel
+        ? `<button class="wachtrij-del" title="Annuleer deze reservering"
+                  onclick="annuleerReservering(this,'${id}','${escapeHtml(rv.datum)}','${escapeHtml(rv.tijd)}')">🗑️</button>`
+        : '';
 
       return `
         <div class="wachtrij-item">
