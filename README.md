@@ -127,7 +127,7 @@ GitHub Actions' eigen scheduled triggers zijn onbetrouwbaar (kunnen volledig ove
 
 ```
 1. Open de PWA op je telefoon
-2. Kies datum, tijd en 3 medespelers
+2. Kies datum, tijd, sport (Padel of Tennis) en 3 medespelers
 3. Tik op "Baan reserveren"
 ```
 
