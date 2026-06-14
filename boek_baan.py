@@ -2039,7 +2039,7 @@ def main():
     log.info(f"   Spelers: {', '.join(spelers)}")
     log.info("=" * 50)
 
-    voeg_toe_aan_agenda(baan, args.datum, gereserveerde_tijd, spelers, args.sport)
+    # Agenda-item wordt aangemaakt in lees_reserveringen.py (beheer_reserveringen.yml)
 
 
 if __name__ == "__main__":

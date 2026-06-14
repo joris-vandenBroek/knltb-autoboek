@@ -51,6 +51,8 @@ GOOGLE_CALENDAR_ID  = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
 GEBRUIKER           = os.environ.get("GEBRUIKER", "joris")
 RESERVERINGEN_FILE  = f"reserveringen_{GEBRUIKER}.json"
 TIMEOUT             = 20
+SPELER1_NAAM        = os.environ.get("SPELER1_NAAM", "")
+AGENDA_ITEMS_FILE   = f"agenda_items_{GEBRUIKER}.json"
 
 
 def screenshot(driver, naam: str):
@@ -569,8 +571,131 @@ def annuleer(driver, target_id: str) -> bool:
     return weg
 
 
-def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
-    """Verwijder de matching Padel-event uit Google Agenda voor (datum, tijd)."""
+
+def _laad_agenda_items() -> dict:
+    """Laad agenda_items_{GEBRUIKER}.json, of return lege dict als het bestand niet bestaat."""
+    if not os.path.exists(AGENDA_ITEMS_FILE):
+        return {}
+    try:
+        with open(AGENDA_ITEMS_FILE, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as e:
+        log.warning(f"Agenda-items bestand niet leesbaar ({e}), start leeg")
+        return {}
+
+
+def _sla_agenda_items_op(items: dict):
+    """Sla agenda-items dict op als JSON."""
+    with open(AGENDA_ITEMS_FILE, "w", encoding="utf-8") as fh:
+        json.dump(items, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+
+
+def voeg_toe_aan_agenda(reservering: dict) -> str:
+    """
+    Maak een Google Agenda-event voor een reservering.
+    Returnt het Google event ID, of "" bij fout of geen credentials.
+    """
+    if not GOOGLE_CREDENTIALS or not GOOGLE_CALENDAR_ID:
+        return ""
+    try:
+        from datetime import timedelta
+        from google.oauth2.service_account import Credentials
+        from googleapiclient.discovery import build
+
+        baan    = reservering.get("baan") or "Baan"
+        datum   = reservering["datum"]
+        tijd    = reservering["tijd"]
+        spelers = reservering.get("spelers", [])
+
+        sport = "Tennis" if baan and "Tennis" in baan else "Padel"
+        alle_spelers = ([SPELER1_NAAM] if SPELER1_NAAM else []) + spelers
+
+        creds_info = json.loads(GOOGLE_CREDENTIALS)
+        creds = Credentials.from_service_account_info(
+            creds_info, scopes=["https://www.googleapis.com/auth/calendar"]
+        )
+        service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+
+        start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M")
+        eind_dt  = start_dt + timedelta(hours=1)
+        datum_nl = start_dt.strftime("%d-%m-%Y")
+
+        # En-dash via chr() zodat de broncode vrij is van bijzondere tekens
+        dash = chr(8211)
+
+        event = {
+            "summary": f"ETV {sport} {dash} {baan}",
+            "location": "ETV Volley, Swaardvenstraat 10, 5048 AV Tilburg",
+            "description": (
+                f"Baan automatisch gereserveerd.\n\n"
+                f"Baan:    {baan}\n"
+                f"Datum:   {datum_nl}\n"
+                f"Tijd:    {tijd} {dash} {eind_dt.strftime('%H:%M')}\n\n"
+                f"Spelers:\n" +
+                "\n".join(f"  {i+1}. {s}" for i, s in enumerate(alle_spelers))
+            ),
+            "start": {
+                "dateTime": start_dt.strftime("%Y-%m-%dT%H:%M:00"),
+                "timeZone": "Europe/Amsterdam",
+            },
+            "end": {
+                "dateTime": eind_dt.strftime("%Y-%m-%dT%H:%M:00"),
+                "timeZone": "Europe/Amsterdam",
+            },
+            "colorId": "10",
+            "reminders": {
+                "useDefault": False,
+                "overrides": [{"method": "popup", "minutes": 60}],
+            },
+        }
+        result = service.events().insert(
+            calendarId=GOOGLE_CALENDAR_ID, body=event
+        ).execute()
+        event_id = result.get("id", "")
+        log.info(f"Google Agenda bijgewerkt: {result.get('htmlLink')}")
+        return event_id
+    except ImportError:
+        log.error("google-api-python-client niet geinstalleerd")
+    except json.JSONDecodeError:
+        log.error("GOOGLE_CALENDAR_CREDENTIALS is geen geldig JSON")
+    except Exception as e:
+        log.error(f"Google Agenda aanmaken mislukt: {e}")
+    return ""
+
+
+def maak_ontbrekende_agenda_items(reserveringen: list) -> bool:
+    """
+    Maak Google Agenda-items aan voor reserveringen waarvoor er nog geen is.
+    Slaat event-IDs op in AGENDA_ITEMS_FILE voor idempotentie en directe verwijdering.
+    Returnt True als er nieuwe items zijn aangemaakt (bestand moet gecommit worden).
+    """
+    if not GOOGLE_CREDENTIALS or not GOOGLE_CALENDAR_ID:
+        return False
+
+    items = _laad_agenda_items()
+    nieuw = 0
+
+    for r in reserveringen:
+        rid = r.get("id")
+        if not rid or rid in items:
+            continue
+        event_id = voeg_toe_aan_agenda(r)
+        if event_id:
+            items[rid] = event_id
+            nieuw += 1
+
+    if nieuw:
+        _sla_agenda_items_op(items)
+        log.info(f"{nieuw} nieuw agenda-item(s) aangemaakt")
+        return True
+    log.info("Geen nieuwe agenda-items nodig")
+    return False
+
+
+def verwijder_uit_agenda(datum: str, tijd: str, reservering_id: str = "") -> bool:
+    """Verwijder het Google Agenda-event voor (datum, tijd).
+    Probeert eerst direct via agenda_items.json (snel), dan via tijdzoekvenster (fallback voor oude events)."""
     if not GOOGLE_CREDENTIALS:
         log.warning("âš ï¸ GOOGLE_CALENDAR_CREDENTIALS niet ingesteld â€” agenda-verwijdering overgeslagen")
         return False
@@ -584,6 +709,22 @@ def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
             scopes=["https://www.googleapis.com/auth/calendar"]
         )
         service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+
+        # Directe lookup via agenda_items.json
+        if reservering_id:
+            agenda_items = _laad_agenda_items()
+            direct_event_id = agenda_items.get(reservering_id, "")
+            if direct_event_id:
+                try:
+                    service.events().delete(
+                        calendarId=GOOGLE_CALENDAR_ID, eventId=direct_event_id
+                    ).execute()
+                    agenda_items.pop(reservering_id)
+                    _sla_agenda_items_op(agenda_items)
+                    log.info(f"Agenda-event verwijderd ({direct_event_id})")
+                    return True
+                except Exception as _e:
+                    log.warning(f"Directe delete mislukt ({_e}), fallback tijdzoekvenster")
 
         # Booking time is NL-lokaal. Maak datetime timezone-aware in Europe/Amsterdam
         # zodat het zoekvenster overeenkomt met het tijdstip waarop Google
@@ -610,7 +751,6 @@ def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
             calendarId=GOOGLE_CALENDAR_ID,
             timeMin=time_min,
             timeMax=time_max,
-            q="Padel",
             singleEvents=True,
         ).execute()
         events = events_result.get('items', [])
@@ -623,7 +763,7 @@ def verwijder_uit_agenda(datum: str, tijd: str) -> bool:
             ev_start = ev.get('start', {}).get('dateTime', '')
             ev_summary = ev.get('summary', '')
             # Match op start-datetime prefix (negeer tz-suffix) en 'Padel' in summary
-            if target_dt_local in ev_start and 'Padel' in ev_summary:
+            if target_dt_local in ev_start and 'ETV' in ev_summary:
                 ev_id = ev.get('id')
                 log.info(f"  Verwijder: '{ev_summary}' (start {ev_start})")
                 service.events().delete(
@@ -756,7 +896,7 @@ def main():
             # een lege agenda dan een spookafspraak)
             m = re.match(r"(\d{4}-\d{2}-\d{2})_(\d{4})_", args.cancel)
             if m:
-                verwijder_uit_agenda(m.group(1), f"{m.group(2)[:2]}:{m.group(2)[2:]}")
+                verwijder_uit_agenda(m.group(1), f"{m.group(2)[:2]}:{m.group(2)[2:]}", reservering_id=args.cancel)
         # Always scrape (na annuleren is dit de bijgewerkte lijst)
         reserveringen = scrape_reserveringen(driver)
 
@@ -781,11 +921,15 @@ def main():
         log.info(f"ðŸ“„ reserveringen.json geschreven ({len(reserveringen)} items)")
 
         verwijderde_wachtrij = ruim_wachtrij_op(reserveringen)
+        maak_ontbrekende_agenda_items(reserveringen)
 
     finally:
         driver.quit()
 
+    agenda_items_bestaat = os.path.exists(AGENDA_ITEMS_FILE)
     te_committen = [RESERVERINGEN_FILE] + verwijderde_wachtrij
+    if agenda_items_bestaat:
+        te_committen.append(AGENDA_ITEMS_FILE)
     actie = f"annuleer {args.cancel}" if args.cancel else "lees lijst"
     if verwijderde_wachtrij:
         actie += f"; wachtrij opgeruimd: {', '.join(verwijderde_wachtrij)}"
