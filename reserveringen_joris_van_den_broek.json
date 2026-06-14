@@ -1,12 +1,12 @@
 {
-  "bijgewerkt": "2026-06-13T10:40:37",
+  "bijgewerkt": "2026-06-14T07:05:24",
   "reserveringen": [
     {
-      "id": "2026-06-13_1000_padel-1",
-      "datum": "2026-06-13",
-      "tijd": "10:00",
-      "baan": "Padel 1",
-      "tekst": "13-06-2026\t10:00 - 11:00\tPadel 1\t\t\nWijzigen\n\t\nAnnuleren",
+      "id": "2026-06-16_2030_padel-3",
+      "datum": "2026-06-16",
+      "tijd": "20:30",
+      "baan": "Padel 3",
+      "tekst": "16-06-2026\t20:30 - 21:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
       "cancel": {
         "btnTekst": "Annuleren",
         "btnHref": null,
@@ -14,9 +14,9 @@
         "btnDataId": null
       },
       "spelers": [
-        "Toine Aanraad",
-        "Rob Wind",
-        "Joep Kolijn"
+        "Jan Verhoeven",
+        "Walther Slaats",
+        "Petra Brugmans-Kanters"
       ]
     }
   ]
