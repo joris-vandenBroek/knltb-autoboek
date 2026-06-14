@@ -608,7 +608,12 @@ def voeg_toe_aan_agenda(reservering: dict) -> str:
         tijd    = reservering["tijd"]
         spelers = reservering.get("spelers", [])
 
-        sport = "Tennis" if baan and "Tennis" in baan else "Padel"
+        # ETV toont tennisbanen soms als kaal getal ("04"), soms als "Tennis 04"
+        import re as _re
+        if baan and ("Tennis" in baan or _re.match(r'^\d{2}$', baan.strip())):
+            sport = "Tennis"
+        else:
+            sport = "Padel"
         alle_spelers = ([SPELER1_NAAM] if SPELER1_NAAM else []) + spelers
 
         creds_info = json.loads(GOOGLE_CREDENTIALS)
