@@ -1,14 +1,8 @@
-const CACHE = 'padel-v53';
-// index.html en manifest altijd network-first zodat updates direct zichtbaar zijn
-const NETWORK_FIRST = ['/', '/index.html', '/manifest.json'];
-const CACHE_FIRST   = ['/sw.js', '/logo.png', '/icon-192.png', '/icon-512.png'];
-// JSON-payloads die altijd vers moeten zijn (worden ge-cache-bust via ?t=)
-const ALTIJD_VERS_JSON = ['leden.json', 'reserveringen.json'];
+const CACHE = 'padel-v54';
+const STATIC = ['/sw.js', '/logo.png', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE).then(c => c.addAll(CACHE_FIRST))
-  );
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
   self.skipWaiting();
 });
 
@@ -22,32 +16,38 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = e.request.url;
 
-  // Altijd vers: alle JSON-payloads (leden, reserveringen) + GitHub API.
-  // Geen cache-hit ooit serveren — anders zie je na een annulering nog
-  // steeds de oude reserveringen-lijst.
-  // `cache: 'no-store'` omzeilt ook GitHub raw cdn cache die ?t=...
-  // querystrings soms negeert als cache-key.
-  if (ALTIJD_VERS_JSON.some(n => url.includes(n)) || url.includes('api.github.com')) {
+  // Statische assets: cache-first
+  if (STATIC.some(p => url.endsWith(p))) {
     e.respondWith(
-      fetch(e.request, { cache: 'no-store' }).catch(() => caches.match(e.request))
+      caches.match(e.request).then(cached => cached || fetch(e.request))
     );
     return;
   }
 
   // index.html / manifest: network-first, fallback cache
-  if (NETWORK_FIRST.some(p => url.endsWith(p))) {
+  if (url.endsWith('/') || url.includes('/index.html') || url.includes('/manifest.json')) {
     e.respondWith(
       fetch(e.request).then(resp => {
-        const clone = resp.clone();
-        caches.open(CACHE).then(c => c.put(e.request, clone));
+        caches.open(CACHE).then(c => c.put(e.request, resp.clone()));
         return resp;
       }).catch(() => caches.match(e.request))
     );
     return;
   }
 
-  // Afbeeldingen/icons: cache-first
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
-  );
+  // leden.json: cache-first (verandert zelden)
+  if (url.includes('leden.json')) {
+    e.respondWith(
+      caches.match(e.request).then(cached => cached ||
+        fetch(e.request).then(resp => {
+          caches.open(CACHE).then(c => c.put(e.request, resp.clone()));
+          return resp;
+        })
+      )
+    );
+    return;
+  }
+
+  // Al het andere (reserveringen, wachtrij, GitHub API): altijd netwerk
+  e.respondWith(fetch(e.request));
 });
