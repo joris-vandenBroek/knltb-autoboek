@@ -1,5 +1,5 @@
 """
-ETV Volley Padelbaan Auto-Reservering
+ETV Volley Baan Auto-Reservering
 Automatisch een padelbaan reserveren via etv-volley.nl/mijn
 Na een succesvolle reservering wordt de afspraak direct in Google Agenda gezet.
 
@@ -232,7 +232,7 @@ def login(driver: uc.Chrome) -> bool:
     # kritieke booking-pad niet te raken vÃ³Ã³r veld-validatie.
     log.info(f"Navigeer naar {LOGIN_URL}")
     driver.get(LOGIN_URL)
-    time.sleep(4)
+    time.sleep(1)
     screenshot(driver, "01_login_pagina")
 
     # Accepteer cookie-banner (met expliciete wacht)
@@ -323,7 +323,11 @@ def login(driver: uc.Chrome) -> bool:
             log.warning("Geen submit-knop gevonden  gebruik Keys.RETURN als fallback")
             ww_veld.send_keys(Keys.RETURN)
 
-        time.sleep(6)
+        try:
+            WebDriverWait(driver, 10).until(lambda d: d.current_url != LOGIN_URL)
+        except TimeoutException:
+            pass
+        time.sleep(0.5)
         screenshot(driver, "02_na_login")
         log.info(f"URL na login: {driver.current_url}")
 
@@ -374,15 +378,12 @@ def klik_baan_afhangen(driver: uc.Chrome) -> bool:
     log.info("Navigeer naar reserveringspagina...")
     driver.get(RESERVEER_URL)
     time.sleep(2)
-    screenshot(driver, "03_reserveer_pagina")
-
     try:
         afhangen_knop = wacht_op(driver, By.XPATH,
             "//a[contains(text(),'Baan afhangen') or contains(text(),'afhangen')] "
             "| //button[contains(text(),'Baan afhangen') or contains(text(),'afhangen')]")
         afhangen_knop.click()
         time.sleep(2)
-        screenshot(driver, "04_na_afhangen_klik")
         log.info(" 'Baan afhangen' geklikt")
         return True
     except TimeoutException as e:
@@ -642,8 +643,6 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
             if not zoek_veld:
                 continue
             continue
-        screenshot(driver, f"05b_zoek_{index}_{achternaam}")
-
         # Wacht tot er een .addPlayer[data-id] card verschijnt met EXACTE match
         try:
             WebDriverWait(driver, 8).until(
@@ -765,22 +764,26 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
     return ""
 
 
-def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str) -> bool:
+def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str,
+                      is_retry: bool = False) -> bool:
     log.info("Spelers toevoegen...")
-    time.sleep(2)
+    time.sleep(1)
 
-    # Defensieve refresh: forceer ETV om de ReservationsPlayers pagina vers
-    # te renderen. Eventuele stale state uit een vorige gefaalde booking-
-    # poging wordt zo zichtbaar (= we kunnen detecteren of spelers al in
-    # #youPlayWith staan voordat we ze opnieuw proberen toe te voegen).
-    try:
-        driver.refresh()
-        time.sleep(3)
+    # Defensieve refresh alleen bij retry (outer_poging > 1): stale state
+    # uit een vorige poging opruimen. Eerste run heeft verse sessie.
+    if is_retry:
+        try:
+            driver.refresh()
+            try:
+                WebDriverWait(driver, 8).until(
+                    lambda d: _zoek_veld_spelers(d) is not None
+                )
+            except TimeoutException:
+                time.sleep(1)
         log.info(f"   ReservationsPlayers ververst  URL: {driver.current_url}")
-    except Exception as e:
-        log.warning(f"  Refresh mislukt ({e}), doorgaan op huidige page state")
+        except Exception as e:
+            log.warning(f"  Refresh mislukt ({e}), doorgaan op huidige page state")
 
-    screenshot(driver, "05_spelers_pagina")
 
     # Log wie er al in #youPlayWith staat (eventueel leftover van een
     # eerder gecrashte booking-poging). Joris staat er altijd in als speler 1.
@@ -909,8 +912,6 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     log.info(f"Dag kiezen: {datum}, dagdeel: {dagdeel(tijd)}")
     time.sleep(2)
     _sluit_cookie_banner(driver)
-    screenshot(driver, "07_dag_pagina")
-
     doel_datum      = datetime.strptime(datum, "%Y-%m-%d")
     dag_nr          = str(doel_datum.day)
     gewenst_dagdeel = dagdeel(tijd)
@@ -1168,8 +1169,6 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
 
     # â”€â”€ Sluit cookie-banner vÃ³Ã³r we iets klikken â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     _sluit_cookie_banner(driver)
-
-    screenshot(driver, "09_baan_pagina")
 
     tijden = genereer_tijden(voorkeur_tijd)
     log.info(f"Tijden om te proberen: {tijden}")
@@ -1435,7 +1434,6 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             except TimeoutException:
                 pass
             time.sleep(1)
-            screenshot(driver, "11_bevestig_pagina")
             url_na_vol = driver.current_url
             log.info(f"  URL na Volgende: {url_na_vol}")
             try:
@@ -1545,7 +1543,13 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             return 'jQuery-trigger';
         """, data_url)
         log.info(f"  Intercept result: {intercepted}")
-        time.sleep(3)   # geef de AJAX-call tijd om te sturen
+        try:
+            WebDriverWait(driver, 5).until(
+                lambda d: d.execute_script("return !!window._interceptedCalled;")
+            )
+        except TimeoutException:
+            pass
+        time.sleep(0.5)
 
         # Lees de onderschepte POST-data en AJAX-respons
         intercepted_data  = driver.execute_script("return window._interceptedData;")
@@ -1714,7 +1718,12 @@ def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
     def _check_pagina(url: str, scherm_naam: str) -> str:
         try:
             driver.get(url)
-            time.sleep(5)   # geef AJAX-content tijd om te laden
+            try:
+                WebDriverWait(driver, 10).until(
+                    lambda d: len((d.find_element(By.TAG_NAME, "body").text or "")) > 50
+                )
+            except TimeoutException:
+                pass
             screenshot(driver, scherm_naam)
             body = driver.find_element(By.TAG_NAME, "body").text
             log.info(f"  {url} body (800): {body[:800]}")
@@ -1857,7 +1866,7 @@ def main():
                      f"voorbereid, bevestig-klik volgt pas op 07:01 NL.")
 
     log.info("=" * 50)
-    log.info(" ETV Volley Padelbaan Auto-Reservering")
+    log.info(" ETV Volley Baan Auto-Reservering")
     log.info(f"   Datum:   {args.datum}")
     log.info(f"   Tijd:    {args.tijd}")
     log.info(f"   Spelers: {SPELER1}, {args.speler2}, {args.speler3}, {args.speler4}")
@@ -1927,7 +1936,8 @@ def main():
                 log.error(f" 'Baan afhangen' knop niet gevonden (poging {outer_poging})")
                 continue  # outer retry
 
-            if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4):
+            if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4,
+                                 is_retry=(outer_poging > 1)):
                 log.error(" Speler niet gevonden  controleer spelernamen")
                 sys.exit(1)  # credentials/lid-issue, geen retry zinvol
 
