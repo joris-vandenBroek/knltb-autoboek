@@ -134,10 +134,15 @@ def parse_tijd(tekst: str) -> str | None:
 
 
 def parse_baan(tekst: str) -> str | None:
-    """Vind 'Padel N' of 'Tennis N' in tekst."""
+    """Vind 'Padel N', 'Tennis N', of een kaal Smashcourt-baannummer (04-09, 11, 12)."""
     m = re.search(r"\b(Padel|Tennis)\s*\d+\b", tekst, re.IGNORECASE)
     if m:
         return m.group(0).title()
+    # ETV toont tennisbanen soms als kaal getal (bijv. "04").
+    # Negatieve lookbehind/lookahead zodat datums (14-06) en tijden (16:04) niet matchen.
+    m2 = re.search(r"(?<![\d:\-])(0[4-9]|1[12])(?![\d:\-])", tekst)
+    if m2:
+        return f"Tennis {m2.group(1)}"
     return None
 
 
