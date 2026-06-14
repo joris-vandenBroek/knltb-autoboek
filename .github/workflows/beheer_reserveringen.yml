@@ -35,7 +35,7 @@ jobs:
             gebruikers=$(jq -c '[.[].id]' gebruikers.json)
           else
             gebruiker="${{ inputs.gebruiker || 'joris_van_den_broek' }}"
-            gebruikers=$(jq -n --arg u "$gebruiker" '[$u]')
+            gebruikers=$(jq -cn --arg u "$gebruiker" '[$u]')
           fi
           echo "gebruikers=$gebruikers" >> $GITHUB_OUTPUT
 
