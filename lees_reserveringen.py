@@ -886,7 +886,7 @@ def commit_en_push(bestanden: list, message: str):
             subprocess.run(["git", "rebase", "--abort"], check=False)
             # Haal remote op + cherry-pick onze commit bovenop remote HEAD
             subprocess.run(["git", "fetch", "origin", "main"], check=False)
-            subprocess.run(["git", "reset", "--soft", "origin/main"], check=False)
+            subprocess.run(["git", "reset", "--mixed", "origin/main"], check=False)
             # Onze bestanden opnieuw stagen (zijn al gewijzigd door script)
             subprocess.run(["git", "add"] + bestanden, check=False)
             diff = subprocess.run(["git", "diff", "--cached", "--quiet"])
