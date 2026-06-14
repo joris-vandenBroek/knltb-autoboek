@@ -1795,7 +1795,19 @@ async function laadReserveringen() {
     setTimeout(poll, 60000);
   }
 
-  /** Handmatige verversen-knop: triggert workflow en toont toast. */
+  /** Dispatch beheer_reserveringen voor één gebruiker. Geeft true bij 204. */
+  async function _dispatchBeheer(pat, gebruiker, cancelId = '') {
+    const r = await fetch(
+      `https://api.github.com/repos//actions/workflows//dispatches`,
+      { method: 'POST',
+        headers: { 'Authorization': `Bearer `, 'Accept': 'application/vnd.github+json',
+                   'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: 'main', inputs: { gebruiker, cancel_id: cancelId } }) }
+    );
+    return r.status === 204;
+  }
+
+  /** Handmatige verversen-knop: triggert workflow voor ALLE gebruikers parallel. */
   async function verversReserveringen() {
     const pat = getPat();
     if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
@@ -1803,26 +1815,20 @@ async function laadReserveringen() {
     btn.disabled = true;
     btn.textContent = '⏳…';
     try {
-      const r = await fetch(
-        `https://api.github.com/repos/${REPO}/actions/workflows/${BEHEER_WORKFLOW}/dispatches`,
-        { method: 'POST',
-          headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
-                     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ref: 'main', inputs: { gebruiker: getGebruiker(), cancel_id: '' } }) }
-      );
-      if (r.status === 204) {
+      const gebruikers = await laadGebruikers();
+      const ids = gebruikers.map(g => g.id);
+      const resultaten = await Promise.all(ids.map(id => _dispatchBeheer(pat, id)));
+      if (resultaten.some(ok => ok)) {
         toonToast('success', '🔄 Reserveringen worden bijgewerkt (~1.5 min).\nLijst ververst vanzelf.');
         _pollingNaDispatch();
       } else {
-        let detail = '';
-        try { const j = await r.json(); detail = j.message ? `\n${j.message}` : ''; } catch (_) {}
-        toonToast('error', `❌ Mislukt (${r.status})${detail}`);
+        toonToast('error', '❌ Dispatch mislukt — controleer je GitHub Token');
       }
     } catch (e) {
-      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+      toonToast('error', `❌ Netwerkfout: `);
     }
     btn.disabled = false;
-    btn.textContent = '🔄 Verversen';
+    btn.textContent = '🔄 Verversen';
   }
 
   /** Poll reserveringen.json elke 30s tot bijgewerkt-timestamp veranderd is (max 3 min). */
@@ -1857,15 +1863,9 @@ async function laadReserveringen() {
   async function autoVerversReserveringen() {
     if (_autoVerversBezig) return;
     try {
-      const r = await fetch(
-        `https://api.github.com/repos/${REPO}/actions/workflows/${BEHEER_WORKFLOW}/dispatches`,
-        { method: 'POST',
-          headers: { 'Authorization': `Bearer ${getPat()}`, 'Accept': 'application/vnd.github+json',
-                     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ref: 'main', inputs: { gebruiker: getGebruiker(), cancel_id: '' } }) }
-      );
-      if (r.status !== 204) return;  // Stilletjes opgeven
-      _pollingNaDispatch();
+      const gebruikers = await laadGebruikers();
+      const ok = await Promise.all(gebruikers.map(g => _dispatchBeheer(getPat(), g.id)));
+      if (ok.some(Boolean)) _pollingNaDispatch();
     } catch (_) {}
   }
 
@@ -1876,14 +1876,8 @@ async function laadReserveringen() {
     btn.disabled = true;
     btn.textContent = '⏳';
     try {
-      const r = await fetch(
-        `https://api.github.com/repos/${REPO}/actions/workflows/${BEHEER_WORKFLOW}/dispatches`,
-        { method: 'POST',
-          headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json',
-                     'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ref: 'main', inputs: { gebruiker: getGebruiker(), cancel_id: id } }) }
-      );
-      if (r.status === 204) {
+      const r = await _dispatchBeheer(pat, getGebruiker(), id);
+      if (r === true) {
         toonToast('success', '🗑️ Annulering wordt verwerkt (~1.5 min).\nLijst ververst zelf.');
         // Optimistic UI: verwijder het item direct uit de DOM zodat de
         // gebruiker meteen visuele feedback krijgt. De polling overschrijft

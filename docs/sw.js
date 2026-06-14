@@ -1,4 +1,4 @@
-const CACHE = 'padel-v47';
+const CACHE = 'padel-v48';
 // index.html en manifest altijd network-first zodat updates direct zichtbaar zijn
 const NETWORK_FIRST = ['/', '/index.html', '/manifest.json'];
 const CACHE_FIRST   = ['/sw.js', '/logo.png', '/icon-192.png', '/icon-512.png'];
