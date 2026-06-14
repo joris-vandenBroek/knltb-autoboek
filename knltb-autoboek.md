@@ -266,7 +266,7 @@ Beide PATs hebben minimaal `workflow` scope nodig (classic) of `Actions: Read an
 Een HTML-bestand zonder frameworks. Werkt als installeerbare PWA op iPhone en Android. Sectie-volgorde:
 
 1. **Header** met ETV Volley-logo + tandwiel-knop voor PAT
-2. **Wanneer** -- datumkiezer + tijdkeuze (08:00-21:30, stappen van 30 min, standaard 15:00)
+2. **Wanneer** -- datumkiezer + tijdkeuze (08:00-21:30, stappen van 30 min, standaard 15:00) + Sport-selector (Padel/Tennis)
 3. **Medespelers** -- 3 dropdowns met zoekfilter (PrimeFaces-stijl)
 4. **Mijn reserveringen** -- actieve reserveringen + annuleren per item
 5. **Ingeplande reserveringen** -- wachtrij + verwijderen per item
@@ -322,7 +322,7 @@ Elke keer dat `index.html` of `sw.js` inhoudelijk verandert moet dit versienumme
 ### 8.1 boek.yml
 
 **Trigger:** alleen `workflow_dispatch`.  
-**Inputs:** `datum` (YYYY-MM-DD), `tijd` (HH:MM), `speler2`, `speler3`, `speler4`.
+**Inputs:** `datum` (YYYY-MM-DD), `tijd` (HH:MM), `sport` (padel/tennis, default padel), `speler2`, `speler3`, `speler4`.
 
 **Stappen:** checkout -> setup-python 3.11 -> apt-get install xvfb + pip install -> Xvfb :99 + python boek_baan.py -> bij fout: upload `*.png` als artifact (3 dagen retentie).
 
@@ -365,6 +365,7 @@ LOGIN_URL     = "https://www.etv-volley.nl/mijn"
 RESERVEER_URL = "https://www.etv-volley.nl/mijn/Reservations"
 SPELER1       = "Joris van den Broek"
 PADEL_BANEN   = ["Padel 1", ..., "Padel 6"]
+TENNIS_BANEN  = ["Tennis 04", ..., "Tennis 12"]  # Smashcourt-courts (banen 04-12, geen 10)
 ```
 
 ### Wachtrij-pad
