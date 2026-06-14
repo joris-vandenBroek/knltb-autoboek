@@ -1907,6 +1907,11 @@ async function laadReserveringen() {
     if (document.visibilityState === 'visible') {
       laadReserveringen();
       laadWachtrij();
+      // Als polling bezig was maar door mobile throttling gestorven is, herstart
+      if (_autoVerversBezig) {
+        _autoVerversBezig = false;
+        _pollingNaDispatch();
+      }
     }
   });
 
