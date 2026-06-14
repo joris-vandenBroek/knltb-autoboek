@@ -304,7 +304,7 @@ Verschijnt automatisch als `localStorage.knltb_pat` leeg is. PAT opgeslagen loka
 ## 7. Service Worker -- docs/sw.js
 
 ```javascript
-const CACHE = 'padel-v46';
+const CACHE = 'padel-v54';
 ```
 
 Elke keer dat `index.html` of `sw.js` inhoudelijk verandert moet dit versienummer omhoog. De SW verwijdert dan automatisch de oude cache bij activate.
@@ -315,8 +315,10 @@ Elke keer dat `index.html` of `sw.js` inhoudelijk verandert moet dit versienumme
 |-----------|-----------|-------|
 | `index.html`, `manifest.json`, `/` | **Network-first**, fallback cache | Updates direct zichtbaar |
 | `sw.js`, `logo.png`, `icon-*.png` | **Cache-first** | Veranderen zelden |
-| `leden.json`, `api.github.com` | **Altijd netwerk**, fallback cache | Altijd vers |
-| Overige | Cache-first | Afbeeldingen/icons |
+| `leden.json` | **Cache-first** | Verandert zelden, beheerd door eigenaar |
+| Al het overige (reserveringen, wachtrij, GitHub API) | **Altijd netwerk** | Stale data is actief schadelijk; offline is toch nutteloos |
+
+> **Bewuste keuze:** data-caching is uit voor reserveringen en wachtrij. Offline werken heeft geen zin (boeken/annuleren vereist netwerk), en gecachte reserveringen leidden tot bugs waarbij annuleringen of updates onzichtbaar bleven.
 
 ---
 
@@ -341,10 +343,18 @@ Elke keer dat `index.html` of `sw.js` inhoudelijk verandert moet dit versienumme
 
 ### 8.3 beheer_reserveringen.yml
 
-**Trigger:** alleen `workflow_dispatch`.  
-**Input:** `cancel_id` (optioneel).
+**Trigger:** `workflow_dispatch` of `schedule` (dagelijks 07:30 NL).  
+**Inputs:** `gebruiker` (gebruiker-ID of `'alle'`), `cancel_id` (optioneel).
 
-Run: `python lees_reserveringen.py` (of met `--cancel ID`). Schrijft `reserveringen.json` en commit.
+**Twee-job structuur:**
+1. **`setup`-job**: bepaalt matrix via `curl gebruikers.json | jq '[.[].id]'`. Bij `gebruiker='alle'` of schedule: alle gebruikers. Anders: één gebruiker.
+2. **`beheer`-job**: draait parallel per gebruiker via `strategy.matrix`, `fail-fast: false`. Concurrency per gebruiker: `knltb-beheer-<gebruiker>`.
+
+Run: `python lees_reserveringen.py` (of met `--cancel ID`). Schrijft `reserveringen_<gebruiker>.json` en commit.
+
+**Google Agenda:** alleen als de gebruiker een `calendar_id` heeft in `GEBRUIKERS_CONFIG`. Geen fallback naar de gedeelde `GOOGLE_CALENDAR_ID` secret — voorkomt dat medegebruikers events aanmaken in elkaars agenda.
+
+**pip cache:** `requirements.txt` in de root bevat de pip-dependencies; `actions/setup-python@v5` cachet ze tussen runs (~25s besparing).
 
 ### 8.4 haal_leden_op.yml
 

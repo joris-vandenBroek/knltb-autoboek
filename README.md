@@ -160,11 +160,13 @@ Login + spelers gebeurt tijdens de wachttijd voor 07:00. Pas vanaf 07:01 (1 min 
 ### Mijn reserveringen / annuleren
 
 In de PWA-kaart "Mijn reserveringen":
-- **Automatisch** -> elke ochtend om 07:30 NL scrapet `beheer_reserveringen.yml` de actuele stand; verlopen of door anderen geannuleerde reserveringen verdwijnen vanzelf uit agenda
-- **🔄 Verversen** -> handmatig scrapen vanuit de PWA; Google Agenda wordt direct gesynchroniseerd (nieuwe events aanmaken, verdwenen events verwijderen)
+- **Automatisch** -> elke ochtend om 07:30 NL scrapet `beheer_reserveringen.yml` alle gebruikers parallel; verlopen of door anderen geannuleerde reserveringen verdwijnen vanzelf uit agenda
+- **🔄 Verversen** -> één dispatch met `gebruiker='alle'` triggert alle gebruikers tegelijk via matrix-strategie; de PWA pollt daarna elke 15s (eerste check na 5s) tot de JSON bijgewerkt is
 - **🗑️ per reservering** -> annuleert op ETV-site + verwijdert agenda-event
 
-De PWA haalt bij elke open en elke 3 minuten de laatste `reserveringen_<gebruiker>.json` op van GitHub (snelle fetch, geen workflow). De 🔄 Verversen-knop en de dagelijkse cron zijn de enige momenten dat de ETV-site opnieuw gescrapet wordt.
+De PWA haalt bij elke open, bij terugkomen in de app en elke 3 minuten de laatste `reserveringen_<gebruiker>.json` op van GitHub (snelle fetch, geen workflow). De 🔄 Verversen-knop en de dagelijkse cron zijn de enige momenten dat de ETV-site opnieuw gescrapet wordt.
+
+**Google Agenda:** alleen aangemaakt voor gebruikers met een eigen `calendar_id` in `GEBRUIKERS_CONFIG`. Medegebruikers zonder eigen agenda-ID maken geen events aan in elkaars agenda.
 
 ---
 
