@@ -22,6 +22,14 @@ on:
       speler4:
         description: 'Naam medespeler 4'
         required: true
+      sport:
+        description: 'Sport (padel of tennis)'
+        required: false
+        default: 'padel'
+        type: choice
+        options:
+          - 'padel'
+          - 'tennis'
       dry_run:
         description: 'Dry-run: loop flow door zonder echte reservering bij ETV'
         required: false
@@ -91,6 +99,7 @@ jobs:
           python boek_baan.py \
             --datum   "${{ inputs.datum }}" \
             --tijd    "${{ inputs.tijd }}" \
+            --sport   "${{ inputs.sport || 'padel' }}" \
             --speler2 "${{ inputs.speler2 }}" \
             --speler3 "${{ inputs.speler3 }}" \
             --speler4 "${{ inputs.speler4 }}" \
@@ -146,6 +155,7 @@ jobs:
           Run faalde -- automatisch gemeld door boek.yml.
 
           - **Gebruiker:** ${{ inputs.gebruiker }}
+          - **Sport:** ${{ inputs.sport || 'padel' }}
           - **Speeldatum:** ${{ inputs.datum }}
           - **Tijd:** ${{ inputs.tijd }}
           - **Spelers:** ${{ inputs.speler2 }}, ${{ inputs.speler3 }}, ${{ inputs.speler4 }}

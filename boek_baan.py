@@ -1,4 +1,4 @@
-﻿"""
+"""
 ETV Volley Padelbaan Auto-Reservering
 Automatisch een padelbaan reserveren via etv-volley.nl/mijn
 Na een succesvolle reservering wordt de afspraak direct in Google Agenda gezet.
@@ -46,6 +46,8 @@ GOOGLE_CREDENTIALS = os.environ.get("GOOGLE_CALENDAR_CREDENTIALS", "")
 GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", "")
 
 PADEL_BANEN   = ["Padel 1", "Padel 2", "Padel 3", "Padel 4", "Padel 5", "Padel 6"]
+TENNIS_BANEN  = ["Tennis 04", "Tennis 05", "Tennis 06", "Tennis 07",
+                 "Tennis 08", "Tennis 09", "Tennis 11", "Tennis 12"]
 WACHT_TIMEOUT = 15
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -81,7 +83,7 @@ def dagdeel(tijd: str) -> str:
 
 
 # â”€â”€ Google Agenda â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
+def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list, sport: str = "padel"):
     """Maak een afspraak aan in Google Agenda via Service Account."""
     if not GOOGLE_CREDENTIALS or not GOOGLE_CALENDAR_ID:
         log.warning("Google Calendar overgeslagen (geen credentials of calendar_id).")
@@ -103,10 +105,10 @@ def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
         datum_nl = start_dt.strftime("%d-%m-%Y")
 
         event = {
-            "summary": f"ðŸŽ¾ Padel â€“ {baan} â€“ ETV Volley",
+            "summary": f"🎾 {sport.capitalize()} – {baan} – ETV Volley",
             "location": "ETV Volley, Swaardvenstraat 10, 5048 AV Tilburg",
             "description": (
-                f"Padelbaan automatisch gereserveerd.\n\n"
+                f"Baan automatisch gereserveerd.\n\n"
                 f"Baan:    {baan}\n"
                 f"Datum:   {datum_nl}\n"
                 f"Tijd:    {tijd} â€“ {eind_dt.strftime('%H:%M')}\n\n"
@@ -121,7 +123,7 @@ def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list):
                 "dateTime": eind_dt.isoformat(),
                 "timeZone": "Europe/Amsterdam",
             },
-            "colorId": "10",   # Groen (Sage) â€” passend bij padel
+            "colorId": "10",
             "reminders": {
                 "useDefault": False,
                 "overrides": [
@@ -1136,7 +1138,7 @@ def _sluit_cookie_banner(driver: uc.Chrome):
         driver.implicitly_wait(5)
 
 
-def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
+def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel") -> tuple:
     """
     Kies een padelbaan + tijdslot.
 
@@ -1200,15 +1202,15 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
             // Fallback: scroll naar 70% van paginahoogte
             window.scrollTo(0, document.body.scrollHeight * 0.7);
             return 'Fallback scroll 70%';
-        """, PADEL_BANEN)
-        log.info(f"Scroll naar padel: {scroll_result}")
+        """, PADEL_BANEN if sport == "padel" else TENNIS_BANEN)
+        log.info(f"Scroll naar {sport}: {scroll_result}")
         time.sleep(0.8)
         _sluit_cookie_banner(driver)
     except Exception as e:
         log.warning(f"Scroll naar padel mislukt: {e}")
 
     for tijd in tijden:
-        log.info(f"Zoek padel tijdslot '{tijd}'...")
+        log.info(f"Zoek {sport} tijdslot '{tijd}'...")
 
         # Zoek tijdslot in een padel-rij via ABSOLUTE document-Y (scroll-onafhankelijk).
         # getBoundingClientRect().top + window.scrollY = absolute document-Y.
@@ -1232,31 +1234,37 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
         #   - .disabled cellen worden expliciet uitgesloten
         #   - Werkt onafhankelijk van accordion-expand-state / scrollpositie
         result = driver.execute_script("""
-            var tijd = arguments[0];
+            var tijd  = arguments[0];
+            var sport = arguments[1];
             var found = null;
             document.querySelectorAll('.court').forEach(function(court) {
                 if (found) return;
                 var btn = court.querySelector('button.btn-link');
                 if (!btn) return;
                 var courtNaam = (btn.innerText || '').trim();
-                // Match "Padel N" â€” voorbeeld button-text: "9 Padel 1Padel"
-                var m = courtNaam.match(/Padel \\d/);
-                if (!m) return;
-                var padelLabel = m[0];
-
+                var baanLabel;
+                if (sport === 'tennis') {
+                    if (courtNaam.indexOf('Smashcourt') < 0) return;
+                    var nm = courtNaam.match(/\b(\d{2})\b/);
+                    baanLabel = nm ? 'Tennis ' + nm[1] : 'Tennis';
+                } else {
+                    var m = courtNaam.match(/Padel \d/);
+                    if (!m) return;
+                    baanLabel = m[0];
+                }
                 var cellen = court.querySelectorAll('.timeincourt:not(.disabled)');
                 for (var i = 0; i < cellen.length; i++) {
                     var cel = cellen[i];
                     var txt = (cel.innerText || '').trim();
                     if (txt === tijd || txt.startsWith(tijd)) {
-                        found = { cel: cel, baan: padelLabel };
+                        found = { cel: cel, baan: baanLabel };
                         return;
                     }
                 }
             });
             window._kiesBaanResult = found ? found.baan : 'geen';
             return found;
-        """, tijd)
+        """, tijd, sport)
 
         try:
             d_resultaat = driver.execute_script('return window._kiesBaanResult || ""')
@@ -1265,7 +1273,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
             pass
 
         if not result:
-            log.info(f"  Geen padel tijdslot '{tijd}' gevonden (bezet of buiten drempel)")
+            log.info(f"  Geen {sport} tijdslot '{tijd}' gevonden (bezet of buiten drempel)")
             continue
 
         # result is een dict {cel: WebElement, baan: 'Padel N'}
@@ -1345,7 +1353,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str) -> tuple:
         log.info(f" Tijdslot {tijd} geselecteerd, baan={baan}")
         return baan, tijd
 
-    log.error(" Geen beschikbaar padel tijdslot gevonden!")
+    log.error(f" Geen beschikbaar {sport} tijdslot gevonden!")
     screenshot(driver, "baan_fout")
     return "", ""
 
@@ -1745,7 +1753,7 @@ def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
 
 
 # â”€â”€ Main â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4: str) -> bool:
+def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4: str, sport: str = "padel") -> bool:
     """
     Schrijf een wachtrij-bestand voor latere verwerking en push naar de repo.
     Wordt gebruikt als de speeldatum nog meer dan 2 dagen weg ligt â€” de
@@ -1759,6 +1767,7 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
         "gebruiker": GEBRUIKER,
         "datum":     datum,
         "tijd":      tijd,
+        "sport":     sport,
         "spelers":   [SPELER1, speler2, speler3, speler4],
         "ingediend": datetime.now().isoformat(timespec="seconds"),
     }
@@ -1800,6 +1809,7 @@ def main():
     parser.add_argument("--speler2", required=True)
     parser.add_argument("--speler3", required=True)
     parser.add_argument("--speler4", required=True)
+    parser.add_argument("--sport",   default="padel", choices=["padel", "tennis"])
     parser.add_argument("--dry-run", action="store_true",
                         help="Loop alle stappen door behalve de Bevestig-knop-klik. "
                              "End-to-end test zonder echte reservering bij ETV.")
@@ -1830,7 +1840,7 @@ def main():
         log.info(f" Te vroeg om direct te reserveren  speeldatum is over {dag_verschil} dagen. "
                  f"Reserveringsdatum: {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
         log.info(" Zet in wachtrij voor automatische reservering op de reserveringsdatum.")
-        if _zet_in_wachtrij(args.datum, args.tijd, args.speler2, args.speler3, args.speler4):
+        if _zet_in_wachtrij(args.datum, args.tijd, args.speler2, args.speler3, args.speler4, args.sport):
             log.info(f" In wachtrij gezet  verwerk_wachtrij workflow start de reservering "
                      f"automatisch op {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
             github_output = os.environ.get("GITHUB_OUTPUT", "")
@@ -1957,9 +1967,9 @@ def main():
 
             for baan_poging in range(1, MAX_BAAN_POGINGEN + 1):
                 log.info(f" Baan-poging {baan_poging}/{MAX_BAAN_POGINGEN} ")
-                baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd)
+                baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd, args.sport)
                 if not baan:
-                    log.warning(f" Geen padelbaan beschikbaar in baan-poging {baan_poging}")
+                    log.warning(f" Geen {args.sport}-baan beschikbaar in baan-poging {baan_poging}")
                     break  # naar outer-retry
 
                 _log_zichtbare_spelers(driver, alle_spelers,
@@ -2029,7 +2039,7 @@ def main():
     log.info(f"   Spelers: {', '.join(spelers)}")
     log.info("=" * 50)
 
-    voeg_toe_aan_agenda(baan, args.datum, gereserveerde_tijd, spelers)
+    voeg_toe_aan_agenda(baan, args.datum, gereserveerde_tijd, spelers, args.sport)
 
 
 if __name__ == "__main__":

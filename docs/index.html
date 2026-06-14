@@ -663,7 +663,7 @@
   <div class="header-inner">
     <img src="logo.png" alt="ETV Volley" class="header-logo">
     <div>
-      <h1>Padelbaan Reserveren</h1>
+      <h1>Baan reserveren</h1>
       <p>ETV Volley — automatische reservering</p>
     </div>
   </div>
@@ -806,6 +806,14 @@
   <div class="field-group">
     <label class="field-label" for="tijd">Tijd <span class="req">*</span></label>
     <select id="tijd" class="time-select"></select>
+  </div>
+
+  <div class="field-group">
+    <label class="field-label" for="sport">Sport</label>
+    <select id="sport" class="time-select">
+      <option value="padel" selected>Padel</option>
+      <option value="tennis">Tennis</option>
+    </select>
   </div>
 </div>
 
@@ -1948,6 +1956,7 @@ async function laadReserveringen() {
     datumInput.value = '';
     toonDatum('');
     tijdEl.value = '';
+    document.getElementById('sport').value = 'padel';
     [2, 3, 4].forEach(wisSpeler);
   }
 
@@ -2096,6 +2105,7 @@ async function laadReserveringen() {
 
     const datum   = datumInput.value;
     const tijd    = tijdEl.value;
+    const sport   = document.getElementById('sport').value;
     const speler2 = document.getElementById('speler2').value;
     const speler3 = document.getElementById('speler3').value;
     const speler4 = document.getElementById('speler4').value;
@@ -2129,7 +2139,7 @@ async function laadReserveringen() {
                      'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
           body: JSON.stringify({ ref: 'main', inputs: {
             gebruiker: getGebruiker(),
-            datum, tijd, speler2, speler3, speler4,
+            datum, tijd, sport, speler2, speler3, speler4,
             dry_run: dryRun ? 'true' : 'false'
           }}) }
       );

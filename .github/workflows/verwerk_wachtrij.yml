@@ -68,18 +68,20 @@ jobs:
           for gebruiker_dir in wachtrij/*/; do
             gebruiker=$(basename "$gebruiker_dir")
             for f in "${gebruiker_dir}"*.json; do
-              datum=$(jq -r '.datum'       "$f")
-              tijd=$(jq -r  '.tijd'        "$f")
-              speler2=$(jq -r '.spelers[1]' "$f")
-              speler3=$(jq -r '.spelers[2]' "$f")
-              speler4=$(jq -r '.spelers[3]' "$f")
+              datum=$(jq -r '.datum'         "$f")
+              tijd=$(jq -r  '.tijd'          "$f")
+              sport=$(jq -r '.sport // "padel"' "$f")
+              speler2=$(jq -r '.spelers[1]'  "$f")
+              speler3=$(jq -r '.spelers[2]'  "$f")
+              speler4=$(jq -r '.spelers[3]'  "$f")
               reserveringsdatum=$(date -d "$datum - 2 days" +%Y-%m-%d)
               if [ "$reserveringsdatum" = "$today" ]; then
-                echo "Trigger boek.yml: $gebruiker $datum om $tijd ($f)"
+                echo "Trigger boek.yml: $gebruiker $datum om $tijd $sport ($f)"
                 gh workflow run boek.yml \
                   --field gebruiker="$gebruiker" \
                   --field datum="$datum" \
                   --field tijd="$tijd" \
+                  --field sport="$sport" \
                   --field speler2="$speler2" \
                   --field speler3="$speler3" \
                   --field speler4="$speler4"
