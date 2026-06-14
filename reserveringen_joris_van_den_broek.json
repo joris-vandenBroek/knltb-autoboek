@@ -1,11 +1,11 @@
 {
-  "bijgewerkt": "2026-06-14T15:50:33",
+  "bijgewerkt": "2026-06-14T15:59:36",
   "reserveringen": [
     {
-      "id": "2026-06-14_1800_onbekend",
+      "id": "2026-06-14_1800_tennis-04",
       "datum": "2026-06-14",
       "tijd": "18:00",
-      "baan": null,
+      "baan": "Tennis 04",
       "tekst": "14-06-2026\t18:00 - 19:30\t04\t\t\nWijzigen\n\t\nAnnuleren",
       "cancel": {
         "btnTekst": "Annuleren",
