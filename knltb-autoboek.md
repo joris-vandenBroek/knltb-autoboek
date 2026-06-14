@@ -686,3 +686,19 @@ Badge op tandwiel-icoon: amber bij 8-30 dagen, rood bij 0-7 dagen, pulsend rood 
 ### 16.7 Spelers 2-poging retry
 
 Per speler maximaal 2 pogingen. Bij fail: `driver.refresh()` + retry. Defensieve cleanup bewaart eerder-toegevoegde spelers.
+
+---
+
+## 17. Wachtrij-opruiming -- twee plekken
+
+### 17.1 Primaire cleanup (boek.yml)
+
+Na een succesvolle boeking verwijdert `boek.yml` (stap "Ruim wachtrij-bestand op") het bestand `wachtrij/<gebruiker>/<datum>_<tijdslug>.json` op basis van de *input-tijd*. Dit werkt correct als de boeking op de voorkeurstijd slaagt.
+
+### 17.2 Secundaire cleanup (lees_reserveringen.py `ruim_wachtrij_op()`)
+
+Wordt aangeroepen na elke scrape (dagelijkse cron + handmatig verversen). Vergelijkt wachtrij-items met gescrapete reserveringen.
+
+**Match-logica:** vergelijk op `datum` + `spelers` (set van namen). De tijd wordt bewust NIET gebruikt als criterium, want bij een race-conditie boekt het script automatisch een alternatieve tijd -- de geboekte tijd verschilt dan van de wachtrij-tijd, maar datum en spelers zijn identiek.
+
+**Achtergrond:** op 2026-06-16 slaagde een boeking voor 20:00 op 20:30 (alle banen op 20:00 bezet). Het wachtrij-bestand bleef aanvankelijk staan omdat de exacte tijdmatch faalde.

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Beheer actieve ETV-Volley reserveringen:
 - Zonder argumenten: scrape /mijn/Reservations en schrijf reserveringen.json
 - Met --cancel ID: annuleer de reservering met die ID, dan scrape opnieuw
@@ -694,12 +694,13 @@ def commit_en_push(bestanden: list, message: str):
 
 def ruim_wachtrij_op(reserveringen: list) -> list:
     """
-    Verwijder wachtrij-items waarvan datum + tijd al in de gescrapete
-    reserveringen staan â€” de boeking is kennelijk geslaagd.
+    Verwijder wachtrij-items waarvan datum + spelers overeenkomen met een
+    gescrapete reservering -- de boeking is kennelijk geslaagd.
+    Tijd wordt bewust niet gematcht: bij een race-conditie boekt het script
+    automatisch een alternatieve tijd (datum en spelers blijven gelijk).
     Returnt lijst van verwijderde bestandspaden (voor commit).
     """
     import glob
-    geboekte_slots = {(r['datum'], r['tijd']) for r in reserveringen}
     verwijderd = []
     for f in sorted(glob.glob(f'wachtrij/{GEBRUIKER}/*.json')):
         try:
@@ -712,12 +713,24 @@ def ruim_wachtrij_op(reserveringen: list) -> list:
         tijd  = item.get('tijd', '')
         if not datum or not tijd:
             continue
-        if (datum, tijd) in geboekte_slots:
+        # Medespelers uit wachtrij (alles behalve speler1/booker zelf)
+        wachtrij_spelers = set(item.get('spelers', [])[1:])
+        match = False
+        geboekte_tijd = None
+        for r in reserveringen:
+            if r['datum'] == datum and set(r.get('spelers', [])) == wachtrij_spelers:
+                match = True
+                geboekte_tijd = r['tijd']
+                break
+        if match:
             os.remove(f)
             verwijderd.append(f)
-            log.info(f"âœ… Wachtrij opgeruimd: {f} ({datum} {tijd} staat al in reserveringen)")
+            if geboekte_tijd == tijd:
+                log.info(f"Wachtrij opgeruimd: {f} ({datum} {tijd} staat al in reserveringen)")
+            else:
+                log.info(f"Wachtrij opgeruimd: {f} ({datum} {tijd} -> geboekt op {geboekte_tijd}, alternatieve tijd)")
         else:
-            log.info(f"â­ï¸  Wachtrij bewaard: {f} ({datum} {tijd} nog niet in reserveringen)")
+            log.info(f"Wachtrij bewaard: {f} ({datum} {tijd} nog niet in reserveringen)")
     return verwijderd
 
 
