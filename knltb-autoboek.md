@@ -44,9 +44,7 @@ boek_baan.py
         |  ELSE:
         |     -> login + spelers + (wacht tot 07:01 NL) + dag + baan + bevestig
         v
-Google Agenda  (via Service Account, optioneel)
-        v
-Klaar -- e-mail van ETV Volley + agenda-event
+Klaar -- e-mail van ETV Volley
 
 +----------------------------------------------------------+
 | Voor wachtrij-items (dag+3 en verder):                   |
@@ -61,11 +59,15 @@ Klaar -- e-mail van ETV Volley + agenda-event
 |     v                                                    |
 | boek.yml -> boek_baan.py -> dag-keuze vanaf 07:01 NL    |
 +----------------------------------------------------------+
+
+beheer_reserveringen.yml -> Google Agenda sync (aanmaken + verwijderen)
 ```
 
 De **ledenlijst** (`leden.json`) wordt los bijgehouden via `haal_leden_op.yml` (wekelijks of handmatig). Na een ledenlijst-refresh worden automatisch de **padel speelsterktes** opgehaald via `haal_padel_sterktes.yml`. Gebruikt door de PWA voor de speler-dropdowns.
 
 De **actieve reserveringen** (`reserveringen.json`) worden bijgehouden via `lees_reserveringen.py` + `beheer_reserveringen.yml`, getriggerd vanuit de PWA bij Verversen of Annuleren.
+
+Google Agenda-events worden gesynchroniseerd vanuit dezelfde flow: aanmaken voor reserveringen zonder event (ook als medespeler), verwijderen als een reservering verdwijnt.
 
 ---
 
@@ -181,7 +183,8 @@ knltb-autoboek/
 |-- haal_leden_op.py             # Scrape de ledenlijst -> leden.json
 |-- haal_padel_sterktes.py       # Haal padel speelsterktes -> leden.json
 |-- leden.json                   # Cache van alle ETV-leden met padel sterktes (~977 leden)
-|-- reserveringen.json           # Cache van actieve reserveringen
+|-- reserveringen_<gebruiker>.json   # Cache van actieve reserveringen per gebruiker
+|-- agenda_items_<gebruiker>.json    # Mapping reservering-ID -> Google Agenda event-ID
 |-- wachtrij/                    # Reserveringen voor speeldatums > dag+2
 |   |-- .gitkeep
 |   \-- YYYY-MM-DD_HHMM.json     # Per ingeplande reservering
@@ -301,7 +304,7 @@ Verschijnt automatisch als `localStorage.knltb_pat` leeg is. PAT opgeslagen loka
 ## 7. Service Worker -- docs/sw.js
 
 ```javascript
-const CACHE = 'padel-v16';
+const CACHE = 'padel-v46';
 ```
 
 Elke keer dat `index.html` of `sw.js` inhoudelijk verandert moet dit versienummer omhoog. De SW verwijdert dan automatisch de oude cache bij activate.
@@ -368,6 +371,8 @@ PADEL_BANEN   = ["Padel 1", ..., "Padel 6"]
 TENNIS_BANEN  = ["Tennis 04", ..., "Tennis 12"]  # Smashcourt-courts (banen 04-12, geen 10)
 ```
 
+`kies_baan_en_tijd` filtert op sport (padel: Padel 1-6, tennis: Smashcourt-courts 04-12).
+
 ### Wachtrij-pad
 
 ```python
@@ -387,7 +392,6 @@ if nu.date() < reserveringsdatum.date():
 6. Kies tijdslot (zoekt `.timeincourt` of `[data-hour]` cellen)
 7. Bevestig (intercepteert jQuery.ajax POST naar `/Ajax/Profile/SaveReservation`)
 8. Verifieer op `/mijn/Reservations`
-9. Google Agenda-event via Service Account
 
 ### bevestig + BEZET-retry
 
@@ -418,6 +422,25 @@ Met `--cancel <id>`: annuleer die reservering op ETV-site + verwijder matching G
 1. Tabel-rijen -- alle `<tr>` met >=2 `<td>` cellen
 2. Class-based divs -- `[class*="booking|reservation"]`
 3. Cancel-buttons -- knoppen met tekst/class `annuleer|cancel|verwijder`
+
+### Google Agenda-synchronisatie
+
+`maak_ontbrekende_agenda_items(reserveringen)` wordt na elke scrape aangeroepen en synchroniseert in twee richtingen:
+
+| Situatie | Actie |
+|---|---|
+| Reservering bestaat, nog geen event | Event aanmaken in Google Agenda |
+| Reservering verdwenen (geannuleerd door anderen) | Event verwijderen uit Google Agenda |
+| Annuleren via PWA (`--cancel ID`) | Event direct verwijderd via event-ID lookup |
+
+**Idempotentie:** event-IDs worden opgeslagen in `agenda_items_{GEBRUIKER}.json`. Bij een volgende run worden al-bestaande events niet opnieuw aangemaakt.
+
+**Voordeel t.o.v. aanmaken in boek_baan.py:**
+- Reserveringen waarbij je **medespeler** bent (aangemaakt door iemand anders) krijgen ook een agenda-event
+- Annuleringen door anderen buiten de PWA worden **automatisch** opgeruimd
+- Encoding-veilig: titels via `chr()`, geen literal emoji/dashes in de broncode
+
+**Agenda-titel formaat:** `ETV Padel – Padel 3` of `ETV Tennis – Tennis 07`
 
 ---
 
@@ -576,7 +599,7 @@ In cron-job.org -> cronjob -> tab Schedule. Niet in `verwerk_wachtrij.yml` edite
 ### Nieuwe versie van de PWA uitrollen
 
 1. Wijzig `docs/index.html`
-2. Bump `CACHE` in `docs/sw.js`: `const CACHE = 'padel-v17';`
+2. Bump `CACHE` in `docs/sw.js`: `const CACHE = 'padel-v47';`
 3. Commit + push
 
 ### Site-redesign van ETV Volley
@@ -602,7 +625,7 @@ Diagnose via screenshots (artifacts bij failed run):
 
 ## 15. Toekomstige features -- multi-user setup
 
-**Status: niet geimplementeerd.**
+**Status: geïmplementeerd** -- zie de [Multi-user setup](#multi-user-setup) sectie in README.md voor de actuele opzet via `GEBRUIKERS_CONFIG`.
 
 ### 15.1 Architectuur
 

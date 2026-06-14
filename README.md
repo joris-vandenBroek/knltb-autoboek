@@ -1,13 +1,13 @@
-# ETV Volley Padelbaan Auto-Reservering
+# ETV Volley Baan Auto-Reservering
 
-Volledig automatische padelbaan-reservering bij ETV Volley via de KNLTB-portal -- aangestuurd via een mobiele PWA, draaiend op GitHub Actions, met Google Agenda-koppeling.
+Volledig automatische baan-reservering (padel of tennis) bij ETV Volley via de KNLTB-portal -- aangestuurd via een mobiele PWA, draaiend op GitHub Actions, met Google Agenda-koppeling.
 
 **Highlights:**
-- Mobiele PWA voor 1-tik-reserveren
+- Mobiele PWA voor 1-tik-reserveren (padel én tennis)
 - Auto-reserveert vanaf 07:01 NL op de reserveringsdatum (1 min na slot-opening tegen klok-skew)
 - Wachtrij voor reserveringen die nog te ver in de toekomst liggen (TTL 60 dagen)
 - Overzicht van actieve reserveringen + annuleren vanuit de app
-- Automatische Google Agenda-events (toegevoegd bij reserveren, verwijderd bij annuleren)
+- Automatische Google Agenda-events: aangemaakt voor alle reserveringen (ook als je medespeler bent), automatisch verwijderd bij annuleren of als een reservering buiten de app om wordt geannuleerd
 - Race-conditie-bestendig: als iemand anders net sneller dezelfde baan claimt, probeert het script automatisch de volgende vrije padelbaan (max 6 pogingen)
 - Dry-run modus: end-to-end test (login + spelers + dag + baan-keuze) zonder echte reservering bij ETV
 - Auto-issue bij failure + dead-man's-switch (Healthchecks.io optioneel) + PAT-expiry badge in PWA
@@ -28,9 +28,9 @@ Gehost als Progressive Web App op GitHub Pages.
 
 ### Kaarten in de PWA
 
-1. **Wanneer** -- datumkiezer + tijdkeuze (08:00-21:30, stappen van 30 min)
+1. **Wanneer** -- datumkiezer + tijdkeuze (08:00-21:30, stappen van 30 min) + Sport-selector (Padel/Tennis)
 2. **Medespelers** -- 3 dropdowns met zoekfilter op de ledenlijst
-3. **Mijn reserveringen** -- actieve ETV-reserveringen, met knop per item om te annuleren (haalt ook agenda-event weg). Toont direct de laatste cache; bij data >15 min oud wordt op de achtergrond automatisch ververst. Ook bij elke tab-terugkomst
+3. **Mijn reserveringen** -- actieve ETV-reserveringen, met knop per item om te annuleren (agenda-event wordt bij eerstvolgende scrape verwijderd). Toont direct de laatste cache; bij data >15 min oud wordt op de achtergrond automatisch ververst. Ook bij elke tab-terugkomst
 4. **Ingeplande reserveringen** -- wachtrij voor toekomstige reserveringen, met knop om te verwijderen
 5. **Baan reserveren** -- knop vast onderaan, triggert direct of zet in wachtrij
 
@@ -40,15 +40,16 @@ Gehost als Progressive Web App op GitHub Pages.
 
 | Bestand | Wat doet het? |
 |---------|---------------|
-| `boek_baan.py` | Hoofdscript -- login, baan + tijd selecteren, bevestigen, agenda-event. Ondersteunt `--dry-run` |
+| `boek_baan.py` | Hoofdscript -- login, baan + tijd selecteren, bevestigen. Ondersteunt padel én tennis, `--dry-run` |
 | `etv_common.py` | Gedeelde ETV-login flow (gebruikt door lees_reserveringen + haal_leden_op) |
-| `lees_reserveringen.py` | Scrape actieve reserveringen + annuleren (inclusief agenda-event) |
+| `lees_reserveringen.py` | Scrape actieve reserveringen + annuleren + Google Agenda synchronisatie (aanmaken + verwijderen) |
 | `haal_leden_op.py` | Scrape de ledenlijst -> `leden.json` |
 | `haal_padel_sterktes.py` | Haal padel speelsterktes op van mijnknltb.toernooi.nl -> `leden.json` |
 | `leden.json` | Cache van alle ETV-leden met padel speelsterktes (autocomplete bron voor PWA) |
 | `gebruikers.json` | Lijst van actieve gebruikers met ID en naam (niet-gevoelig, in repo) |
 | `reserveringen_<gebruiker>.json` | Cache van actieve reserveringen per gebruiker (bijv. `reserveringen_joris.json`) |
 | `wachtrij/<gebruiker>/*.json` | Reserveringen per gebruiker voor speeldatums verder dan dag+2 weg |
+| `agenda_items_<gebruiker>.json` | Mapping van reservering-ID naar Google Agenda event-ID (voor idempotente sync en directe verwijdering) |
 | `docs/` | PWA-bronbestanden (index.html, sw.js, manifest.json, icons) |
 | `.github/workflows/boek.yml` | Voert een reservering uit (getriggerd door PWA of wachtrij) |
 | `.github/workflows/verwerk_wachtrij.yml` | Werkt 's ochtends 07:00 NL de wachtrij af |
@@ -134,7 +135,7 @@ Het script kiest op basis van de speeldatum automatisch een van de paden:
 
 | Speeldatum t.o.v. vandaag | Wat er gebeurt |
 |---|---|
-| **dag 0 / dag+1 / dag+2** | `boek.yml` boekt direct -- binnen 5 min mail van ETV Volley + agenda-event |
+| **dag 0 / dag+1 / dag+2** | `boek.yml` boekt direct -- binnen 5 min mail van ETV Volley; agenda-event aangemaakt bij eerstvolgende Verversen |
 | **dag+3 of verder** | `boek_baan.py` schrijft `wachtrij/<datum>_<tijd>.json` en commit/pusht. Cron-job.org triggert om 06:50 NL op de reserveringsdatum -> boek.yml met die inputs |
 
 ### Timing op de reserveringsdatum
@@ -149,7 +150,7 @@ De reserveringsdatum is **(speeldatum - 2 kalenderdagen)**. ETV opent het slot o
 07:01:00  Dag-selectie + Volgende
 07:01:30  Baan/tijd-selectie + Volgende
 07:02:00  BEVESTIG-KLIK
-07:02:30  Verificatie + agenda-event
+07:02:30  Verificatie
 ```
 
 Login + spelers gebeurt tijdens de wachttijd voor 07:00. Pas vanaf 07:01 (1 min buffer voor klok-skew) wordt de dag-keuze geprobeerd -- ETV's server weigert daypart-selectie voor 07:00 (geen navigatie na Volgende). De rest van de wizard volgt direct erna.
@@ -159,9 +160,9 @@ Login + spelers gebeurt tijdens de wachttijd voor 07:00. Pas vanaf 07:01 (1 min 
 ### Mijn reserveringen / annuleren
 
 In de PWA-kaart "Mijn reserveringen":
-- **Automatisch** -> elke ochtend om 07:30 NL scrapet `beheer_reserveringen.yml` de actuele stand; verlopen reserveringen verdwijnen vanzelf
-- **🔄 Verversen** -> handmatig scrapen vanuit de PWA, resultaat zichtbaar na ~1.5 min
-- **🗑️ per reservering** -> annuleert op ETV-site + verwijdert matching agenda-event
+- **Automatisch** -> elke ochtend om 07:30 NL scrapet `beheer_reserveringen.yml` de actuele stand; verlopen of door anderen geannuleerde reserveringen verdwijnen vanzelf uit agenda
+- **🔄 Verversen** -> handmatig scrapen vanuit de PWA; Google Agenda wordt direct gesynchroniseerd (nieuwe events aanmaken, verdwenen events verwijderen)
+- **🗑️ per reservering** -> annuleert op ETV-site + verwijdert agenda-event
 
 De PWA haalt bij elke open en elke 3 minuten de laatste `reserveringen_<gebruiker>.json` op van GitHub (snelle fetch, geen workflow). De 🔄 Verversen-knop en de dagelijkse cron zijn de enige momenten dat de ETV-site opnieuw gescrapet wordt.
 
@@ -191,10 +192,10 @@ De PWA toont onder het ledenaantal "Laatst ververst op DD-MM-YYYY".
 | Automatisch issue `auto-failure,boek` in repo | Workflow `boek.yml` faalde. Check link in het issue voor de run-log + download screenshots-artifact. Sluit issue na onderzoek (volgende failure = nieuw issue) |
 | Log toont `Padel X was bezet door iemand anders` | Klopt -- race-conditie, script probeert automatisch volgende vrije baan. Eindigt 'ie alsnog met OK: alles goed. Eindigt 'ie met fout na 6 pogingen: alle padelbanen op alle alternatieve tijden waren bezet (zeldzaam) |
 | Wachtrij-item niet verwerkt | Check Actions -> Verwerk Wachtrij. Cron-job.org kan ook 401 geven -> PAT-scope checken |
-| Afspraak niet in agenda | Controleer `GOOGLE_CALENDAR_CREDENTIALS` en of agenda gedeeld is met serviceaccount |
+| Afspraak niet in agenda | Events worden aangemaakt bij de volgende Verversen in de PWA of de dagelijkse cron om 07:30. Controleer ook of agenda gedeeld is met het serviceaccount en of `GOOGLE_CALENDAR_CREDENTIALS` correct is |
 | Naam niet gevonden in autocomplete | Tik Verversen om de ledenlijst bij te werken |
 | App vraagt PAT | Voer GitHub PAT in via tandwiel (eenmalig per apparaat, scope `workflow` is genoeg) |
-| Annuleren werkt niet | Check beheer_reserveringen log. Agenda-event blijft soms achter -- handmatig weghalen |
+| Annuleren werkt niet | Check beheer_reserveringen log. Agenda-event wordt verwijderd bij eerstvolgende beheer_reserveringen run |
 | Padel sterktes niet bijgewerkt | Check Actions -> Padel speelsterktes ophalen. Controleer `KNLTB_LOGINNAAM` en `KNLTB_WACHTWOORD` secrets |
 
 ---
