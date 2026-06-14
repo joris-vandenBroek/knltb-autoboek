@@ -2,6 +2,7 @@ name: Beheer Reserveringen
 
 # - Zonder cancel_id: scrape reserveringen en update reserveringen_{gebruiker}.json
 # - Met cancel_id: annuleer die reservering, dan scrape opnieuw
+# - Schedule: alle gebruikers parallel via matrix
 
 on:
   workflow_dispatch:
@@ -17,12 +18,30 @@ on:
   schedule:
     - cron: '30 5 * * *'  # Dagelijks 07:30 NL (CEST) / 06:30 (CET)
 
-concurrency:
-  group: knltb-beheer-${{ inputs.gebruiker || 'joris_van_den_broek' }}
-  cancel-in-progress: true
-
 jobs:
+  # Stap 1: bepaal welke gebruikers verwerkt worden en bouw de matrix.
+  # Bij dispatch: alleen de opgegeven gebruiker.
+  # Bij schedule: alle gebruikers uit gebruikers.json.
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      gebruikers: ${{ steps.matrix.outputs.gebruikers }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bepaal gebruikers-matrix
+        id: matrix
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            gebruikers=$(jq -c '[.[].id]' gebruikers.json)
+          else
+            gebruiker="${{ inputs.gebruiker || 'joris_van_den_broek' }}"
+            gebruikers=$(jq -n --arg u "$gebruiker" '[$u]')
+          fi
+          echo "gebruikers=$gebruikers" >> $GITHUB_OUTPUT
+
+  # Stap 2: verwerk elke gebruiker in een aparte parallelle job.
   beheer:
+    needs: setup
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -30,6 +49,13 @@ jobs:
       issues:   write
     env:
       TZ: Europe/Amsterdam
+    strategy:
+      matrix:
+        gebruiker: ${{ fromJson(needs.setup.outputs.gebruikers) }}
+      fail-fast: false  # één gebruiker die faalt stopt de rest niet
+    concurrency:
+      group: knltb-beheer-${{ matrix.gebruiker }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
 
@@ -47,74 +73,41 @@ jobs:
         env:
           GEBRUIKERS_CONFIG: ${{ secrets.GEBRUIKERS_CONFIG }}
         run: |
-          # Bij schedule: loop alle gebruikers langs
-          # Bij dispatch: gebruik de opgegeven gebruiker
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            echo "ALLE_GEBRUIKERS=true" >> $GITHUB_ENV
-          else
-            gebruiker="${{ inputs.gebruiker || 'joris_van_den_broek' }}"
-            bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].bondsnummer')
-            wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].wachtwoord')
-            naam=$(echo         "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].naam')
-            if [ "$bondsnummer" = "null" ] || [ -z "$bondsnummer" ]; then
-              echo "Gebruiker '$gebruiker' niet gevonden in GEBRUIKERS_CONFIG"
-              exit 1
-            fi
-            calendar_id=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].calendar_id // empty')
-            echo "ETVVOLLEY_BONDSNUMMER=$bondsnummer" >> $GITHUB_ENV
-            echo "ETVVOLLEY_WACHTWOORD=$wachtwoord"  >> $GITHUB_ENV
-            echo "SPELER1_NAAM=$naam"                >> $GITHUB_ENV
-            echo "GEBRUIKER=$gebruiker"              >> $GITHUB_ENV
-            echo "GOOGLE_CALENDAR_ID=$calendar_id"   >> $GITHUB_ENV
-            echo "ALLE_GEBRUIKERS=false"             >> $GITHUB_ENV
+          gebruiker="${{ matrix.gebruiker }}"
+          bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].bondsnummer')
+          wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].wachtwoord')
+          naam=$(echo        "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].naam')
+          if [ "$bondsnummer" = "null" ] || [ -z "$bondsnummer" ]; then
+            echo "Gebruiker '$gebruiker' niet gevonden in GEBRUIKERS_CONFIG"
+            exit 1
           fi
+          calendar_id=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].calendar_id // empty')
+          echo "ETVVOLLEY_BONDSNUMMER=$bondsnummer" >> $GITHUB_ENV
+          echo "ETVVOLLEY_WACHTWOORD=$wachtwoord"  >> $GITHUB_ENV
+          echo "SPELER1_NAAM=$naam"                >> $GITHUB_ENV
+          echo "GEBRUIKER=$gebruiker"              >> $GITHUB_ENV
+          echo "GOOGLE_CALENDAR_ID=$calendar_id"   >> $GITHUB_ENV
 
-      - name: Beheer reserveringen (per gebruiker)
+      - name: Beheer reserveringen
         env:
           DISPLAY:                     :99
           GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
-          GOOGLE_CALENDAR_ID:          ${{ secrets.GOOGLE_CALENDAR_ID }}
+          GOOGLE_CALENDAR_ID:          ${{ env.GOOGLE_CALENDAR_ID || secrets.GOOGLE_CALENDAR_ID }}
           GEBRUIKERS_CONFIG:           ${{ secrets.GEBRUIKERS_CONFIG }}
         run: |
           Xvfb :99 -screen 0 1280x900x24 &
           sleep 2
-
-          run_voor_gebruiker() {
-            local gebruiker="$1"
-            local bondsnummer wachtwoord naam
-            bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].bondsnummer')
-            wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].wachtwoord')
-            naam=$(echo         "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].naam')
-            local calendar_id
-            calendar_id=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].calendar_id // empty')
-            export ETVVOLLEY_BONDSNUMMER="$bondsnummer"
-            export ETVVOLLEY_WACHTWOORD="$wachtwoord"
-            export SPELER1_NAAM="$naam"
-            export GEBRUIKER="$gebruiker"
-            export GOOGLE_CALENDAR_ID="$calendar_id"
-            echo "--- Beheer voor: $gebruiker ($naam) ---"
-            if [ -n "${{ inputs.cancel_id }}" ]; then
-              python lees_reserveringen.py --cancel "${{ inputs.cancel_id }}"
-            else
-              python lees_reserveringen.py
-            fi
-          }
-
-          if [ "$ALLE_GEBRUIKERS" = "true" ]; then
-            # Schedule: alle gebruikers uit gebruikers.json
-            gebruikers=$(jq -r '.[].id' gebruikers.json)
-            for gebruiker in $gebruikers; do
-              run_voor_gebruiker "$gebruiker" || echo "::warning::Beheer faalde voor $gebruiker"
-            done
+          if [ -n "${{ inputs.cancel_id }}" ]; then
+            python lees_reserveringen.py --cancel "${{ inputs.cancel_id }}"
           else
-            run_voor_gebruiker "$GEBRUIKER"
+            python lees_reserveringen.py
           fi
 
       - name: Screenshots bij fout
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-reserveringen
+          name: screenshots-${{ matrix.gebruiker }}
           path: '*.png'
           retention-days: 3
 
@@ -123,14 +116,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
-          gebruiker="${{ inputs.gebruiker || 'schedule-alle' }}"
           actie="scrape"
           if [ -n "${{ inputs.cancel_id }}" ]; then actie="annuleer ${{ inputs.cancel_id }}"; fi
-          titel="beheer_reserveringen faalt: $gebruiker $actie (run #${{ github.run_number }})"
+          titel="beheer_reserveringen faalt: ${{ matrix.gebruiker }} $actie (run #${{ github.run_number }})"
           body="Beheer-actie gefaald.
 
-          - Gebruiker: $gebruiker
+          - Gebruiker: ${{ matrix.gebruiker }}
           - Actie: $actie
           - Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
