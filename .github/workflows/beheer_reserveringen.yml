@@ -2,13 +2,13 @@ name: Beheer Reserveringen
 
 # - Zonder cancel_id: scrape reserveringen en update reserveringen_{gebruiker}.json
 # - Met cancel_id: annuleer die reservering, dan scrape opnieuw
-# - Schedule: alle gebruikers parallel via matrix
+# - gebruiker='alle' of schedule: alle gebruikers parallel via matrix
 
 on:
   workflow_dispatch:
     inputs:
       gebruiker:
-        description: 'Gebruiker-ID (uit gebruikers.json)'
+        description: 'Gebruiker-ID (uit gebruikers.json), of "alle"'
         required: false
         default: 'joris_van_den_broek'
       cancel_id:
@@ -19,20 +19,27 @@ on:
     - cron: '30 5 * * *'  # Dagelijks 07:30 NL (CEST) / 06:30 (CET)
 
 jobs:
-  # Stap 1: bepaal welke gebruikers verwerkt worden en bouw de matrix.
-  # Bij dispatch: alleen de opgegeven gebruiker.
-  # Bij schedule: alle gebruikers uit gebruikers.json.
+  # Stap 1: bepaal matrix via GitHub API (geen volledige checkout nodig).
   setup:
     runs-on: ubuntu-latest
     outputs:
       gebruikers: ${{ steps.matrix.outputs.gebruikers }}
     steps:
-      - uses: actions/checkout@v4
       - name: Bepaal gebruikers-matrix
         id: matrix
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.gebruiker }}" = "alle" ]; then
-            gebruikers=$(jq -c '[.[].id]' gebruikers.json)
+            gebruikers=$(gh api \
+              "repos/${{ github.repository }}/contents/gebruikers.json" \
+              --jq '[.content] | map(@base64d | fromjson | .[].id) | first' 2>/dev/null || echo "")
+            # Fallback: lees via raw URL
+            if [ -z "$gebruikers" ]; then
+              gebruikers=$(curl -sf \
+                "https://raw.githubusercontent.com/${{ github.repository }}/main/gebruikers.json" \
+                | jq -c '[.[].id]')
+            fi
           else
             gebruiker="${{ inputs.gebruiker || 'joris_van_den_broek' }}"
             gebruikers=$(jq -cn --arg u "$gebruiker" '[$u]')
@@ -62,6 +69,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Installeer dependencies
         run: |

@@ -1829,7 +1829,7 @@ async function laadReserveringen() {
     btn.textContent = '🔄 Verversen';
   }
 
-  /** Poll reserveringen.json elke 30s tot bijgewerkt-timestamp veranderd is (max 3 min). */
+  /** Poll reserveringen.json: eerste poll na 5s, daarna elke 15s (max 4 min). */
   async function _pollingNaDispatch() {
     if (_autoVerversBezig) return;
     _autoVerversBezig = true;
@@ -1851,10 +1851,10 @@ async function laadReserveringen() {
           }
         }
       } catch (_) {}
-      if (Date.now() - startTs < 180000) setTimeout(poll, 30000);
+      if (Date.now() - startTs < 240000) setTimeout(poll, 15000);
       else _autoVerversBezig = false;
     };
-    setTimeout(poll, 30000);
+    setTimeout(poll, 5000);
   }
 
   /** Na boeking: dispatch beheer_reserveringen en poll tot JSON bijgewerkt is. */
