@@ -1,23 +1,4 @@
 {
-  "bijgewerkt": "2026-06-14T17:53:11",
-  "reserveringen": [
-    {
-      "id": "2026-06-14_1900_tennis-04",
-      "datum": "2026-06-14",
-      "tijd": "19:00",
-      "baan": "Tennis 04",
-      "tekst": "14-06-2026\t19:00 - 20:30\t04\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
-        "Peter Nijhof",
-        "Chris van Waardenburg"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-06-14T18:49:43",
+  "reserveringen": []
 }
