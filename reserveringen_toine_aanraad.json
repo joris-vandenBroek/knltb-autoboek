@@ -1,23 +1,4 @@
 {
-  "bijgewerkt": "2026-06-13T10:41:30",
-  "reserveringen": [
-    {
-      "id": "2026-06-13_1000_padel-1",
-      "datum": "2026-06-13",
-      "tijd": "10:00",
-      "baan": "Padel 1",
-      "tekst": "13-06-2026\t10:00 - 11:00\tPadel 1\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
-        "Rob Wind",
-        "Joep Kolijn"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-06-14T10:56:53",
+  "reserveringen": []
 }
