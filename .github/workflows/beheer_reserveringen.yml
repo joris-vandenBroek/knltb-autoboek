@@ -31,15 +31,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.gebruiker }}" = "alle" ]; then
-            gebruikers=$(gh api \
-              "repos/${{ github.repository }}/contents/gebruikers.json" \
-              --jq '[.content] | map(@base64d | fromjson | .[].id) | first' 2>/dev/null || echo "")
-            # Fallback: lees via raw URL
-            if [ -z "$gebruikers" ]; then
-              gebruikers=$(curl -sf \
-                "https://raw.githubusercontent.com/${{ github.repository }}/main/gebruikers.json" \
-                | jq -c '[.[].id]')
-            fi
+            gebruikers=$(curl -sf \
+              "https://raw.githubusercontent.com/${{ github.repository }}/main/gebruikers.json" \
+              | jq -c '[.[].id]')
           else
             gebruiker="${{ inputs.gebruiker || 'joris_van_den_broek' }}"
             gebruikers=$(jq -cn --arg u "$gebruiker" '[$u]')
