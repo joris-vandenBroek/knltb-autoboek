@@ -1846,6 +1846,7 @@ async function laadReserveringen() {
           const dN = await rN.json();
           if (dN.bijgewerkt && dN.bijgewerkt !== oldTs) {
             await laadReserveringen();
+            laadAndereGebruikers();
             _autoVerversBezig = false;
             return;
           }
@@ -1907,6 +1908,7 @@ async function laadReserveringen() {
     if (document.visibilityState === 'visible') {
       laadReserveringen();
       laadWachtrij();
+      laadAndereGebruikers();
       // Als polling bezig was maar door mobile throttling gestorven is, herstart
       if (_autoVerversBezig) {
         _autoVerversBezig = false;
@@ -1921,6 +1923,7 @@ async function laadReserveringen() {
     if (document.visibilityState === 'visible') {
       laadReserveringen();
       laadWachtrij();
+      laadAndereGebruikers();
     }
   }, 3 * 60 * 1000);
 
