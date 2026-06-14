@@ -1807,7 +1807,7 @@ async function laadReserveringen() {
     return r.status === 204;
   }
 
-  /** Handmatige verversen-knop: triggert workflow voor ALLE gebruikers parallel. */
+  /** Handmatige verversen-knop: één dispatch met gebruiker='alle' triggert alle gebruikers parallel via matrix. */
   async function verversReserveringen() {
     const pat = getPat();
     if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
@@ -1815,17 +1815,15 @@ async function laadReserveringen() {
     btn.disabled = true;
     btn.textContent = '⏳…';
     try {
-      const gebruikers = await laadGebruikers();
-      const ids = gebruikers.map(g => g.id);
-      const resultaten = await Promise.all(ids.map(id => _dispatchBeheer(pat, id)));
-      if (resultaten.some(ok => ok)) {
+      const ok = await _dispatchBeheer(pat, 'alle');
+      if (ok) {
         toonToast('success', '🔄 Reserveringen worden bijgewerkt (~1.5 min).\nLijst ververst vanzelf.');
         _pollingNaDispatch();
       } else {
         toonToast('error', '❌ Dispatch mislukt — controleer je GitHub Token');
       }
     } catch (e) {
-      toonToast('error', `❌ Netwerkfout: `);
+      toonToast('error', `❌ Netwerkfout: ${e.message}`);
     }
     btn.disabled = false;
     btn.textContent = '🔄 Verversen';
@@ -1863,8 +1861,7 @@ async function laadReserveringen() {
   async function autoVerversReserveringen() {
     if (_autoVerversBezig) return;
     try {
-      const gebruikers = await laadGebruikers();
-      const ok = await Promise.all(gebruikers.map(g => _dispatchBeheer(getPat(), g.id)));
+      const ok = await _dispatchBeheer(getPat(), 'alle');
       if (ok.some(Boolean)) _pollingNaDispatch();
     } catch (_) {}
   }

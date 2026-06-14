@@ -31,7 +31,7 @@ jobs:
       - name: Bepaal gebruikers-matrix
         id: matrix
         run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ inputs.gebruiker }}" = "alle" ]; then
             gebruikers=$(jq -c '[.[].id]' gebruikers.json)
           else
             gebruiker="${{ inputs.gebruiker || 'joris_van_den_broek' }}"
