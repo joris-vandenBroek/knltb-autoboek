@@ -666,16 +666,46 @@ def voeg_toe_aan_agenda(reservering: dict) -> str:
 
 def maak_ontbrekende_agenda_items(reserveringen: list) -> bool:
     """
-    Maak Google Agenda-items aan voor reserveringen waarvoor er nog geen is.
+    Synchroniseer Google Agenda met de gescrapete reserveringen:
+    - Maak events aan voor reserveringen die er nog geen hebben.
+    - Verwijder events voor reserveringen die niet meer bestaan (geannuleerd door iemand anders).
     Slaat event-IDs op in AGENDA_ITEMS_FILE voor idempotentie en directe verwijdering.
-    Returnt True als er nieuwe items zijn aangemaakt (bestand moet gecommit worden).
+    Returnt True als er iets gewijzigd is (bestand moet gecommit worden).
     """
     if not GOOGLE_CREDENTIALS or not GOOGLE_CALENDAR_ID:
         return False
 
-    items = _laad_agenda_items()
-    nieuw = 0
+    try:
+        from google.oauth2.service_account import Credentials
+        from googleapiclient.discovery import build
+        creds = Credentials.from_service_account_info(
+            json.loads(GOOGLE_CREDENTIALS),
+            scopes=["https://www.googleapis.com/auth/calendar"]
+        )
+        service = build("calendar", "v3", credentials=creds, cache_discovery=False)
+    except Exception as e:
+        log.error(f"Google Calendar verbinding mislukt: {e}")
+        return False
 
+    items   = _laad_agenda_items()
+    actieve_ids = {r["id"] for r in reserveringen if r.get("id")}
+    gewijzigd   = False
+
+    # Verwijder events voor reserveringen die niet meer bestaan
+    verwijder_ids = [rid for rid in list(items) if rid not in actieve_ids]
+    for rid in verwijder_ids:
+        event_id = items[rid]
+        try:
+            service.events().delete(
+                calendarId=GOOGLE_CALENDAR_ID, eventId=event_id
+            ).execute()
+            log.info(f"Agenda-event verwijderd (reservering verdwenen): {rid}")
+        except Exception as e:
+            log.warning(f"Agenda-event {rid} verwijderen mislukt ({e}), verwijder toch uit index")
+        items.pop(rid)
+        gewijzigd = True
+
+    # Maak events aan voor reserveringen zonder event
     for r in reserveringen:
         rid = r.get("id")
         if not rid or rid in items:
@@ -683,13 +713,13 @@ def maak_ontbrekende_agenda_items(reserveringen: list) -> bool:
         event_id = voeg_toe_aan_agenda(r)
         if event_id:
             items[rid] = event_id
-            nieuw += 1
+            gewijzigd = True
 
-    if nieuw:
+    if gewijzigd:
         _sla_agenda_items_op(items)
-        log.info(f"{nieuw} nieuw agenda-item(s) aangemaakt")
+        log.info(f"Agenda gesynchroniseerd ({len(verwijder_ids)} verwijderd, {len(actieve_ids) - len(items) + len(verwijder_ids)} toegevoegd)")
         return True
-    log.info("Geen nieuwe agenda-items nodig")
+    log.info("Agenda al up-to-date")
     return False
 
 
