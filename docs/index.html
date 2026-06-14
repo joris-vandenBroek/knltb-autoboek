@@ -1807,13 +1807,20 @@ async function laadReserveringen() {
     return r.status === 204;
   }
 
+  function _setVerversKnopStatus(bezig) {
+    const btn = document.getElementById('verversReservBtn');
+    if (!btn) return;
+    btn.disabled = bezig;
+    btn.textContent = bezig ? '⏳ Bezig…' : '🔄 Verversen';
+  }
+
   /** Handmatige verversen-knop: één dispatch met gebruiker='alle' triggert alle gebruikers parallel via matrix. */
   async function verversReserveringen() {
     const pat = getPat();
     if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
-    const btn = document.getElementById('verversReservBtn');
-    btn.disabled = true;
-    btn.textContent = '⏳…';
+    // Reset polling zodat herstart altijd werkt, ook na mobile throttle
+    _autoVerversBezig = false;
+    _setVerversKnopStatus(true);
     try {
       const ok = await _dispatchBeheer(pat, 'alle');
       if (ok) {
@@ -1821,12 +1828,12 @@ async function laadReserveringen() {
         _pollingNaDispatch();
       } else {
         toonToast('error', '❌ Dispatch mislukt — controleer je GitHub Token');
+        _setVerversKnopStatus(false);
       }
     } catch (e) {
-      toonToast('error', `❌ Netwerkfout: ${e.message}`);
+      toonToast('error', '❌ Netwerkfout: ' + e.message);
+      _setVerversKnopStatus(false);
     }
-    btn.disabled = false;
-    btn.textContent = '🔄 Verversen';
   }
 
   /** Poll reserveringen.json: eerste poll na 5s, daarna elke 15s (max 4 min). */
@@ -1848,12 +1855,13 @@ async function laadReserveringen() {
             await laadReserveringen();
             laadAndereGebruikers();
             _autoVerversBezig = false;
+            _setVerversKnopStatus(false);
             return;
           }
         }
       } catch (_) {}
       if (Date.now() - startTs < 240000) setTimeout(poll, 15000);
-      else _autoVerversBezig = false;
+      else { _autoVerversBezig = false; _setVerversKnopStatus(false); }
     };
     setTimeout(poll, 5000);
   }
