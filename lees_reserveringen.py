@@ -322,7 +322,20 @@ def scrape_reserveringen(driver) -> list:
     return reserveringen
 
 
-def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
+def _laad_bekende_spelers() -> dict:
+    """Laad bestaande reserveringen JSON en geef {id: spelers} terug."""
+    try:
+        with open(RESERVERINGEN_FILE, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return {
+            r["id"]: r.get("spelers", [])
+            for r in data.get("reserveringen", [])
+            if r.get("id") and r.get("spelers")
+        }
+    except Exception:
+        return {}
+
+def scrape_spelers_per_reservering(driver, reserveringen: list, bekende_spelers=None) -> list:
     """
     Voor elke reservering: navigeer naar de Wijzig-pagina, scrape de
     spelers, navigeer terug. NIET op Bevestig/OK klikken â€” dat zou ETV
@@ -345,9 +358,26 @@ def scrape_spelers_per_reservering(driver, reserveringen: list) -> list:
     """
     if not reserveringen:
         return reserveringen
-    log.info(f"ðŸ” Spelers ophalen via Wijzig-flow voor {len(reserveringen)} reservering(en)...")
 
-    for idx, r in enumerate(reserveringen, start=1):
+    if bekende_spelers is None:
+        bekende_spelers = {}
+
+    # Vul bekende spelers direct in; scrape alleen nieuw/onbekend
+    te_scrapen = []
+    for r in reserveringen:
+        cached = bekende_spelers.get(r.get("id", ""))
+        if cached:
+            r["spelers"] = cached
+        else:
+            te_scrapen.append(r)
+
+    if not te_scrapen:
+        log.info("Spelers: alle reserveringen al bekend uit cache -- Wijzig-flow overgeslagen")
+        return reserveringen
+
+    log.info(f"ðŸ” Spelers ophalen via Wijzig-flow voor {len(te_scrapen)}/{len(reserveringen)} reservering(en)...")
+
+    for idx, r in enumerate(te_scrapen, start=1):
         rid = r.get('id', '?')
         reservation_id = r.get('_reservationId')
 
@@ -938,12 +968,12 @@ def main():
             if m:
                 verwijder_uit_agenda(m.group(1), f"{m.group(2)[:2]}:{m.group(2)[2:]}", reservering_id=args.cancel)
         # Always scrape (na annuleren is dit de bijgewerkte lijst)
+        bekende_spelers = _laad_bekende_spelers()
         reserveringen = scrape_reserveringen(driver)
 
         # Per reservering de spelers ophalen via de Wijzig-flow.
-        # Best-effort: faalt voor Ã©Ã©n item â‡’ blijft 'spelers' weg â‡’ PWA
-        # toont alleen de baan (graceful degradation).
-        reserveringen = scrape_spelers_per_reservering(driver, reserveringen)
+        # Bekende reserveringen worden overgeslagen (spelers uit cache).
+        reserveringen = scrape_spelers_per_reservering(driver, reserveringen, bekende_spelers)
 
         # Diagnose-velden (beginnen met '_') strippen voor we naar JSON
         # schrijven â€” die zijn alleen voor de scrape zelf bedoeld.
