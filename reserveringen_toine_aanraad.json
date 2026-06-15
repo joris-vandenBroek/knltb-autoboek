@@ -1,4 +1,22 @@
 {
-  "bijgewerkt": "2026-06-14T18:52:24",
-  "reserveringen": []
+  "bijgewerkt": "2026-06-15T13:33:17",
+  "reserveringen": [
+    {
+      "id": "2026-06-17_1000_padel-6",
+      "datum": "2026-06-17",
+      "tijd": "10:00",
+      "baan": "Padel 6",
+      "tekst": "17-06-2026\t10:00 - 11:00\tPadel 6\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Branka Matanovic",
+        "Toine Aanraad"
+      ]
+    }
+  ]
 }
