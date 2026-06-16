@@ -67,10 +67,7 @@ Ga naar: **Settings -> Secrets and variables -> Actions -> New repository secret
 
 #### ETV Volley (etv-volley.nl)
 
-| Secret | Waarde |
-|--------|--------|
-| `ETVVOLLEY_BONDSNUMMER` | Gebruikersnaam voor etv-volley.nl |
-| `ETVVOLLEY_WACHTWOORD` | Wachtwoord voor etv-volley.nl |
+ETV Volley credentials worden beheerd via `GEBRUIKERS_CONFIG` (zie hieronder). Losse `ETVVOLLEY_BONDSNUMMER`/`ETVVOLLEY_WACHTWOORD` secrets zijn niet meer nodig.
 
 #### mijnKNLTB (mijnknltb.toernooi.nl)
 

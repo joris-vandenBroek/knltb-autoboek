@@ -211,10 +211,7 @@ In te stellen via **GitHub -> Repository -> Settings -> Secrets and variables ->
 
 ### ETV Volley (etv-volley.nl)
 
-| Secret | Inhoud |
-|--------|--------|
-| `ETVVOLLEY_BONDSNUMMER` | Gebruikersnaam voor etv-volley.nl |
-| `ETVVOLLEY_WACHTWOORD` | Wachtwoord voor etv-volley.nl |
+ETV Volley credentials worden per gebruiker beheerd via `GEBRUIKERS_CONFIG`. Losse `ETVVOLLEY_BONDSNUMMER`/`ETVVOLLEY_WACHTWOORD` secrets zijn niet meer nodig — alle workflows (boek, beheer, haal_leden_op) lezen uit `GEBRUIKERS_CONFIG`.
 
 ### mijnKNLTB (mijnknltb.toernooi.nl)
 
