@@ -28,9 +28,16 @@ jobs:
       - name: Leden ophalen
         env:
           DISPLAY: :99
-          ETVVOLLEY_BONDSNUMMER: ${{ secrets.ETVVOLLEY_BONDSNUMMER }}
-          ETVVOLLEY_WACHTWOORD:  ${{ secrets.ETVVOLLEY_WACHTWOORD }}
+          GEBRUIKERS_CONFIG: ${{ secrets.GEBRUIKERS_CONFIG }}
         run: |
+          bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r '.joris_van_den_broek.bondsnummer')
+          wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r '.joris_van_den_broek.wachtwoord')
+          if [ "$bondsnummer" = "null" ] || [ -z "$bondsnummer" ]; then
+            echo "joris_van_den_broek niet gevonden in GEBRUIKERS_CONFIG"
+            exit 1
+          fi
+          export ETVVOLLEY_BONDSNUMMER="$bondsnummer"
+          export ETVVOLLEY_WACHTWOORD="$wachtwoord"
           Xvfb :99 -screen 0 1280x900x24 &
           sleep 2
           python haal_leden_op.py
