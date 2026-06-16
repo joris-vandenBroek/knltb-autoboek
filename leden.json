@@ -90,12 +90,6 @@
     "rating_padel": "8,0000"
   },
   {
-    "bondsnummer": "44557663",
-    "naam": "Amber van de Sande",
-    "sterkte_padel": "7",
-    "rating_padel": "7,0000"
-  },
-  {
     "bondsnummer": "26488191",
     "naam": "Andrea Lutke Willink",
     "sterkte_padel": "8",
@@ -1038,6 +1032,12 @@
     "rating_padel": "8,0000"
   },
   {
+    "bondsnummer": "44722842",
+    "naam": "Edwin van Capelleveen",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
     "bondsnummer": "42987695",
     "naam": "Edwin van der Hoorn",
     "sterkte_padel": "8",
@@ -1858,6 +1858,12 @@
     "naam": "Ioannis Fokias",
     "sterkte_padel": "8",
     "rating_padel": "8,0000"
+  },
+  {
+    "bondsnummer": "44722869",
+    "naam": "Ipek Ustunboyacioglu",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "18717306",
