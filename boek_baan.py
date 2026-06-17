@@ -1706,10 +1706,12 @@ def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
     """
     log.info("Reservering verifiren...")
 
+    _NL_MAANDEN = ["", "januari", "februari", "maart", "april", "mei", "juni",
+                   "juli", "augustus", "september", "oktober", "november", "december"]
     datum_obj  = datetime.strptime(datum, "%Y-%m-%d")
-    datum_nl   = f"{datum_obj.day}-{datum_obj.month}"   # bijv. "29-5"
-    datum_nl2  = f"{datum_obj.day} mei"                  # bijv. "29 mei"
-    datum_nl3  = f"{datum_obj.day:02d}-{datum_obj.month:02d}-{datum_obj.year}"  # "29-05-2026"
+    datum_nl   = f"{datum_obj.day}-{datum_obj.month}"                           # bijv. "17-6"
+    datum_nl2  = f"{datum_obj.day} {_NL_MAANDEN[datum_obj.month]}"             # bijv. "17 juni"
+    datum_nl3  = f"{datum_obj.day:02d}-{datum_obj.month:02d}-{datum_obj.year}" # "17-06-2026"
     # Let op: gebruik GEEN losse tijdstring als zoekterm â€” die matcht ook op reserveringen
     # van andere datums (bijv. een bestaande reservering op een andere dag om 15:00).
     # Vereiste: datum Ã‰N tijd moeten allebei aanwezig zijn op de pagina.
