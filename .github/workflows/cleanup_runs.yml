@@ -40,6 +40,7 @@ on:
 permissions:
   actions: write
   contents: read
+  pages: write
 
 jobs:
   cleanup:
@@ -153,10 +154,10 @@ jobs:
               if [ "$DRY_RUN" = "true" ]; then
                 echo "  🔍 [DRY] #$n ($created) $concl — zou verwijderd worden"
               else
-                if gh api -X DELETE "/repos/$REPO/actions/runs/$id" 2>/dev/null; then
+                if gh api -X DELETE "/repos/$REPO/actions/runs/$id"; then
                   echo "  🗑️  #$n ($created) $concl — verwijderd"
                 else
-                  echo "  ⚠️  #$n ($created) $concl — delete faalde"
+                  echo "  ⚠️  #$n ($created) $concl — delete faalde (zie fout hierboven)"
                 fi
               fi
             done
