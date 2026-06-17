@@ -349,7 +349,7 @@ def scrape_spelers_per_reservering(driver, reserveringen: list, bekende_spelers=
          a. #youPlayWith li (zelfde structuur als nieuwe-boeking flow)
          b. .player-row, .deelnemer-naam, vergelijkbare class-names
          c. Tabel-rijen met 'speler' / 'partner' label
-      4. Sla op in r['spelers'] (lijst van strings, EXCL. de eigenaar Joris)
+      4. Sla op in r['spelers'] (lijst van strings, INCL. SPELER1_NAAM vooraan)
       5. driver.get(/mijn/Reservations) om terug te keren â€” schoner dan
          driver.back() (cache-gerelateerde gotchas)
 
@@ -480,6 +480,10 @@ def scrape_spelers_per_reservering(driver, reserveringen: list, bekende_spelers=
                     if naam not in seen:
                         seen.add(naam)
                         unieke.append(naam)
+                # Voeg SPELER1_NAAM (de ingelogde gebruiker) vooraan toe zodat
+                # alle 4 namen zichtbaar zijn in de PWA.
+                if SPELER1_NAAM and SPELER1_NAAM not in seen:
+                    unieke = [SPELER1_NAAM] + unieke
                 r['spelers'] = unieke
                 log.info(f"      âœ… Spelers: {unieke}")
             else:
@@ -649,7 +653,7 @@ def voeg_toe_aan_agenda(reservering: dict) -> str:
             sport = "Tennis"
         else:
             sport = "Padel"
-        alle_spelers = ([SPELER1_NAAM] if SPELER1_NAAM else []) + spelers
+        alle_spelers = spelers
 
         creds_info = json.loads(GOOGLE_CREDENTIALS)
         creds = Credentials.from_service_account_info(
