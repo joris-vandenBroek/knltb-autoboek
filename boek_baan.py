@@ -1944,24 +1944,30 @@ def main():
             _log_zichtbare_spelers(driver, alle_spelers,
                 "na voeg_spelers_toe (4 verwacht)")
 
-            # Klok-buffer alleen op 1e poging: wacht tot 07:01 NL vÃ³Ã³r kies_dag.
-            # Run #63 (cron 30-05) bewees dat ETV's daypart-selectie ZELF al
-            # geweigerd wordt vÃ³Ã³r 07:00 NL. Bij outer-retry (poging 2+) zijn
-            # we sowieso ruim voorbij 07:01.
+            # Klok-buffer alleen op 1e poging: wacht tot 07:00:10 NL voor kies_dag.
+            # ETV opent het slot om 07:00; 10s buffer voor klok-skew.
+            # Bij dag-selectie-fail: retry-lus hieronder probeert 5x met 10s ertussen.
             if outer_poging == 1:
                 nu_pre_dag = datetime.now()
-                doel_window_open = reserveringsdatum.replace(hour=7, minute=1, second=0, microsecond=0)
+                doel_window_open = reserveringsdatum.replace(hour=7, minute=0, second=10, microsecond=0)
                 if nu_pre_dag.date() == reserveringsdatum.date() and nu_pre_dag < doel_window_open:
                     wacht_sec = int((doel_window_open - nu_pre_dag).total_seconds())
-                    log.info(f" Wacht {wacht_sec} sec tot 07:01 NL vr dag-selectie "
-                             f"(ETV opent het slot om 07:00, buffer voor klok-skew)...")
+                    log.info(f" Wacht {wacht_sec} sec tot 07:00:10 NL voor dag-selectie "
+                             f"(ETV opent het slot om 07:00, 10s buffer voor klok-skew)...")
                     time.sleep(wacht_sec)
                     log.info(f" {datetime.now().strftime('%H:%M:%S')} NL  boekvenster open.")
 
-            if not kies_dag(driver, args.datum, args.tijd):
-                log.warning(f" Dag {args.datum} niet selecteerbaar in poging {outer_poging}  "
-                            f"mogelijk ETV restrictie (dag+2 nog niet open of 1-actieve-reservering-rule). "
-                            f"Outer-retry.")
+            dag_gelukt = False
+            for dag_poging in range(1, 7):  # max 6 pogingen: 07:00:10, :20, :30, :40, :50, :00
+                if kies_dag(driver, args.datum, args.tijd):
+                    dag_gelukt = True
+                    log.info(f" Dag-selectie geslaagd op poging {dag_poging}/6 — direct door naar baankeuze.")
+                    break
+                if dag_poging < 6:
+                    log.warning(f" Dag-selectie mislukt (poging {dag_poging}/6) — wacht 10s voor retry...")
+                    time.sleep(10)
+            if not dag_gelukt:
+                log.warning(f" Dag {args.datum} niet selecteerbaar na 6 dag-pogingen — outer-retry.")
                 continue  # outer retry
 
             _log_zichtbare_spelers(driver, alle_spelers,
