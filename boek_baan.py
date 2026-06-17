@@ -1944,28 +1944,28 @@ def main():
             _log_zichtbare_spelers(driver, alle_spelers,
                 "na voeg_spelers_toe (4 verwacht)")
 
-            # Klok-buffer alleen op 1e poging: wacht tot 07:00:10 NL voor kies_dag.
-            # ETV opent het slot om 07:00; 10s buffer voor klok-skew.
-            # Bij dag-selectie-fail: retry-lus hieronder probeert 5x met 10s ertussen.
-            if outer_poging == 1:
-                nu_pre_dag = datetime.now()
-                doel_window_open = reserveringsdatum.replace(hour=7, minute=0, second=10, microsecond=0)
-                if nu_pre_dag.date() == reserveringsdatum.date() and nu_pre_dag < doel_window_open:
-                    wacht_sec = int((doel_window_open - nu_pre_dag).total_seconds())
-                    log.info(f" Wacht {wacht_sec} sec tot 07:00:10 NL voor dag-selectie "
-                             f"(ETV opent het slot om 07:00, 10s buffer voor klok-skew)...")
-                    time.sleep(wacht_sec)
-                    log.info(f" {datetime.now().strftime('%H:%M:%S')} NL  boekvenster open.")
+            # Dag-selectie: poging 1 om 07:00:10, poging 2 om 07:00:20, etc.
+            # Elke poging wacht tot zijn absolute doeltijd zodat kies_dag-duur
+            # de interval niet ophoogt. Alleen op de reserveringsdatum relevant;
+            # bij outer-retry > 1 zijn we sowieso al voorbij 07:00.
+            doel_window_open = reserveringsdatum.replace(hour=7, minute=0, second=10, microsecond=0)
 
             dag_gelukt = False
             for dag_poging in range(1, 7):  # max 6 pogingen: 07:00:10, :20, :30, :40, :50, :00
+                doel_poging = doel_window_open + timedelta(seconds=(dag_poging - 1) * 10)
+                nu = datetime.now()
+                if nu.date() == reserveringsdatum.date() and nu < doel_poging:
+                    wacht_sec = (doel_poging - nu).total_seconds()
+                    log.info(f" Wacht {wacht_sec:.1f}s tot {doel_poging.strftime('%H:%M:%S')} NL "
+                             f"(dag-poging {dag_poging}/6)...")
+                    time.sleep(wacht_sec)
                 if kies_dag(driver, args.datum, args.tijd):
                     dag_gelukt = True
-                    log.info(f" Dag-selectie geslaagd op poging {dag_poging}/6 — direct door naar baankeuze.")
+                    log.info(f" Dag-selectie geslaagd op poging {dag_poging}/6 om "
+                             f"{datetime.now().strftime('%H:%M:%S')} — direct door naar baankeuze.")
                     break
-                if dag_poging < 6:
-                    log.warning(f" Dag-selectie mislukt (poging {dag_poging}/6) — wacht 10s voor retry...")
-                    time.sleep(10)
+                log.warning(f" Dag-selectie mislukt (poging {dag_poging}/6) om "
+                            f"{datetime.now().strftime('%H:%M:%S')}")
             if not dag_gelukt:
                 log.warning(f" Dag {args.datum} niet selecteerbaar na 6 dag-pogingen — outer-retry.")
                 continue  # outer retry
