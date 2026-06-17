@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-06-17T08:44:35",
-  "reserveringen": [
-    {
-      "id": "2026-06-17_1500_padel-1",
-      "datum": "2026-06-17",
-      "tijd": "15:00",
-      "baan": "Padel 1",
-      "tekst": "17-06-2026\t15:00 - 16:00\tPadel 1\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Joris van den Broek",
-        "Peter Nijhof",
-        "Chris van Waardenburg",
-        "Jan van Bragt"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-06-17T08:47:00",
+  "reserveringen": []
 }
