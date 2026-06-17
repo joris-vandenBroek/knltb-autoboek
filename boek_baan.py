@@ -780,7 +780,7 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
                 )
             except TimeoutException:
                 time.sleep(1)
-        log.info(f"   ReservationsPlayers ververst  URL: {driver.current_url}")
+            log.info(f"   ReservationsPlayers ververst  URL: {driver.current_url}")
         except Exception as e:
             log.warning(f"  Refresh mislukt ({e}), doorgaan op huidige page state")
 
