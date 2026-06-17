@@ -1919,30 +1919,46 @@ def main():
         boek_gelukt = False
         baan = ""
         gereserveerde_tijd = ""
+        spelers_gedaan = False
 
         for outer_poging in range(1, MAX_OUTER_POGINGEN + 1):
             log.info(f" BOEK-POGING {outer_poging}/{MAX_OUTER_POGINGEN} ")
 
             if outer_poging > 1:
-                log.info(" Wacht 30s en restart wizard vanaf 'Baan afhangen'...")
                 time.sleep(30)
-                try:
-                    driver.get("https://www.etv-volley.nl/me/Reservations")
-                    time.sleep(3)
-                except Exception as e:
-                    log.warning(f"Terugnavigeren naar /me/Reservations faalde: {e}")
+                if spelers_gedaan:
+                    log.info(" Spelers al succesvol ingevoerd — navigeer direct naar dag-pagina.")
+                    try:
+                        driver.get("https://www.etv-volley.nl/me/ReservationsDay")
+                        time.sleep(2)
+                        if "ReservationsDay" not in driver.current_url:
+                            log.warning(f" ETV stuurde door naar {driver.current_url} — volledige herstart.")
+                            spelers_gedaan = False
+                    except Exception as e:
+                        log.warning(f"Navigatie naar dag-pagina mislukt: {e} — volledige herstart.")
+                        spelers_gedaan = False
 
-            if not klik_baan_afhangen(driver):
-                log.error(f" 'Baan afhangen' knop niet gevonden (poging {outer_poging})")
-                continue  # outer retry
+                if not spelers_gedaan:
+                    log.info(" Herstart wizard vanaf 'Baan afhangen'...")
+                    try:
+                        driver.get("https://www.etv-volley.nl/me/Reservations")
+                        time.sleep(3)
+                    except Exception as e:
+                        log.warning(f"Terugnavigeren naar /me/Reservations faalde: {e}")
 
-            if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4,
-                                 is_retry=(outer_poging > 1)):
-                log.error(" Speler niet gevonden  controleer spelernamen")
-                sys.exit(1)  # credentials/lid-issue, geen retry zinvol
+            if not spelers_gedaan:
+                if not klik_baan_afhangen(driver):
+                    log.error(f" 'Baan afhangen' knop niet gevonden (poging {outer_poging})")
+                    continue  # outer retry
 
-            _log_zichtbare_spelers(driver, alle_spelers,
-                "na voeg_spelers_toe (4 verwacht)")
+                if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4,
+                                     is_retry=(outer_poging > 1)):
+                    log.error(" Speler niet gevonden  controleer spelernamen")
+                    sys.exit(1)  # credentials/lid-issue, geen retry zinvol
+
+                spelers_gedaan = True
+                _log_zichtbare_spelers(driver, alle_spelers,
+                    "na voeg_spelers_toe (4 verwacht)")
 
             # Dag-selectie: poging 1 om 07:00:10, poging 2 om 07:00:20, etc.
             # Elke poging wacht tot zijn absolute doeltijd zodat kies_dag-duur
