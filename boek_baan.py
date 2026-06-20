@@ -2074,11 +2074,15 @@ def main():
         # â"€â"€ Verificeer dat reservering zichtbaar is op Mijn Reserveringen â"€â"€â"€â"€â"€â"€â"€â"€
         geverifieerde_baan = verifieer_reservering(driver, args.datum, gereserveerde_tijd)
         if not geverifieerde_baan:
-            log.error(" Reservering niet zichtbaar op reserveringspagina  agenda NIET bijgewerkt")
-            sys.exit(1)
-
-        # Gebruik geverifieerde baan-naam (betrouwbaarder dan detectie tijdens grid-klik)
-        baan = geverifieerde_baan
+            # Verificatie mislukt maar reservering is WEL gemaakt (bevestig() returnte 'OK').
+            # sys.exit(1) hier zou de cleanup-stap in boek.yml overslaan en het wachtrij-bestand
+            # laten staan — waardoor morgen opnieuw geprobeerd wordt te boeken voor dezelfde datum.
+            # Daarom: log een warning en ga door zodat de cleanup altijd plaatsvindt.
+            log.warning(" Reservering niet zichtbaar op reserveringspagina — verificatie overgeslagen, "
+                        "baan-naam onbekend. Agenda wordt NIET bijgewerkt.")
+        else:
+            # Gebruik geverifieerde baan-naam (betrouwbaarder dan detectie tijdens grid-klik)
+            baan = geverifieerde_baan
 
     finally:
         driver.quit()

@@ -56,18 +56,30 @@ jobs:
           set -e
           today=$(date +%Y-%m-%d)
           triggered=0
+          fouten=0
           shopt -s nullglob
 
           # Loop door alle gebruiker-subfolders
           for gebruiker_dir in wachtrij/*/; do
             gebruiker=$(basename "$gebruiker_dir")
             for f in "${gebruiker_dir}"*.json; do
-              datum=$(jq -r '.datum'         "$f")
-              tijd=$(jq -r  '.tijd'          "$f")
+              # Per-item foutafhandeling: corrupt JSON stopt niet de rest van de items
+              if ! jq -e '.' "$f" > /dev/null 2>&1; then
+                echo "::warning::Corrupt of leeg wachtrij-bestand: $f — overgeslagen"
+                fouten=$((fouten + 1))
+                continue
+              fi
+              datum=$(jq -r '.datum'            "$f")
+              tijd=$(jq -r  '.tijd'             "$f")
               sport=$(jq -r '.sport // "padel"' "$f")
-              speler2=$(jq -r '.spelers[1]'  "$f")
-              speler3=$(jq -r '.spelers[2]'  "$f")
-              speler4=$(jq -r '.spelers[3]'  "$f")
+              speler2=$(jq -r '.spelers[1]'     "$f")
+              speler3=$(jq -r '.spelers[2]'     "$f")
+              speler4=$(jq -r '.spelers[3]'     "$f")
+              if [ -z "$datum" ] || [ "$datum" = "null" ]; then
+                echo "::warning::Ontbrekend datum-veld in $f — overgeslagen"
+                fouten=$((fouten + 1))
+                continue
+              fi
               reserveringsdatum=$(date -d "$datum - 2 days" +%Y-%m-%d)
               if [ "$reserveringsdatum" = "$today" ]; then
                 echo "Trigger boek.yml: $gebruiker $datum om $tijd $sport ($f)"
@@ -86,6 +98,10 @@ jobs:
             done
           done
           echo "Getriggerd: $triggered boek.yml run(s)"
+          if [ "$fouten" -gt 0 ]; then
+            echo "::error::$fouten wachtrij-bestand(en) overgeslagen wegens fouten — check de warnings hierboven"
+            exit 1
+          fi
 
       - name: Healthcheck-ping (succes)
         if: success() && env.HEALTHCHECK_PING_URL != ''
