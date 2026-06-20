@@ -331,7 +331,9 @@ def login(driver: uc.Chrome) -> bool:
             ww_veld.send_keys(Keys.RETURN)
 
         try:
-            WebDriverWait(driver, 10).until(lambda d: d.current_url != LOGIN_URL)
+            WebDriverWait(driver, 10).until(
+                lambda d: d.current_url.rstrip('/') != LOGIN_URL.rstrip('/')
+            )
         except TimeoutException:
             pass
         time.sleep(0.5)
@@ -485,21 +487,21 @@ def _ruim_onverwachte_spelers_op(driver: uc.Chrome, verwachte_data_ids: set) -> 
             try:
                 # jQuery .trigger('click') werkt voor ETV's verwijder-handler;
                 # zelfde patroon als de speler-toevoegen fallback.
-                ok = driver.execute_script(f"""
-                    var sel = 'a.removePlayer[data-id="{did}"]';
-                    if (window.jQuery) {{
+                ok = driver.execute_script("""
+                    var sel = 'a.removePlayer[data-id="' + arguments[0] + '"]';
+                    if (window.jQuery) {
                         var $el = window.jQuery(sel);
-                        if ($el.length) {{ $el.trigger('click'); return 'jquery'; }}
-                    }}
+                        if ($el.length) { $el.trigger('click'); return 'jquery'; }
+                    }
                     var el = document.querySelector(sel);
-                    if (el) {{ el.click(); return 'dom'; }}
+                    if (el) { el.click(); return 'dom'; }
                     return 'niet gevonden';
-                """)
+                """, did)
                 time.sleep(0.8)
                 # Verifieer dat 'ie weg is
-                weg = driver.execute_script(f"""
-                    return !document.querySelector('a.removePlayer[data-id="{did}"]');
-                """)
+                weg = driver.execute_script("""
+                    return !document.querySelector('a.removePlayer[data-id="' + arguments[0] + '"]');
+                """, did)
                 if weg:
                     log.info(f"   Verwijderd via {ok}: '{naam}'")
                     verwijderd.append(naam)
@@ -1076,8 +1078,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             WebDriverWait(driver, 15).until(
                 lambda d: "ReservationsCourt" in d.current_url
                           or "ReservationsPlayers" in d.current_url
-                          or ":00" in d.find_element(By.TAG_NAME, "body").text
-                          or ":30" in d.find_element(By.TAG_NAME, "body").text
+                          or "ReservationsDay" not in d.current_url
             )
         except TimeoutException:
             log.warning("  Geen herkenbare navigatie binnen 15s")
@@ -1589,7 +1590,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             return 'BEZET'
 
         # Wacht op redirect (kan al gebeurd zijn via de site's eigen success-callback)
-        if _wacht_op_redirect(5):
+        if _wacht_op_redirect(12):
             url_na = driver.current_url
             try:
                 body_a = driver.find_element(By.TAG_NAME, "body").text
@@ -1970,8 +1971,8 @@ def main():
 
                 if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4,
                                      is_retry=(outer_poging > 1)):
-                    log.error(" Speler niet gevonden  controleer spelernamen")
-                    sys.exit(1)  # credentials/lid-issue, geen retry zinvol
+                    log.error(f" Speler niet gevonden (poging {outer_poging}) — outer-retry")
+                    continue  # outer-retry; bij uitputting van alle pogingen faalt de job
 
                 spelers_gedaan = True
                 _log_zichtbare_spelers(driver, alle_spelers,

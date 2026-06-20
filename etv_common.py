@@ -64,7 +64,7 @@ def login(driver, bondsnummer: str, wachtwoord: str,
                 EC.element_to_be_clickable((By.XPATH, sel))
             )
             knop.click()
-            log.info("🍪 Cookie-banner geaccepteerd")
+            log.info("Cookie-banner geaccepteerd")
             time.sleep(1)
             break
         except Exception:
