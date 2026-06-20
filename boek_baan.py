@@ -17,6 +17,13 @@ import time
 import argparse
 import logging
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+_AMS = ZoneInfo("Europe/Amsterdam")
+
+def _nu_nl() -> datetime:
+    """Huidige tijd in NL (Amsterdam), als naive datetime voor vergelijking met andere naive datetimes."""
+    return datetime.now(tz=_AMS).replace(tzinfo=None)
 
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
@@ -203,7 +210,7 @@ def _log_zichtbare_spelers(driver, spelers, label: str):
         "ReservationsPlayers" in url
         or "ReservationsConfirm" in url
         or "/mijn/Reservations" in url
-        or "/me/Reservations" in url and "ReservationsCourt" not in url and "ReservationsDay" not in url
+        or ("/me/Reservations" in url and "ReservationsCourt" not in url and "ReservationsDay" not in url)
     )
 
     try:
@@ -1455,7 +1462,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
                 log.error(f" Volgende bracht ons naar {url_na_vol} i.p.v. ReservationsConfirm "
                           f"— court-selectie mogelijk niet geregistreerd")
                 screenshot(driver, "bevestig_fout_verkeerde_pagina")
-                return False
+                return 'FOUT'
 
         # â"€â"€ Stap 2: zoek confirmReservationButton (op id of data-url) â"€â"€â"€â"€â"€â"€â"€
         knop_info = driver.execute_script("""
@@ -1788,7 +1795,7 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
         "tijd":      tijd,
         "sport":     sport,
         "spelers":   [SPELER1, speler2, speler3, speler4],
-        "ingediend": datetime.now().isoformat(timespec="seconds"),
+        "ingediend": _nu_nl().isoformat(timespec="seconds"),
     }
     map_pad = f"wachtrij/{GEBRUIKER}"
     os.makedirs(map_pad, exist_ok=True)
@@ -1850,7 +1857,7 @@ def main():
 
     # Reserveringsstrategie: vanaf 07:00 op (speeldatum - 2 kalenderdagen) mag worden gereserveerd.
     # Dat geldt voor alle dagdelen van dag 0, dag+1 en dag+2.
-    nu            = datetime.now()
+    nu            = _nu_nl()
     reserveringsdatum = speeldatum - timedelta(days=2)
     dag_verschil  = (speeldatum.date() - nu.date()).days
     log.info(f" Speeldatum dag+{dag_verschil} | reserveringsdatum: {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00")
@@ -1979,7 +1986,7 @@ def main():
             dag_gelukt = False
             for dag_poging in range(1, 7):  # max 6 pogingen: 07:00:10, :20, :30, :40, :50, :00
                 doel_poging = doel_window_open + timedelta(seconds=(dag_poging - 1) * 10)
-                nu = datetime.now()
+                nu = _nu_nl()
                 if nu.date() == reserveringsdatum.date() and nu < doel_poging:
                     wacht_sec = (doel_poging - nu).total_seconds()
                     log.info(f" Wacht {wacht_sec:.1f}s tot {doel_poging.strftime('%H:%M:%S')} NL "
@@ -1988,10 +1995,10 @@ def main():
                 if kies_dag(driver, args.datum, args.tijd):
                     dag_gelukt = True
                     log.info(f" Dag-selectie geslaagd op poging {dag_poging}/6 om "
-                             f"{datetime.now().strftime('%H:%M:%S')} — direct door naar baankeuze.")
+                             f"{_nu_nl().strftime('%H:%M:%S')} — direct door naar baankeuze.")
                     break
                 log.warning(f" Dag-selectie mislukt (poging {dag_poging}/6) om "
-                            f"{datetime.now().strftime('%H:%M:%S')}")
+                            f"{_nu_nl().strftime('%H:%M:%S')}")
             if not dag_gelukt:
                 log.warning(f" Dag {args.datum} niet selecteerbaar na 6 dag-pogingen — outer-retry.")
                 continue  # outer retry
