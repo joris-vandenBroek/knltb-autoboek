@@ -1099,10 +1099,18 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             time.sleep(2)
             continue
 
-        # Nog steeds ReservationsDay of onbekend â€” submit blijkbaar mislukt
-        log.warning(f"  Geen navigatie. URL: {url_na} | body[:200]: {body_na[:200]}")
-        screenshot(driver, f"geen_nav_poging{poging}")
-        time.sleep(2)
+        # Nog steeds ReservationsDay — ETV backend heeft de submit nog niet verwerkt.
+        # Refresh de pagina zodat de server-side staat opnieuw geladen wordt.
+        log.warning(f”  Geen navigatie. URL: {url_na} | body[:200]: {body_na[:200]}”)
+        screenshot(driver, f”geen_nav_poging{poging}”)
+        try:
+            driver.refresh()
+            WebDriverWait(driver, 8).until(
+                lambda d: len(d.find_element(By.TAG_NAME, “body”).text) > 50
+            )
+        except Exception as e:
+            log.warning(f”  Refresh mislukt: {e}”)
+        time.sleep(1)
 
     log.error(f" kies_dag faalde definitief na 3 pogingen")
     screenshot(driver, "kies_dag_definitief_fout")
