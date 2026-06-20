@@ -967,8 +967,12 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
                     _submit_knop(driver, sp_volg)
                     WebDriverWait(driver, 10).until(
                         lambda d: "ReservationsDay" in d.current_url
+                                  or "ReservationsCourt" in d.current_url
                     )
                     time.sleep(1)
+                    if "ReservationsCourt" in driver.current_url:
+                        log.info("  Volgende bracht ons direct naar baankeuze  dag-selectie was al OK")
+                        return True
                 else:
                     log.warning("  Geen Volgende op spelers-pagina  kan niet recoveren")
                     continue
