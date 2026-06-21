@@ -1055,7 +1055,6 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         except Exception:
             pass
 
-        screenshot(driver, f"08_dag_geselecteerd_poging{poging}")
 
         # â"€â"€ Volgende-knop opnieuw fetchen (kan na DOM-update stale zijn) â"€â"€â"€â"€
         try:
