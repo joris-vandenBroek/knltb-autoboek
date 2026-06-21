@@ -919,7 +919,14 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     opnieuw. Max 3 pogingen.
     """
     log.info(f"Dag kiezen: {datum}, dagdeel: {dagdeel(tijd)}")
-    time.sleep(2)
+    try:
+        WebDriverWait(driver, 5).until(
+            lambda d: d.execute_script(
+                "return document.querySelectorAll('[data-date]').length") > 0
+            or "ReservationsCourt" in d.current_url
+        )
+    except TimeoutException:
+        pass  # pagina nog leeg, kies_dag-pogingen vangen dit op
     doel_datum      = datetime.strptime(datum, "%Y-%m-%d")
     dag_nr          = str(doel_datum.day)
     gewenst_dagdeel = dagdeel(tijd)
@@ -1030,9 +1037,9 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
                 log.warning(f"  Ook dispatchEvent faalde: {e2}")
 
         if not klik_ok:
-            time.sleep(2)
+            time.sleep(1)
             continue
-        time.sleep(2)
+        time.sleep(0.3)
 
         # Backup: zet hidden selectedDate input voor sites die 'm uit DOM lezen
         try:
@@ -1104,18 +1111,10 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             time.sleep(2)
             continue
 
-        # Nog steeds ReservationsDay — ETV backend heeft de submit nog niet verwerkt.
-        # Refresh de pagina zodat de server-side staat opnieuw geladen wordt.
+        # Nog steeds ReservationsDay — ETV heeft submit niet verwerkt.
+        # Geen refresh (wist dagpart-selectie); direct opnieuw proberen.
         log.warning(f"  Geen navigatie. URL: {url_na} | body[:200]: {body_na[:200]}")
         screenshot(driver, f"geen_nav_poging{poging}")
-        try:
-            driver.refresh()
-            WebDriverWait(driver, 8).until(
-                lambda d: len(d.find_element(By.TAG_NAME, "body").text) > 50
-            )
-        except Exception as e:
-            log.warning(f"  Refresh mislukt: {e}")
-        time.sleep(1)
 
     log.error(f" kies_dag faalde definitief na 3 pogingen")
     screenshot(driver, "kies_dag_definitief_fout")
