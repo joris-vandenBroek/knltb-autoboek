@@ -26,7 +26,6 @@ from datetime import datetime
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
@@ -158,7 +157,12 @@ def scrape_reserveringen(driver) -> list:
     for url in RESERVERINGEN_URLS:
         try:
             driver.get(url)
-            time.sleep(4)
+            try:
+                WebDriverWait(driver, 10).until(
+                    lambda d: len(d.find_element(By.TAG_NAME, "body").text) > 50
+                )
+            except TimeoutException:
+                pass
             screenshot(driver, f"03_reserveringen_{url.split('/')[-2]}")
             body_text = driver.find_element(By.TAG_NAME, "body").text
             log.info(f"  {url} body[:500]: {body_text[:500]}")
@@ -212,7 +216,7 @@ def scrape_reserveringen(driver) -> list:
         });
 
         // 2) Divs/articles/sections met booking-related class
-        var classKeywords = ['booking','reservation','reservering','reservering','my-bookings','my-reservations'];
+        var classKeywords = ['booking','reservation','reservering','my-bookings','my-reservations'];
         document.querySelectorAll('div, article, section, li').forEach(function(el) {
             var cls = (el.className || '').toString().toLowerCase();
             var match = false;
@@ -538,7 +542,7 @@ def annuleer(driver, target_id: str) -> bool:
         for (var i = 0; i < rijen.length; i++) {
             var rij = rijen[i];
             var tekst = (rij.innerText || '').trim();
-            if (tekst.indexOf(doelDatum) < 0 && tekst.indexOf(doelTijd) < 0) continue;
+            if (tekst.indexOf(doelDatum) < 0 || tekst.indexOf(doelTijd) < 0) continue;
             // Vind cancel-knop binnen deze rij
             var btns = rij.querySelectorAll('button, a, [role="button"]');
             for (var j = 0; j < btns.length; j++) {
@@ -573,8 +577,8 @@ def annuleer(driver, target_id: str) -> bool:
         for xpath in [
             "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'ja')]",
             "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'bevestig')]",
-            "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'annuleer')]",
             "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'ok')]",
+            "//button[contains(translate(.,'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'verwijder')]",
         ]:
             try:
                 els = WebDriverWait(driver, 3).until(
@@ -648,8 +652,7 @@ def voeg_toe_aan_agenda(reservering: dict) -> str:
         spelers = reservering.get("spelers", [])
 
         # ETV toont tennisbanen soms als kaal getal ("04"), soms als "Tennis 04"
-        import re as _re
-        if baan and ("Tennis" in baan or _re.match(r'^\d{2}$', baan.strip())):
+        if baan and ("Tennis" in baan or re.match(r'^\d{2}$', baan.strip())):
             sport = "Tennis"
         else:
             sport = "Padel"
@@ -759,9 +762,10 @@ def maak_ontbrekende_agenda_items(reserveringen: list) -> bool:
             items[rid] = event_id
             gewijzigd = True
 
+    toegevoegd = len(items) - (len(actieve_ids) - len(verwijder_ids))
     if gewijzigd:
         _sla_agenda_items_op(items)
-        log.info(f"Agenda gesynchroniseerd ({len(verwijder_ids)} verwijderd, {len(actieve_ids) - len(items) + len(verwijder_ids)} toegevoegd)")
+        log.info(f"Agenda gesynchroniseerd ({len(verwijder_ids)} verwijderd, {max(0, toegevoegd)} toegevoegd)")
         return True
     log.info("Agenda al up-to-date")
     return False
@@ -956,6 +960,8 @@ def main():
         log.error("âŒ Stel ETVVOLLEY_BONDSNUMMER en ETVVOLLEY_WACHTWOORD in als GitHub Secrets")
         sys.exit(1)
 
+    reserveringen = []
+    verwijderde_wachtrij = []
     driver = maak_driver()
     try:
         if not login(driver):
