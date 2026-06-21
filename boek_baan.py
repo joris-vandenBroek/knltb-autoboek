@@ -1978,7 +1978,7 @@ def main():
             # Elke poging wacht tot zijn absolute doeltijd zodat kies_dag-duur
             # de interval niet ophoogt. Alleen op de reserveringsdatum relevant;
             # bij outer-retry > 1 zijn we sowieso al voorbij 07:00.
-            doel_window_open = reserveringsdatum.replace(hour=7, minute=0, second=10, microsecond=0)
+            doel_window_open = reserveringsdatum.replace(hour=7, minute=0, second=1, microsecond=0)
 
             dag_gelukt = False
             for dag_poging in range(1, 7):  # max 6 pogingen: 07:00:10, :20, :30, :40, :50, :00
