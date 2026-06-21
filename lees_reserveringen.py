@@ -931,7 +931,7 @@ def ruim_wachtrij_op(reserveringen: list) -> list:
         match = False
         geboekte_tijd = None
         for r in reserveringen:
-            if r['datum'] == datum and set(r.get('spelers', [])) == wachtrij_spelers:
+            if r['datum'] == datum and wachtrij_spelers.issubset(set(r.get('spelers', []))):
                 match = True
                 geboekte_tijd = r['tijd']
                 break
