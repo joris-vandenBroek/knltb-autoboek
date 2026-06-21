@@ -1822,18 +1822,24 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
         log.error(f" Git commit voor wachtrij mislukt: {e}")
         return False
 
+    # Unshallow indien nodig (actions/checkout doet standaard fetch-depth=1).
+    subprocess.run(["git", "fetch", "--unshallow", "origin"], capture_output=True)
+
     # Retry-lus voor race condities met andere bots/commits op main.
     for poging in range(1, 6):
-        r = subprocess.run(["git", "pull", "--rebase", "origin", "main"])
+        r = subprocess.run(["git", "pull", "--rebase", "origin", "main"],
+                           capture_output=True, text=True)
         if r.returncode != 0:
-            subprocess.run(["git", "rebase", "--abort"])
-            log.warning(f"  git pull --rebase mislukt (poging {poging}) — retry")
+            subprocess.run(["git", "rebase", "--abort"], capture_output=True)
+            log.warning(f"  git pull --rebase mislukt (poging {poging}): {r.stderr.strip()[:300]} — retry")
             time.sleep(poging)
             continue
-        if subprocess.run(["git", "push"]).returncode == 0:
+        push = subprocess.run(["git", "push", "origin", "HEAD:main"],
+                              capture_output=True, text=True)
+        if push.returncode == 0:
             log.info(f" Wachtrij-bestand gecommit en gepusht (poging {poging})")
             return True
-        log.warning(f"  Push poging {poging} mislukt  retry na {poging}s")
+        log.warning(f"  Push poging {poging} mislukt: {push.stderr.strip()[:200]} — retry na {poging}s")
         time.sleep(poging)
     log.error(" Push voor wachtrij faalde na 5 pogingen")
     return False
