@@ -920,7 +920,6 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     """
     log.info(f"Dag kiezen: {datum}, dagdeel: {dagdeel(tijd)}")
     time.sleep(2)
-    _sluit_cookie_banner(driver)
     doel_datum      = datetime.strptime(datum, "%Y-%m-%d")
     dag_nr          = str(doel_datum.day)
     gewenst_dagdeel = dagdeel(tijd)
@@ -957,25 +956,19 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     for poging in range(1, 4):
         log.info(f" kies_dag poging {poging}/3 ")
 
-        # Recover: als we op spelers-pagina staan, klik Volgende om door te gaan
+        # Recover: als we op spelers-pagina staan, navigeer direct naar dag-pagina
         url_nu = driver.current_url
         if "ReservationsPlayers" in url_nu:
-            log.info("  Op ReservationsPlayers  klik Volgende om naar dag-pagina terug te gaan")
+            log.info("  Op ReservationsPlayers — directe GET naar ReservationsDay")
             try:
-                sp_volg = _zoek_knop(driver, ["Volgende", "Next"])
-                if sp_volg:
-                    _submit_knop(driver, sp_volg)
-                    WebDriverWait(driver, 10).until(
-                        lambda d: "ReservationsDay" in d.current_url
-                                  or "ReservationsCourt" in d.current_url
-                    )
-                    time.sleep(1)
-                    if "ReservationsCourt" in driver.current_url:
-                        log.info("  Volgende bracht ons direct naar baankeuze  dag-selectie was al OK")
-                        return True
-                else:
-                    log.warning("  Geen Volgende op spelers-pagina  kan niet recoveren")
-                    continue
+                driver.get("https://www.etv-volley.nl/me/ReservationsDay")
+                WebDriverWait(driver, 5).until(
+                    lambda d: "ReservationsDay" in d.current_url
+                              or "ReservationsCourt" in d.current_url
+                )
+                if "ReservationsCourt" in driver.current_url:
+                    log.info("  Direct naar baankeuze — dag-selectie was al OK")
+                    return True
             except Exception as e:
                 log.warning(f"  Recovery naar dag-pagina mislukt: {e}")
                 continue
@@ -1079,13 +1072,13 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             continue
 
         try:
-            WebDriverWait(driver, 15).until(
+            WebDriverWait(driver, 3).until(
                 lambda d: "ReservationsCourt" in d.current_url
                           or "ReservationsPlayers" in d.current_url
                           or "ReservationsDay" not in d.current_url
             )
         except TimeoutException:
-            log.warning("  Geen herkenbare navigatie binnen 15s")
+            log.warning("  Geen herkenbare navigatie binnen 3s")
         except Exception:
             pass
 
@@ -1996,7 +1989,16 @@ def main():
                     wacht_sec = (doel_poging - nu).total_seconds()
                     log.info(f" Wacht {wacht_sec:.1f}s tot {doel_poging.strftime('%H:%M:%S')} NL "
                              f"(dag-poging {dag_poging}/6)...")
-                    time.sleep(wacht_sec)
+                    # Sluit cookie-banner alvast tijdens de wacht (vóór 07:00:10)
+                    if dag_poging == 1 and wacht_sec > 5:
+                        time.sleep(max(0, wacht_sec - 4))
+                        _sluit_cookie_banner(driver)
+                        nu2 = _nu_nl()
+                        resterend = (doel_poging - nu2).total_seconds()
+                        if resterend > 0:
+                            time.sleep(resterend)
+                    else:
+                        time.sleep(wacht_sec)
                 if kies_dag(driver, args.datum, args.tijd):
                     dag_gelukt = True
                     log.info(f" Dag-selectie geslaagd op poging {dag_poging}/6 om "
