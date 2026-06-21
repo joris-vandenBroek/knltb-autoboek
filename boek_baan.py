@@ -386,7 +386,12 @@ def login(driver: uc.Chrome) -> bool:
 def klik_baan_afhangen(driver: uc.Chrome) -> bool:
     log.info("Navigeer naar reserveringspagina...")
     driver.get(RESERVEER_URL)
-    time.sleep(2)
+    try:
+        WebDriverWait(driver, 10).until(
+            lambda d: len(d.find_element(By.TAG_NAME, "body").text) > 50
+        )
+    except TimeoutException:
+        pass
     try:
         afhangen_knop = wacht_op(driver, By.XPATH,
             "//a[contains(text(),'Baan afhangen') or contains(text(),'afhangen')] "
@@ -886,7 +891,7 @@ def _vind_daypart(driver, datum: str, gewenst_dagdeel: str):
             var txt = (candidates[i].innerText || '').trim();
             if (txt === dagdeel || txt.includes(dagdeel)) return candidates[i];
         }
-        return candidates[0];
+        return null;
     """, datum, gewenst_dagdeel)
 
 
@@ -1350,9 +1355,14 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
                 return { cls: cls, selected: selected, fout: foutTekst };
             } catch(e) { return { cls: 'error', selected: false, fout: e.message }; }
         """, cel, PADEL_BANEN, tijd)
+        fout_tekst = selectie_ok.get('fout', '')
         log.info(f"  Selectiestatus: cls='{selectie_ok.get('cls','')}' "
                  f"selected={selectie_ok.get('selected',False)} "
-                 f"fout='{selectie_ok.get('fout','')}'")
+                 f"fout='{fout_tekst}'")
+
+        if fout_tekst:
+            log.warning(f"  Foutmelding na klik op {tijd}: '{fout_tekst}' — volgende tijdslot")
+            continue
 
         try:
             body_na = driver.find_element(By.TAG_NAME, "body").text
@@ -1481,7 +1491,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             except Exception:
                 pass
             screenshot(driver, "bevestig_fout")
-            return False
+            return 'FOUT'
 
         log.info(f"  Knop gevonden: id={knop_info.get('id')} "
                  f"data-url={knop_info.get('dataUrl')} "
@@ -1494,7 +1504,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
         if not data_url:
             log.error(" data-url attribuut ontbreekt op bevestig-knop")
             screenshot(driver, "bevestig_fout")
-            return False
+            return 'FOUT'
 
         # â"€â"€ DRY-RUN: stop hier, ga niet daadwerkelijk reserveren â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         if dry_run:
@@ -1814,7 +1824,12 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
 
     # Retry-lus voor race condities met andere bots/commits op main.
     for poging in range(1, 6):
-        subprocess.run(["git", "pull", "--rebase", "origin", "main"], check=False)
+        r = subprocess.run(["git", "pull", "--rebase", "origin", "main"])
+        if r.returncode != 0:
+            subprocess.run(["git", "rebase", "--abort"])
+            log.warning(f"  git pull --rebase mislukt (poging {poging}) — retry")
+            time.sleep(poging)
+            continue
         if subprocess.run(["git", "push"]).returncode == 0:
             log.info(f" Wachtrij-bestand gecommit en gepusht (poging {poging})")
             return True
@@ -1885,10 +1900,11 @@ def main():
     log.info(f"   Spelers: {SPELER1}, {args.speler2}, {args.speler3}, {args.speler4}")
     log.info("=" * 50)
 
-    driver = maak_driver()
     baan, gereserveerde_tijd = "", ""
+    driver = None
 
     try:
+        driver = maak_driver()
         # Login met onderhoud-retry: bij ETV-onderhoudspagina max 5Ã—
         # wachten (3 min per poging) voor we opgeven.
         MAX_LOGIN_POGINGEN = 5
@@ -2095,7 +2111,8 @@ def main():
             baan = geverifieerde_baan
 
     finally:
-        driver.quit()
+        if driver:
+            driver.quit()
 
     # â"€â"€ Succes: Google Agenda bijwerken â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     spelers = [SPELER1, args.speler2, args.speler3, args.speler4]

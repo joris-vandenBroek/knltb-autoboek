@@ -90,7 +90,6 @@ jobs:
         env:
           DISPLAY:                     :99
           GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
-          GOOGLE_CALENDAR_ID:          ${{ secrets.GOOGLE_CALENDAR_ID }}
         run: |
           Xvfb :99 -screen 0 1280x900x24 &
           sleep 2
