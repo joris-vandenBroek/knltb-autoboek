@@ -1884,8 +1884,8 @@ def main():
     else:
         log.info(f" Reserveren! (dag+{dag_verschil}, reserveringsdatum bereikt)")
         if nu.date() == reserveringsdatum.date() and (nu.hour < 7 or (nu.hour == 7 and nu.minute < 1)):
-            log.info(f"   Cron is vroeg gestart  login/spelers/dag/baan worden NU al "
-                     f"voorbereid, bevestig-klik volgt pas op 07:01 NL.")
+            log.info("   Cron is vroeg gestart — login/spelers worden NU al voorbereid, "
+                     "dag-selectie start om 07:00:10 NL.")
 
     log.info("=" * 50)
     log.info(" ETV Volley Baan Auto-Reservering")
