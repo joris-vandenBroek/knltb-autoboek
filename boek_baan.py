@@ -1825,6 +1825,10 @@ def _zet_in_wachtrij(datum: str, tijd: str, speler2: str, speler3: str, speler4:
     # Unshallow indien nodig (actions/checkout doet standaard fetch-depth=1).
     subprocess.run(["git", "fetch", "--unshallow", "origin"], capture_output=True)
 
+    # Gooi eventuele unstaged wijzigingen weg (bijv. reserveringen_*.json die
+    # al eerder in de run zijn bijgewerkt). Ons wachtrij-bestand is al gecommit.
+    subprocess.run(["git", "checkout", "--", "."], capture_output=True)
+
     # Retry-lus voor race condities met andere bots/commits op main.
     for poging in range(1, 6):
         r = subprocess.run(["git", "pull", "--rebase", "origin", "main"],
