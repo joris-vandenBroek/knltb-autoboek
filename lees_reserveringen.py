@@ -927,8 +927,7 @@ def ruim_wachtrij_op(reserveringen: list) -> list:
         tijd  = item.get('tijd', '')
         if not datum or not tijd:
             continue
-        # Medespelers uit wachtrij (alles behalve speler1/booker zelf)
-        wachtrij_spelers = set(item.get('spelers', [])[1:])
+        wachtrij_spelers = set(item.get('spelers', []))
         match = False
         geboekte_tijd = None
         for r in reserveringen:
