@@ -1,4 +1,4 @@
-﻿"""
+"""
 Haal alle leden op van de Ledenlijst-pagina op etv-volley.nl
 en sla op in leden.json (naam + bondsnummer per lid).
 
@@ -23,6 +23,7 @@ from selenium.common.exceptions import TimeoutException
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
                     handlers=[logging.StreamHandler(sys.stdout)])
 log = logging.getLogger(__name__)
+logging.getLogger("undetected_chromedriver").setLevel(logging.WARNING)
 
 LOGIN_URL   = "https://www.etv-volley.nl/mijn"
 BONDSNUMMER = os.environ.get("ETVVOLLEY_BONDSNUMMER", "")
@@ -32,7 +33,7 @@ WACHTWOORD  = os.environ.get("ETVVOLLEY_WACHTWOORD", "")
 def screenshot(driver, naam):
     try:
         driver.save_screenshot(f"{naam}.png")
-        log.info(f"Screenshot: {naam}.png â€” URL: {driver.current_url}")
+        log.debug(f"Screenshot: {naam}.png -- URL: {driver.current_url}")
     except Exception as e:
         log.warning(f"Screenshot mislukt ({naam}): {e}")
 
@@ -86,7 +87,7 @@ def naar_ledenlijst(driver) -> bool:
         try:
             link = WebDriverWait(driver, 10).until(
                 EC.element_to_be_clickable((By.XPATH, sel)))
-            log.info(f"Ledenlijst-link: '{link.text.strip()}'")
+            log.debug(f"Ledenlijst-link: '{link.text.strip()}'")
             driver.execute_script("arguments[0].click();", link)
             time.sleep(3)
             screenshot(driver, "03_ledenlijst")
@@ -125,7 +126,7 @@ def scrape_ledenlijst(driver) -> list:
         )
         log.info("Tabel zichtbaar")
     except TimeoutException:
-        log.warning("Tabel niet gevonden na 15s â€” toch proberen")
+        log.warning("Tabel niet gevonden na 15s -- toch proberen")
 
     screenshot(driver, "04_tabel_geladen")
 
@@ -155,8 +156,8 @@ def scrape_ledenlijst(driver) -> list:
 
         if not volgende:
             for sel in [
-                "//a[normalize-space(.)='Â»' or normalize-space(.)='â€º' or contains(.,'Volgende') or contains(.,'Next')]",
-                "//button[normalize-space(.)='Â»' or normalize-space(.)='â€º' or contains(.,'Volgende')]",
+                "//a[normalize-space(.)='»' or normalize-space(.)='›' or contains(.,'Volgende') or contains(.,'Next')]",
+                "//button[normalize-space(.)='»' or normalize-space(.)='›' or contains(.,'Volgende')]",
                 "//li[contains(@class,'next') and not(contains(@class,'disabled'))]//a",
             ]:
                 try:
@@ -170,7 +171,7 @@ def scrape_ledenlijst(driver) -> list:
                     break
 
         if not volgende:
-            log.info(f"Geen volgende pagina na pagina {pagina} â€” klaar")
+            log.info(f"Geen volgende pagina na pagina {pagina} -- klaar")
             break
 
         driver.execute_script("arguments[0].click();", volgende)
@@ -184,14 +185,14 @@ def scrape_ledenlijst(driver) -> list:
         nieuw = verwerk_batch(leden)
         log.info(f"Pagina {pagina}: {len(leden)} rijen, totaal: {len(alle_leden)} (+{nieuw})")
         if nieuw == 0:
-            log.info("Geen nieuwe leden â€” stoppen")
+            log.info("Geen nieuwe leden -- stoppen")
             break
 
     log.info(f"Klaar: {pagina} pagina's, {len(alle_leden)} unieke leden")
 
     # Fallback: zoekfilter per letter als te weinig resultaten
     if len(alle_leden) < 10:
-        log.warning(f"Slechts {len(alle_leden)} â€” probeer zoekfilter per letter")
+        log.warning(f"Slechts {len(alle_leden)} -- probeer zoekfilter per letter")
         zoek_veld = None
         for sel in ["//input[@placeholder='Zoeken' or @type='search']"]:
             try:
@@ -207,7 +208,7 @@ def scrape_ledenlijst(driver) -> list:
                 zoek_veld.send_keys(letter)
                 time.sleep(1.5)
                 nieuw = verwerk_batch(haal_leden_van_pagina(driver))
-                log.info(f"  Filter '{letter}': totaal {len(alle_leden)} (+{nieuw})")
+                log.debug(f"  Filter '{letter}': totaal {len(alle_leden)} (+{nieuw})")
             zoek_veld.clear()
 
     screenshot(driver, "05_einde_scrape")
@@ -238,7 +239,7 @@ def main():
         driver.quit()
 
     if not leden_lijst:
-        log.error("Geen leden gevonden â€” leden.json wordt NIET overschreven")
+        log.error("Geen leden gevonden -- leden.json wordt NIET overschreven")
         sys.exit(1)
 
     # Bewaar eventuele sterkte_padel uit huidige leden.json (zodat sterktes niet
@@ -253,7 +254,7 @@ def main():
                     'sterkte_padel': item.get('sterkte_padel', ''),
                     'rating_padel':  item.get('rating_padel', ''),
                 }
-        log.info(f"Bestaande sterktes bewaard voor {len(bestaande_sterktes)} leden")
+        log.debug(f"Bestaande sterktes bewaard voor {len(bestaande_sterktes)} leden")
     except Exception:
         pass
 
@@ -271,7 +272,7 @@ def main():
         json.dump(leden_lijst, f, ensure_ascii=False, indent=2)
 
     log.info(f"Opgeslagen: {len(leden_lijst)} leden in leden.json")
-    log.info(f"Voorbeeld: {json.dumps(leden_lijst[0], ensure_ascii=False)}")
+    log.debug(f"Voorbeeld: {json.dumps(leden_lijst[0], ensure_ascii=False)}")
 
 
 if __name__ == "__main__":

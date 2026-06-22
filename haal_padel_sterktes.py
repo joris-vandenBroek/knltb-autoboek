@@ -1,11 +1,11 @@
-﻿"""
+"""
 Haal padel speelsterktes op van mijnknltb.toernooi.nl en voeg toe aan leden.json.
 
 Strategie:
 - Geen Selenium nodig: mijnknltb.toernooi.nl heeft geen Cloudflare-bescherming.
 - requests.Session + CSRF-token voor login
-- GET /find/player/DoSearch?Query={bondsnummer} â†’ player-profile link
-- GET /player-profile/{guid} â†’ padel sterkte uit server-rendered HTML
+- GET /find/player/DoSearch?Query={bondsnummer} -> player-profile link
+- GET /player-profile/{guid} -> padel sterkte uit server-rendered HTML
 """
 
 import os, sys, json, re, logging
@@ -48,7 +48,7 @@ def accepteer_cookiewall(session: requests.Session) -> None:
         log.info("Geen cookie wall aangetroffen")
         return
 
-    log.info("Cookie wall gevonden â€” accepteren...")
+    log.info("Cookie wall gevonden -- accepteren...")
 
     # Zoek form action en CSRF token in de cookie wall
     action_m = re.search(r'<form[^>]+action="([^"]*cookiewall[^"]*)"', r.text, re.I)
@@ -84,7 +84,7 @@ def login(session: requests.Session) -> bool:
 
     # Als we nog steeds op de cookie wall zitten, harder accepteren
     if "cookiewall" in r.url.lower():
-        log.warning("Cookie wall nog steeds actief â€” probeer via GET-parameter")
+        log.warning("Cookie wall nog steeds actief -- probeer via GET-parameter")
         session.get(f"{MIJNKNLTB_URL}/cookiewall",
                     params={"returnurl": "/user/login", "accept": "true"},
                     timeout=10)
@@ -103,7 +103,7 @@ def login(session: requests.Session) -> bool:
         m = re.search(r'value="([^"]+)"[^>]*name="__RequestVerificationToken"', r.text)
     token = m.group(1) if m else ""
     if not token:
-        log.warning("Geen CSRF-token gevonden â€” toch proberen")
+        log.warning("Geen CSRF-token gevonden -- toch proberen")
         snippet = re.sub(r'\s+', ' ', r.text)[:400]
         log.warning(f"Pagina snippet: {snippet!r}")
     else:
@@ -119,9 +119,9 @@ def login(session: requests.Session) -> bool:
         inp_type  = type_m.group(1)  if type_m  else "(no type)"
         inp_value = value_m.group(1) if value_m else ""
         if inp_type.lower() != "password":
-            log.info(f"  Form input: name={inp_name!r} type={inp_type!r} value={inp_value[:40]!r}")
+            log.debug(f"  Form input: name={inp_name!r} type={inp_type!r} value={inp_value[:40]!r}")
         else:
-            log.info(f"  Form input: name={inp_name!r} type={inp_type!r} value=***")
+            log.debug(f"  Form input: name={inp_name!r} type={inp_type!r} value=***")
 
     # ReturnUrl is standaard aanwezig in ASP.NET Identity login forms
     return_url_m = re.search(r'name="ReturnUrl"[^>]*value="([^"]*)"', r.text, re.I)
@@ -197,7 +197,7 @@ def zoek_profiel_url(session: requests.Session, bondsnummer: str) -> str | None:
 
         matches = re.findall(r'href="/player-profile/([^"]+)"', r.text)
         if matches:
-            log.info(f"  DoSearch: {len(matches)} resultaat/resultaten voor {bondsnummer}")
+            log.debug(f"  DoSearch: {len(matches)} resultaat/resultaten voor {bondsnummer}")
             return f"{MIJNKNLTB_URL}/player-profile/{matches[0]}"
 
         log.warning(f"  DoSearch: geen profiellink voor {bondsnummer} "
@@ -236,10 +236,10 @@ def haal_padel_sterkte_van_profiel(session: requests.Session, profiel_url: str,
         if m:
             sterkte = re.sub(r'<[^>]+>', '', m.group(1)).strip()
             rating  = m.group(2).strip()
-            log.info(f"  âœ… {bondsnummer}: sterkte={sterkte!r}, rating={rating!r}")
+            log.debug(f"  {bondsnummer}: sterkte={sterkte!r}, rating={rating!r}")
             return {"sterkte": sterkte, "rating": rating}
 
-        log.info(f"  Geen Padel Dubbel rating voor {bondsnummer}")
+        log.debug(f"  Geen Padel Dubbel rating voor {bondsnummer}")
         return {}
     except Exception as e:
         log.warning(f"  Profiel fout ({bondsnummer}): {e}")
@@ -247,16 +247,16 @@ def haal_padel_sterkte_van_profiel(session: requests.Session, profiel_url: str,
 
 
 def haal_padel_sterkte(session: requests.Session, bondsnummer: str, idx: int = 0) -> dict:
-    """Volledig ophaalproces voor Ã©Ã©n lid. Geeft {'sterkte':..., 'rating':...} of {}."""
+    """Volledig ophaalproces voor een lid. Geeft {'sterkte':..., 'rating':...} of {}."""
 
     # Stap 1: zoek profiel-URL
     profiel_url = zoek_profiel_url(session, bondsnummer)
     if profiel_url is None:
-        # Sessie mogelijk verlopen â€” herstellen en opnieuw proberen
+        # Sessie mogelijk verlopen -- herstellen en opnieuw proberen
         if herstel_sessie(session):
             profiel_url = zoek_profiel_url(session, bondsnummer)
     if not profiel_url:
-        log.warning(f"  âŒ Geen profiel gevonden voor {bondsnummer}")
+        log.warning(f"  FOUT Geen profiel gevonden voor {bondsnummer}")
         return {}
 
     # Stap 2: haal sterkte op van profielpagina
@@ -294,14 +294,14 @@ def main():
 
     session = maak_sessie()
     if not login(session):
-        log.error("Login mislukt â€” script stopt")
+        log.error("Login mislukt -- script stopt")
         sys.exit(1)
 
     # Elke 100 leden sessie controleren en zonodig herstellen
     for i, lid in enumerate(te_verwerken):
         bnr = lid.get("bondsnummer", "").strip()
         if not bnr:
-            log.info(f"  [{i+1}/{len(leden_lijst)}] {lid['naam']}: geen bondsnummer")
+            log.debug(f"  [{i+1}/{len(leden_lijst)}] {lid['naam']}: geen bondsnummer")
             lid.setdefault("sterkte_padel", "")
             lid.setdefault("rating_padel", "")
             continue
@@ -310,7 +310,7 @@ def main():
             if not controleer_sessie(session):
                 herstel_sessie(session)
 
-        log.info(f"[{i+1}/{len(leden_lijst)}] {lid['naam']} ({bnr})")
+        log.debug(f"[{i+1}/{len(leden_lijst)}] {lid['naam']} ({bnr})")
         data = haal_padel_sterkte(session, bnr, idx=i)
         lid["sterkte_padel"] = data.get("sterkte", "")
         lid["rating_padel"]  = data.get("rating", "")
