@@ -569,7 +569,7 @@ def annuleer(driver, target_id: str) -> bool:
     """, doel_datum_iso, doel_datum_nl, doel_tijd)
 
     if not gelukt:
-        log.error(f"âŒ Geen annuleer-knop gevonden voor {doel_datum} {doel_tijd}")
+        log.error(f"âŒ Geen annuleer-knop gevonden voor {doel_datum_nl} {doel_tijd}")
         screenshot(driver, "annuleer_geen_knop")
         return False
 
@@ -610,7 +610,7 @@ def annuleer(driver, target_id: str) -> bool:
         body_na = driver.find_element(By.TAG_NAME, "body").text
     except Exception:
         body_na = ""
-    weg = (doel_datum not in body_na) and (doel_tijd not in body_na)
+    weg = (doel_datum_iso not in body_na and doel_datum_nl not in body_na) and (doel_tijd not in body_na)
     if weg:
         log.info(f"âœ… Reservering {target_id} succesvol geannuleerd")
     else:
