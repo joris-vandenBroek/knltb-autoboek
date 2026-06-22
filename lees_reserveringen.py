@@ -1,4 +1,4 @@
-"""
+﻿"""
 Beheer actieve ETV-Volley reserveringen:
 - Zonder argumenten: scrape /mijn/Reservations en schrijf reserveringen.json
 - Met --cancel ID: annuleer de reservering met die ID, dan scrape opnieuw
@@ -973,12 +973,11 @@ def main():
         if args.cancel:
             etv_ok = annuleer(driver, args.cancel)
             if not etv_ok:
-                log.error("âŒ Annuleren op ETV-site mislukt")
-            # Ook agenda-event verwijderen (zelfs als ETV-cancel mislukte, beter
-            # een lege agenda dan een spookafspraak)
-            m = re.match(r"(\d{4}-\d{2}-\d{2})_(\d{4})_", args.cancel)
-            if m:
-                verwijder_uit_agenda(m.group(1), f"{m.group(2)[:2]}:{m.group(2)[2:]}", reservering_id=args.cancel)
+                log.error("Annuleren op ETV-site mislukt — agenda-event blijft staan")
+            else:
+                m = re.match(r"(\d{4}-\d{2}-\d{2})_(\d{4})_", args.cancel)
+                if m:
+                    verwijder_uit_agenda(m.group(1), f"{m.group(2)[:2]}:{m.group(2)[2:]}", reservering_id=args.cancel)
         # Always scrape (na annuleren is dit de bijgewerkte lijst)
         bekende_spelers = _laad_bekende_spelers()
         reserveringen = scrape_reserveringen(driver)
