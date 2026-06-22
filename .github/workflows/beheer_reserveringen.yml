@@ -1,4 +1,4 @@
-name: Beheer Reserveringen
+name: Beheer reserveringen
 
 # - Zonder cancel_id: scrape reserveringen en update reserveringen_{gebruiker}.json
 # - Met cancel_id: annuleer die reservering, dan scrape opnieuw
@@ -59,6 +59,8 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:

@@ -533,7 +533,7 @@ def annuleer(driver, target_id: str) -> bool:
             log.info(f"Reservering lijkt zichtbaar op {url}")
             break
     else:
-        log.warning("Reservering niet zichtbaar op een van de URLs â€” mogelijk al geannuleerd")
+        log.info("Reservering niet meer zichtbaar op ETV -- mogelijk al geannuleerd")
         return True
 
     # Zoek cancel-knop binnen rij/container die datum+tijd bevat

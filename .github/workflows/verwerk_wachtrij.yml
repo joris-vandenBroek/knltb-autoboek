@@ -1,4 +1,4 @@
-name: Verwerk Wachtrij
+name: Verwerk wachtrij
 
 # Getriggerd door cron-job.org om 06:50 NL (tijdzone-onafhankelijk).
 # Loopt door alle gebruiker-subfolders in wachtrij/ en triggert boek.yml
