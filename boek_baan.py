@@ -60,11 +60,20 @@ WACHT_TIMEOUT = 15
 # â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 
+def dagdeel(tijd: str) -> str:
+    uur = int(tijd.split(":")[0])
+    if uur < 12:   return "Ochtend"
+    elif uur < 17: return "Middag"
+    else:          return "Avond"
+
+
 def genereer_tijden(voorkeur_tijd: str) -> list:
-    """Genereer tijden rondom voorkeur, 30 min stappen, tussen 08:00 en 22:00."""
+    """Genereer tijden rondom voorkeur, 30 min stappen, beperkt tot hetzelfde dagdeel."""
+    DAGDEEL_GRENZEN = {"Ochtend": ("08:00", "11:30"), "Middag": ("12:00", "16:30"), "Avond": ("17:00", "22:00")}
+    dd = dagdeel(voorkeur_tijd)
+    vroegst = datetime.strptime(DAGDEEL_GRENZEN[dd][0], "%H:%M")
+    laatst  = datetime.strptime(DAGDEEL_GRENZEN[dd][1], "%H:%M")
     basis   = datetime.strptime(voorkeur_tijd, "%H:%M")
-    vroegst = datetime.strptime("08:00", "%H:%M")
-    laatst  = datetime.strptime("22:00", "%H:%M")
     tijden  = [basis]
     stap = 1
     while True:
@@ -81,13 +90,6 @@ def genereer_tijden(voorkeur_tijd: str) -> list:
             break
         stap += 1
     return [t.strftime("%H:%M") for t in tijden]
-
-
-def dagdeel(tijd: str) -> str:
-    uur = int(tijd.split(":")[0])
-    if uur < 12:  return "Ochtend"
-    elif uur < 17: return "Middag"
-    else:          return "Avond"
 
 
 # â"€â"€ Google Agenda â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
