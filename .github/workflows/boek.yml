@@ -1,4 +1,4 @@
-name: Reserveer Padelbaan
+name: Reserveer baan
 
 on:
   workflow_dispatch:
