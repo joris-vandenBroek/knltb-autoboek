@@ -167,7 +167,7 @@ def chrome_major_versie() -> int | None:
                 return v
         except Exception:
             pass
-    log.warning("Chrome versie niet detecteerbaar  UC bepaalt zelf de driver versie")
+    log.debug("Chrome versie niet detecteerbaar  UC bepaalt zelf de driver versie")
     return None
 
 
@@ -193,7 +193,7 @@ def wacht_op(driver, by, waarde, timeout=WACHT_TIMEOUT):
 
 def screenshot(driver, naam):
     driver.save_screenshot(f"{naam}.png")
-    log.info(f" Screenshot: {naam}.png | URL: {driver.current_url}")
+    log.debug(f" Screenshot: {naam}.png | URL: {driver.current_url}")
 
 
 def _log_zichtbare_spelers(driver, spelers, label: str):
@@ -220,14 +220,10 @@ def _log_zichtbare_spelers(driver, spelers, label: str):
     counts = {s: body.count(s) for s in spelers}
     aanwezig = [s for s, c in counts.items() if c > 0]
     missend  = [s for s, c in counts.items() if c == 0]
-    log.info(f" SPELERS-CHECK [{label}] URL={url}")
-    log.info(f"    Aanwezig ({len(aanwezig)}/{len(spelers)}): {aanwezig}")
-    if missend:
-        if spelers_zichtbaar_pagina:
-            log.warning(f"    MIST ({len(missend)}): {missend}")
-        else:
-            log.info(f"   (deze pagina toont geen spelerslijst  "
-                     f"{len(missend)} 'missend' is verwacht)")
+    log.debug(f" SPELERS-CHECK [{label}] URL={url}")
+    log.debug(f"    Aanwezig ({len(aanwezig)}/{len(spelers)}): {aanwezig}")
+    if missend and spelers_zichtbaar_pagina:
+        log.warning(f"    MIST ({len(missend)}): {missend}")
 
 
 # â"€â"€ STAP 1: Inloggen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -260,13 +256,13 @@ def login(driver: uc.Chrome) -> bool:
     # Log alle input-velden voor diagnose
     try:
         alle_inputs = driver.find_elements(By.TAG_NAME, "input")
-        log.info(f"Gevonden input-velden ({len(alle_inputs)}):")
+        log.debug(f"Gevonden input-velden ({len(alle_inputs)}):")
         for inp in alle_inputs:
-            log.info(f"  type={inp.get_attribute('type')} name={inp.get_attribute('name')} "
-                     f"id={inp.get_attribute('id')} placeholder={inp.get_attribute('placeholder')} "
-                     f"visible={inp.is_displayed()}")
+            log.debug(f"  type={inp.get_attribute('type')} name={inp.get_attribute('name')} "
+                      f"id={inp.get_attribute('id')} placeholder={inp.get_attribute('placeholder')} "
+                      f"visible={inp.is_displayed()}")
     except Exception as e:
-        log.warning(f"Input-veld scan mislukt: {e}")
+        log.debug(f"Input-veld scan mislukt: {e}")
 
     try:
         gebruiker_veld = wacht_op(driver, By.XPATH,
@@ -275,7 +271,7 @@ def login(driver: uc.Chrome) -> bool:
             "or @id='username' or @id='Username' or @id='UserName' "
             "or contains(@placeholder,'bondsnummer') or contains(@placeholder,'gebruikersnaam') "
             "or contains(@placeholder,'e-mail') or contains(@placeholder,'email')]")
-        log.info(f"Gebruikersveld: name='{gebruiker_veld.get_attribute('name')}' "
+        log.debug(f"Gebruikersveld: name='{gebruiker_veld.get_attribute('name')}' "
                  f"id='{gebruiker_veld.get_attribute('id')}'")
 
         # Vul in via JS — triggert ook React/Vue native input events
@@ -286,10 +282,10 @@ def login(driver: uc.Chrome) -> bool:
             el.dispatchEvent(new Event('input',  {bubbles: true}));
             el.dispatchEvent(new Event('change', {bubbles: true}));
         """, gebruiker_veld, BONDSNUMMER)
-        log.info(f"Bondsnummer ingevuld via JS ({len(BONDSNUMMER)} tekens)")
+        log.debug(f"Bondsnummer ingevuld via JS ({len(BONDSNUMMER)} tekens)")
 
         ww_veld = wacht_op(driver, By.XPATH, "//input[@type='password']")
-        log.info(f"Wachtwoordveld: name='{ww_veld.get_attribute('name')}' "
+        log.debug(f"Wachtwoordveld: name='{ww_veld.get_attribute('name')}' "
                  f"id='{ww_veld.get_attribute('id')}'")
 
         driver.execute_script("""
@@ -299,7 +295,7 @@ def login(driver: uc.Chrome) -> bool:
             el.dispatchEvent(new Event('input',  {bubbles: true}));
             el.dispatchEvent(new Event('change', {bubbles: true}));
         """, ww_veld, WACHTWOORD)
-        log.info(f"Wachtwoord ingevuld via JS ({len(WACHTWOORD)} tekens)")
+        log.debug(f"Wachtwoord ingevuld via JS ({len(WACHTWOORD)} tekens)")
 
         time.sleep(1)
 
@@ -436,8 +432,8 @@ def _zoek_veld_spelers(driver: uc.Chrome):
     alle = driver.find_elements(By.XPATH, "//input[@type='text' or @type='search']")
     for inp in alle:
         if inp.is_displayed() and inp.is_enabled():
-            log.info(f"  Zoekveld: placeholder='{inp.get_attribute('placeholder')}' "
-                     f"id='{inp.get_attribute('id')}'")
+            log.debug(f"  Zoekveld: placeholder='{inp.get_attribute('placeholder')}' "
+                      f"id='{inp.get_attribute('id')}'")
             return inp
     return None
 
@@ -487,8 +483,8 @@ def _ruim_onverwachte_spelers_op(driver: uc.Chrome, verwachte_data_ids: set) -> 
         for item in onverwachte or []:
             did = item.get('dataId')
             naam = item.get('naam', '?')
-            log.warning(f"   Onverwachte speler in #youPlayWith: '{naam}' "
-                        f"(data-id={did}) — wordt verwijderd")
+            log.debug(f"   Onverwachte speler in #youPlayWith: '{naam}' "
+                      f"(data-id={did}) — wordt verwijderd")
             try:
                 # jQuery .trigger('click') werkt voor ETV's verwijder-handler;
                 # zelfde patroon als de speler-toevoegen fallback.
@@ -508,14 +504,14 @@ def _ruim_onverwachte_spelers_op(driver: uc.Chrome, verwachte_data_ids: set) -> 
                     return !document.querySelector('a.removePlayer[data-id="' + arguments[0] + '"]');
                 """, did)
                 if weg:
-                    log.info(f"   Verwijderd via {ok}: '{naam}'")
+                    log.debug(f"   Verwijderd via {ok}: '{naam}'")
                     verwijderd.append(naam)
                 else:
-                    log.warning(f"   '{naam}' nog steeds aanwezig na {ok}-klik")
+                    log.debug(f"   '{naam}' nog steeds aanwezig na {ok}-klik")
             except Exception as e:
                 log.error(f"  Kon onverwachte speler '{naam}' niet verwijderen: {e}")
     except Exception as e:
-        log.warning(f"  Scan onverwachte spelers faalde: {e}")
+        log.debug(f"  Scan onverwachte spelers faalde: {e}")
     return verwijderd
 
 
@@ -650,7 +646,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
             zoek_veld.send_keys(Keys.DELETE)
             time.sleep(0.3)
             zoek_veld.send_keys(zoekterm)
-            log.info(f"  Zoekterm: '{zoekterm}'")
+            log.debug(f"  Zoekterm: '{zoekterm}'")
         except Exception as e:
             log.warning(f"  Zoekveld input faalde ({e}), volgende term")
             zoek_veld = _zoek_veld_spelers(driver)
@@ -675,7 +671,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
         data_id, tekst = _vind_addplayer_data_id()
         if not data_id:
             continue
-        log.info(f"   Card gevonden: data-id={data_id}, tekst='{tekst}'")
+        log.debug(f"   Card gevonden: data-id={data_id}, tekst='{tekst}'")
 
         # Pre-klik check: staat deze speler AL in #youPlayWith? Dan was
         # 'ie in een vorige booking-poging al toegevoegd en blijft hangen
@@ -713,7 +709,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
         # Strategie 1: ActionChains
         try:
             ActionChains(driver).move_to_element(el).click().perform()
-            log.info(f"  ActionChains click op data-id={data_id}")
+            log.debug(f"  ActionChains click op data-id={data_id}")
         except Exception as e:
             log.warning(f"  ActionChains faalde ({type(e).__name__})")
         time.sleep(1.0)
@@ -753,8 +749,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
             time.sleep(1.5)
 
         if verified:
-            log.info(f"   {speler} ECHT geselecteerd (data-id={data_id}, "
-                     f"zoekterm '{zoekterm}')")
+            log.debug(f"   {speler} geselecteerd (data-id={data_id}, zoekterm '{zoekterm}')")
             # Defensief: ruim mystery-toevoegingen op (Daniel â†’ Ellen Daniels
             # bug uit run #69). Onverwachte data-ids in #youPlayWith â†’ Ã—-klik.
             _ruim_onverwachte_spelers_op(driver, verwachte_data_ids | {data_id})
@@ -807,7 +802,7 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
             if (!c) return [];
             return Array.from(c.querySelectorAll('h6')).map(h => h.innerText.trim());
         """)
-        log.info(f"  Al in 'Je gaat spelen met' bij start: {bestaand}")
+        log.debug(f"  Al in 'Je gaat spelen met' bij start: {bestaand}")
     except Exception:
         pass
 
@@ -823,7 +818,7 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
     # ETV's typeahead-substring-matches — bug uit run #68/#69).
     toegevoegde_data_ids = set()
     for i, speler in enumerate([speler2, speler3, speler4], start=2):
-        log.info(f"Speler {i} toevoegen: '{speler}'")
+        log.debug(f"Speler {i} toevoegen: '{speler}'")
         # 2-poging retry. Bij fail (network glitch, ETV typeahead die niet laadt,
         # of een onverwacht ETV-foutgeval): refresh + opnieuw. De defensieve
         # cleanup uit commit ae2bfbd zorgt dat een halve eerdere poging geen
@@ -849,6 +844,7 @@ def voeg_spelers_toe(driver: uc.Chrome, speler2: str, speler3: str, speler4: str
             return False
         toegevoegde_data_ids.add(nieuwe_id)
 
+    log.info(f"Spelers geselecteerd: {SPELER1}, {speler2}, {speler3}, {speler4}")
     screenshot(driver, "06_spelers_toegevoegd")
 
     volgende = _zoek_knop(driver, ["Volgende", "Next"])
@@ -960,7 +956,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
                 return el.getAttribute('data-date') + ':' + (el.innerText || '').trim().slice(0, 20);
             }).join(' | ');
         """)
-        log.info(f"Alle data-date elementen: {alle_dayparts}")
+        log.debug(f"Alle data-date elementen: {alle_dayparts}")
     except Exception:
         pass
 
