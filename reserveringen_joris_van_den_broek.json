@@ -1,5 +1,5 @@
 {
-  "bijgewerkt": "2026-06-21T11:10:56",
+  "bijgewerkt": "2026-06-22T07:04:32",
   "reserveringen": [
     {
       "id": "2026-06-23_2000_tennis-06",
@@ -18,6 +18,25 @@
         "Josette Pijnenborg",
         "Jan van Bragt",
         "Theo Minneboo"
+      ]
+    },
+    {
+      "id": "2026-06-24_2030_padel-3",
+      "datum": "2026-06-24",
+      "tijd": "20:30",
+      "baan": "Padel 3",
+      "tekst": "24-06-2026\t20:30 - 21:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Joris van den Broek",
+        "Toine Aanraad",
+        "Chris van Waardenburg",
+        "Peter Nijhof"
       ]
     }
   ]
