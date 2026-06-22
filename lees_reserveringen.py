@@ -1,4 +1,4 @@
-﻿﻿"""
+﻿"""
 Beheer actieve ETV-Volley reserveringen:
 - Zonder argumenten: scrape /mijn/Reservations en schrijf reserveringen.json
 - Met --cancel ID: annuleer de reservering met die ID, dan scrape opnieuw
