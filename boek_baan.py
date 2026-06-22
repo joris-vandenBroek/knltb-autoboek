@@ -1113,7 +1113,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
         # Nog steeds ReservationsDay — ETV heeft submit niet verwerkt.
         # Geen refresh (wist dagpart-selectie); direct opnieuw proberen.
-        log.warning(f"  Geen navigatie. URL: {url_na} | body[:200]: {body_na[:200]}")
+        log.info(f"  Geen navigatie na Volgende — blijft op {url_na}")
         screenshot(driver, f"geen_nav_poging{poging}")
 
     log.error(f" kies_dag faalde definitief na 3 pogingen")
