@@ -1083,13 +1083,13 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             continue
 
         try:
-            WebDriverWait(driver, 3).until(
+            WebDriverWait(driver, 1.5).until(
                 lambda d: "ReservationsCourt" in d.current_url
                           or "ReservationsPlayers" in d.current_url
                           or "ReservationsDay" not in d.current_url
             )
         except TimeoutException:
-            log.warning("  Geen herkenbare navigatie binnen 3s")
+            log.warning("  Geen herkenbare navigatie binnen 1.5s")
         except Exception:
             pass
 
@@ -2004,7 +2004,7 @@ def main():
             # Deadline 07:01:30: daarna geeft de outer-retry meer kans.
             doel_window_open = reserveringsdatum.replace(hour=7, minute=0, second=1, microsecond=0)
             dag_deadline     = reserveringsdatum.replace(hour=7, minute=1, second=30, microsecond=0)
-            MAX_DAG_POGINGEN = 30
+            MAX_DAG_POGINGEN = 50
 
             dag_gelukt = False
             for dag_poging in range(1, MAX_DAG_POGINGEN + 1):
