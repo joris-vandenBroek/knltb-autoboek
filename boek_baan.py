@@ -39,6 +39,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 log = logging.getLogger(__name__)
+logging.getLogger("undetected_chromedriver").setLevel(logging.WARNING)
 
 # â"€â"€ Instellingen â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 LOGIN_URL    = "https://www.etv-volley.nl/mijn"
@@ -344,7 +345,7 @@ def login(driver: uc.Chrome) -> bool:
                 if zoekterm in body_tekst.lower():
                     log.warning(f" '{zoekterm}' gevonden in paginatekst")
             log.info(f"Paginatitel na login: {driver.title}")
-            log.info(f"Paginatekst (eerste 500): {body_tekst[:500]}")
+            log.debug(f"Paginatekst (eerste 500): {body_tekst[:500]}")
         except Exception:
             pass
 
@@ -716,7 +717,7 @@ def _voeg_speler_toe(driver: uc.Chrome, speler: str, index: int,
 
         # Strategie 2 (als 1 niet werkte): jQuery trigger
         if not _is_in_youplaywith(data_id):
-            log.info(f"  ActionChains registreerde niet  jQuery .trigger('click') fallback")
+            log.debug(f"  ActionChains registreerde niet  jQuery .trigger('click') fallback")
             try:
                 driver.execute_script(
                     'if (window.jQuery) '
@@ -1188,7 +1189,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
     # Log paginatekst voor diagnose
     try:
         pagina = driver.find_element(By.TAG_NAME, "body").text
-        log.info(f"Baan-pagina tekst (3000): {pagina[:3000]}")
+        log.debug(f"Baan-pagina tekst (3000): {pagina[:3000]}")
     except Exception:
         pass
 
@@ -1214,7 +1215,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
             window.scrollTo(0, document.body.scrollHeight * 0.7);
             return 'Fallback scroll 70%';
         """, PADEL_BANEN if sport == "padel" else TENNIS_BANEN)
-        log.info(f"Scroll naar {sport}: {scroll_result}")
+        log.debug(f"Scroll naar {sport}: {scroll_result}")
         time.sleep(0.8)
         _sluit_cookie_banner(driver)
     except Exception as e:
@@ -1279,7 +1280,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
 
         try:
             d_resultaat = driver.execute_script('return window._kiesBaanResult || ""')
-            log.info(f"  diagnose: match='{d_resultaat}' voor tijd '{tijd}'")
+            log.debug(f"  diagnose: match='{d_resultaat}' voor tijd '{tijd}'")
         except Exception:
             pass
 
@@ -1304,7 +1305,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
                        + ' txt=' + (el.innerText||'').trim().slice(0,30)
                        + ' html=' + el.outerHTML.slice(0,150);
             """, cel)
-            log.info(f"  Tijdslot element: {info}")
+            log.debug(f"  Tijdslot element: {info}")
         except Exception:
             pass
 
@@ -1362,7 +1363,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
 
         try:
             body_na = driver.find_element(By.TAG_NAME, "body").text
-            log.info(f"  Body na klik (500): {body_na[:500]}")
+            log.debug(f"  Body na klik (500): {body_na[:500]}")
         except Exception:
             pass
 
@@ -1454,8 +1455,8 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             url_na_vol = driver.current_url
             log.info(f"  URL na Volgende: {url_na_vol}")
             try:
-                log.info(f"  Body na Volgende (400): "
-                         f"{driver.find_element(By.TAG_NAME,'body').text[:400]}")
+                log.debug(f"  Body na Volgende (400): "
+                          f"{driver.find_element(By.TAG_NAME,'body').text[:400]}")
             except Exception:
                 pass
 
@@ -1492,7 +1493,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
         log.info(f"  Knop gevonden: id={knop_info.get('id')} "
                  f"data-url={knop_info.get('dataUrl')} "
                  f"redirect={knop_info.get('redirect')}")
-        log.info(f"  HTML: {knop_info.get('html')}")
+        log.debug(f"  HTML: {knop_info.get('html')}")
 
         data_url = knop_info.get('dataUrl', '')
         redirect = knop_info.get('redirect', '/me/Reservations')
