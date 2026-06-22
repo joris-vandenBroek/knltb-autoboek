@@ -152,7 +152,7 @@ De reserveringsdatum is **(speeldatum - 2 kalenderdagen)**. ETV opent het slot o
 
 Login + spelers gebeurt tijdens de wachttijd voor 07:00. Vanaf 07:00:10 (10s buffer voor klok-skew) wordt dag-keuze geprobeerd -- ETV's server weigert daypart-selectie voor 07:00. Bij mislukken: 5 herhalingen met 10s ertussen. Na een geslaagde dag-selectie volgt de rest van de wizard direct zonder extra wachttijd.
 
-**Race-conditie afhandeling.** Als iemand anders net sneller dezelfde baan + tijd claimt (~1-2 sec venster tussen kies en bevestig), reageert ETV met "niet gevonden" / "al gereserveerd". Het script detecteert dit, navigeert terug naar de baan-keuze pagina + forceert een refresh (ETV toont bezette tijdcellen daarna niet meer), en probeert de volgende vrije padelbaan voor dezelfde tijd. Pas als alle 6 padelbanen op die tijd weg zijn, valt 'ie terug op alternatieve tijden. Max 6 pogingen totaal. Zie [knltb-autoboek.md sectie 11.11](knltb-autoboek.md#1111-race-conditie-andere-boeker-pakt-de-baan-tussen-kies-en-bevestig).
+**Race-conditie afhandeling.** Als iemand anders net sneller dezelfde baan + tijd claimt (~1-2 sec venster tussen kies en bevestig), reageert ETV met "niet gevonden" / "al gereserveerd". Het script detecteert dit, navigeert terug naar de baan-keuze pagina + forceert een refresh (ETV toont bezette tijdcellen daarna niet meer), en probeert de volgende vrije baan voor dezelfde tijd. Pas als alle banen op die tijd weg zijn, valt 'ie terug op alternatieve tijden binnen hetzelfde dagdeel (Ochtend/Middag/Avond). Max 6 pogingen totaal. Zie [knltb-autoboek.md sectie 11.11](knltb-autoboek.md#1111-race-conditie-andere-boeker-pakt-de-baan-tussen-kies-en-bevestig).
 
 ### Mijn reserveringen / annuleren
 
@@ -189,12 +189,12 @@ De PWA toont onder het ledenaantal "Laatst ververst op DD-MM-YYYY".
 | Log meldt `Onverwachte speler in #youPlayWith` + `Verwijderd` | Klopt -- defensieve cleanup. ETV's typeahead voegde een speler met overlappende naam toe. Het script ruimt die op en gaat door |
 | Rode badge op tandwiel-icoon in PWA | Je GitHub PAT verloopt binnen 7 dagen (of is al verlopen). Genereer nieuwe op github.com/settings/tokens (scope `workflow`) -> tandwiel -> vul in + nieuwe verloopdatum |
 | Automatisch issue `auto-failure,boek` in repo | Workflow `boek.yml` faalde. Check link in het issue voor de run-log + download screenshots-artifact. Sluit issue na onderzoek (volgende failure = nieuw issue) |
-| Log toont `Padel X was bezet door iemand anders` | Klopt -- race-conditie, script probeert automatisch volgende vrije baan. Eindigt 'ie alsnog met OK: alles goed. Eindigt 'ie met fout na 6 pogingen: alle padelbanen op alle alternatieve tijden waren bezet (zeldzaam) |
+| Log toont `Padel X was bezet door iemand anders` | Klopt -- race-conditie, script probeert automatisch volgende vrije baan. Eindigt 'ie alsnog met OK: alles goed. Eindigt 'ie met fout na 6 pogingen: alle banen op alle alternatieve tijden (binnen hetzelfde dagdeel) waren bezet (zeldzaam) |
 | Wachtrij-item niet verwerkt | Check Actions -> Verwerk Wachtrij. Cron-job.org kan ook 401 geven -> PAT-scope checken |
 | Afspraak niet in agenda | Events worden aangemaakt bij de volgende Verversen in de PWA of de dagelijkse cron om 07:30. Controleer ook of agenda gedeeld is met het serviceaccount en of `GOOGLE_CALENDAR_CREDENTIALS` correct is |
 | Naam niet gevonden in autocomplete | Tik Verversen om de ledenlijst bij te werken |
 | App vraagt PAT | Voer GitHub PAT in via tandwiel (eenmalig per apparaat, scope `workflow` is genoeg) |
-| Annuleren werkt niet | Check beheer_reserveringen log. Agenda-event wordt verwijderd bij eerstvolgende beheer_reserveringen run |
+| Annuleren werkt niet | Check beheer_reserveringen log. Als ETV-annulering slaagt wordt agenda-event direct verwijderd. Als ETV-annulering mislukt blijft het agenda-event bewust staan. |
 | Padel sterktes niet bijgewerkt | Check Actions -> Padel speelsterktes ophalen. Controleer `KNLTB_LOGINNAAM` en `KNLTB_WACHTWOORD` secrets |
 
 ---

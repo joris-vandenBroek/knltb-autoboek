@@ -323,6 +323,7 @@ Elke keer dat `index.html` of `sw.js` inhoudelijk verandert moet dit versienumme
 
 ### 8.1 boek.yml
 
+**Naam:** Reserveer baan  
 **Trigger:** alleen `workflow_dispatch`.  
 **Inputs:** `datum` (YYYY-MM-DD), `tijd` (HH:MM), `sport` (padel/tennis, default padel), `speler2`, `speler3`, `speler4`.
 
@@ -395,7 +396,7 @@ if nu.date() < reserveringsdatum.date():
 2. Klik "Baan afhangen"
 3. Voeg 3 spelers toe via typeahead
 4. Wacht tot 07:01 NL (alleen op reserveringsdatum)
-5. Kies dag + dagdeel (retry-loop, max 3 pogingen)
+5. Kies dag + dagdeel (retry-loop, max 50 pogingen a 1,5s)
 6. Kies tijdslot (zoekt `.timeincourt` of `[data-hour]` cellen)
 7. Bevestig (intercepteert jQuery.ajax POST naar `/Ajax/Profile/SaveReservation`)
 8. Verifieer op `/mijn/Reservations`
@@ -418,7 +419,7 @@ Na BEZET: `driver.get(ReservationsCourt)` + `driver.refresh()` voor verse DOM (b
 
 Zonder argumenten: scrape `/mijn/Reservations`, schrijf `reserveringen.json`, commit/push.
 
-Met `--cancel <id>`: annuleer die reservering op ETV-site + verwijder matching Google Agenda-event + scrape opnieuw.
+Met `--cancel <id>`: annuleer die reservering op ETV-site. Als de ETV-annulering slaagt, wordt het matching Google Agenda-event direct verwijderd. Bij mislukken blijft het agenda-event bewust staan (geen vals-negatief verwijdering). Daarna scrape opnieuw.
 
 ### ID-format
 
@@ -573,6 +574,53 @@ mijnknltb.toernooi.nl gebruikt veldnaam `Login` in het ASP.NET Identity formulie
 
 PowerShell's `Set-Content -Encoding utf8` schrijft een UTF-8 BOM. GitHub Actions herkent dan `workflow_dispatch` niet meer. Bovendien corrupteert het emoji-tekens in shell `run:` blokken.  
 **Fix:** schrijf YAML-bestanden altijd met de Write-tool (Claude Code) of met `[System.IO.File]::WriteAllText` met `UTF8Encoding($false)`. Gebruik geen emoji in YAML.
+
+
+### 13.15 ETV toont datums als DD-MM-YYYY, niet ISO
+
+ETV Volley rendert datums in de reserverings-pagina als `DD-MM-YYYY` (bijv. `24-06-2026`), niet als `YYYY-MM-DD`. De reserverings-ID's in de code gebruiken wel ISO-formaat.  
+**Fix:** `annuleer()` in `lees_reserveringen.py` berekent zowel `doel_datum_iso` als `doel_datum_nl` en accepteert beide in de JS-rijselectie.
+
+### 13.16 UTF-8 BOM breekt Python op Linux
+
+PowerShell's `[System.IO.File]::WriteAllBytes` met `UTF8.GetBytes()` schrijft een BOM-loze UTF-8. Maar `WriteAllText` en `Set-Content -Encoding utf8` schrijven wel een BOM. Python op Linux (GitHub Actions) weigert bestanden die beginnen met BOM (`U+FEFF`) met `SyntaxError`.  
+**Fix:** altijd `[System.IO.File]::WriteAllBytes(C:\Users\broek01\knltb-autoboek\knltb-autoboek.md, [System.Text.Encoding]::UTF8.GetBytes(# knltb-autoboek -- Volledige documentatie
+
+**GitHub-repository:** `joris-vandenBroek/knltb-autoboek`  
+**Doel:** Automatisch een padelbaan reserveren bij ETV Volley via de KNLTB-ledenportal, aangestuurd via een PWA op de telefoon, inclusief Google Agenda-integratie en wachtrij voor toekomstige reserveringen.
+
+---
+
+## Inhoudsopgave
+
+1. [Hoe werkt het in grote lijnen](#1-hoe-werkt-het-in-grote-lijnen)
+2. [Visuele flows](#2-visuele-flows)
+3. [Repository-structuur](#3-repository-structuur)
+4. [Benodigde GitHub Secrets](#4-benodigde-github-secrets)
+5. [Externe cron-trigger via cron-job.org](#5-externe-cron-trigger-via-cron-joborg)
+6. [PWA-frontend -- docs/index.html](#6-pwa-frontend--docsindexhtml)
+7. [Service Worker -- docs/sw.js](#7-service-worker--docsswjs)
+8. [Workflows](#8-workflows)
+9. [boek_baan.py -- stap voor stap](#9-boek_baanpy--stap-voor-stap)
+10. [lees_reserveringen.py -- reserveringen + annuleren](#10-lees_reserveringenpy--reserveringen--annuleren)
+11. [haal_leden_op.py -- ledenlijst scrapen](#11-haal_leden_oppy--ledenlijst-scrapen)
+12. [haal_padel_sterktes.py -- padel speelsterktes ophalen](#12-haal_padel_sterktesppy--padel-speelsterktes-ophalen)
+13. [Technische valkuilen en beslissingen](#13-technische-valkuilen-en-beslissingen)
+14. [Wijzigingen aanbrengen](#14-wijzigingen-aanbrengen)
+15. [Toekomstige features -- multi-user setup](#15-toekomstige-features--multi-user-setup)
+16. [Operationele veiligheidsnetten](#16-operationele-veiligheidsnetten)
+
+---
+
+### 13.15 ETV toont datums als DD-MM-YYYY, niet ISO
+
+ETV Volley rendert datums in de reserverings-pagina als `DD-MM-YYYY` (bijv. `24-06-2026`), niet als `YYYY-MM-DD`. De reserverings-ID's in de code gebruiken wel ISO-formaat.  
+**Fix:** `annuleer()` in `lees_reserveringen.py` berekent zowel `doel_datum_iso` als `doel_datum_nl` en accepteert beide in de JS-rijselectie.
+
+### 13.16 UTF-8 BOM breekt Python op Linux (GitHub Actions)
+
+PowerShell's `WriteAllText` en `Set-Content -Encoding utf8` schrijven een UTF-8 BOM (byte `0xEF 0xBB 0xBF`). Python op Linux weigert bestanden die beginnen met BOM met `SyntaxError: invalid non-printable character U+FEFF`.  
+**Fix:** altijd `[System.IO.File]::WriteAllBytes($p, [System.Text.Encoding]::UTF8.GetBytes($c))` gebruiken (geen BOM), of de Write-tool van Claude Code.
 
 ---
 
