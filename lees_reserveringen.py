@@ -1,4 +1,4 @@
-﻿"""
+﻿﻿"""
 Beheer actieve ETV-Volley reserveringen:
 - Zonder argumenten: scrape /mijn/Reservations en schrijf reserveringen.json
 - Met --cancel ID: annuleer de reservering met die ID, dan scrape opnieuw
@@ -36,6 +36,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)]
 )
 log = logging.getLogger(__name__)
+logging.getLogger("undetected_chromedriver").setLevel(logging.WARNING)
 
 LOGIN_URL        = "https://www.etv-volley.nl/mijn"
 RESERVERINGEN_URLS = [
@@ -165,7 +166,7 @@ def scrape_reserveringen(driver) -> list:
                 pass
             screenshot(driver, f"03_reserveringen_{url.split('/')[-2]}")
             body_text = driver.find_element(By.TAG_NAME, "body").text
-            log.info(f"  {url} body[:500]: {body_text[:500]}")
+            log.debug(f"  {url} body[:500]: {body_text[:500]}")
             # Heeft de pagina herkenbare datum/tijd patronen?
             if re.search(r"\d{1,2}[-/:]\d{1,2}", body_text):
                 gevonden_url = url
@@ -269,9 +270,9 @@ def scrape_reserveringen(driver) -> list:
         return resultaat;
     """)
 
-    log.info(f"Rauwe scrape: {len(raw)} kandidaten")
+    log.debug(f"Rauwe scrape: {len(raw)} kandidaten")
     for r in raw[:20]:
-        log.info(f"  [{r.get('type')}] tekst='{r.get('tekst', r.get('btnTekst', ''))[:120]}'")
+        log.debug(f"  [{r.get('type')}] tekst='{r.get('tekst', r.get('btnTekst', ''))[:120]}'")
 
     # Parse naar gestructureerde reserveringen
     reserveringen = []
@@ -397,7 +398,7 @@ def scrape_spelers_per_reservering(driver, reserveringen: list, bekende_spelers=
 
         if not reservation_id:
             tr_html_snippet = (r.get('_trHtml') or '')[:600]
-            log.info(f"  [{idx}] {rid}: geen ReservationId in tr â†’ skip. tr-HTML (600): {tr_html_snippet}")
+            log.debug(f"  [{idx}] {rid}: geen ReservationId in tr â†’ skip. tr-HTML (600): {tr_html_snippet}")
             continue
 
         # Submit het EditReservation-form direct via JS. Werkt rond
@@ -405,7 +406,7 @@ def scrape_spelers_per_reservering(driver, reserveringen: list, bekende_spelers=
         # forceren met de hidden ReservationId + CSRF-token uit DOM.
         # POST naar /me/EditReservation â†’ server stuurt redirect naar
         # de wijzig-pagina met spelers ingevuld.
-        log.info(f"  [{idx}] {rid}: submit EditReservation form (id={reservation_id})")
+        log.debug(f"  [{idx}] {rid}: submit EditReservation form (id={reservation_id})")
         try:
             submit_result = driver.execute_script("""
                 var rid = arguments[0];
@@ -419,7 +420,7 @@ def scrape_spelers_per_reservering(driver, reserveringen: list, bekende_spelers=
                 }
                 return 'form-not-found';
             """, reservation_id)
-            log.info(f"      JS form.submit() â†’ {submit_result}")
+            log.debug(f"      JS form.submit() â†’ {submit_result}")
             if submit_result != 'submitted':
                 continue
         except Exception as e:
@@ -835,7 +836,7 @@ def verwijder_uit_agenda(datum: str, tijd: str, reservering_id: str = "") -> boo
             singleEvents=True,
         ).execute()
         events = events_result.get('items', [])
-        log.info(f"  Agenda-zoekvenster {time_min} â†’ {time_max}: {len(events)} 'Padel'-event(s) gevonden")
+        log.debug(f"  Agenda-zoekvenster {time_min} â†’ {time_max}: {len(events)} 'Padel'-event(s) gevonden")
 
         # Match op datum+tijd substring (zonder timezone)
         target_dt_local = start_dt.strftime("%Y-%m-%dT%H:%M")
@@ -846,7 +847,7 @@ def verwijder_uit_agenda(datum: str, tijd: str, reservering_id: str = "") -> boo
             # Match op start-datetime prefix (negeer tz-suffix) en 'Padel' in summary
             if target_dt_local in ev_start and 'ETV' in ev_summary:
                 ev_id = ev.get('id')
-                log.info(f"  Verwijder: '{ev_summary}' (start {ev_start})")
+                log.debug(f"  Verwijder: '{ev_summary}' (start {ev_start})")
                 service.events().delete(
                     calendarId=GOOGLE_CALENDAR_ID, eventId=ev_id
                 ).execute()
