@@ -56,7 +56,9 @@ jobs:
           fi
           git commit -m "Ledenlijst bijgewerkt"
           for i in 1 2 3 4 5; do
-            git pull --rebase origin main || true
+            git stash --include-untracked || true
+            git pull --rebase origin main
+            git stash pop || true
             if git push; then
               echo "Push gelukt (poging $i)"
               exit 0
