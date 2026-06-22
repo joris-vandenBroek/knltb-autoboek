@@ -516,8 +516,9 @@ def annuleer(driver, target_id: str) -> bool:
     if not m:
         log.error(f"âŒ Ongeldige ID: {target_id}")
         return False
-    doel_datum = m.group(1)
-    doel_tijd  = f"{m.group(2)[:2]}:{m.group(2)[2:]}"
+    doel_datum_iso = m.group(1)
+    doel_datum_nl  = "-".join(reversed(doel_datum_iso.split("-")))
+    doel_tijd      = f"{m.group(2)[:2]}:{m.group(2)[2:]}"
 
     # Probeer eerst /mijn/Reservations
     for url in RESERVERINGEN_URLS:
@@ -527,7 +528,7 @@ def annuleer(driver, target_id: str) -> bool:
             body = driver.find_element(By.TAG_NAME, "body").text
         except Exception:
             body = ""
-        if doel_datum in body or doel_tijd in body:
+        if doel_datum_iso in body or doel_datum_nl in body or doel_tijd in body:
             log.info(f"Reservering lijkt zichtbaar op {url}")
             break
     else:
@@ -536,13 +537,15 @@ def annuleer(driver, target_id: str) -> bool:
 
     # Zoek cancel-knop binnen rij/container die datum+tijd bevat
     gelukt = driver.execute_script("""
-        var doelDatum = arguments[0];
-        var doelTijd  = arguments[1];
+        var doelDatumIso = arguments[0];
+        var doelDatumNl  = arguments[1];
+        var doelTijd     = arguments[2];
         var rijen = document.querySelectorAll('table tr, li, div[class*="booking"], div[class*="reservation"], div[class*="reservering"]');
         for (var i = 0; i < rijen.length; i++) {
             var rij = rijen[i];
             var tekst = (rij.innerText || '').trim();
-            if (tekst.indexOf(doelDatum) < 0 || tekst.indexOf(doelTijd) < 0) continue;
+            var heeftDatum = tekst.indexOf(doelDatumIso) >= 0 || tekst.indexOf(doelDatumNl) >= 0;
+            if (!heeftDatum || tekst.indexOf(doelTijd) < 0) continue;
             // Vind cancel-knop binnen deze rij
             var btns = rij.querySelectorAll('button, a, [role="button"]');
             for (var j = 0; j < btns.length; j++) {
@@ -562,7 +565,7 @@ def annuleer(driver, target_id: str) -> bool:
             }
         }
         return null;
-    """, doel_datum, doel_tijd)
+    """, doel_datum_iso, doel_datum_nl, doel_tijd)
 
     if not gelukt:
         log.error(f"âŒ Geen annuleer-knop gevonden voor {doel_datum} {doel_tijd}")
