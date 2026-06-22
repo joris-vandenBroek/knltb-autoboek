@@ -69,14 +69,6 @@ jobs:
           echo "Push faalde na 5 pogingen"
           exit 1
 
-      - name: Trigger haal_padel_sterktes.yml
-        if: success()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run haal_padel_sterktes.yml --ref main
-          echo "haal_padel_sterktes.yml getriggerd"
-
       - name: Screenshots bij fout
         if: failure()
         uses: actions/upload-artifact@v4
