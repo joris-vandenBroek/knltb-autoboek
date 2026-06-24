@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-06-23T10:45:42",
-  "reserveringen": [
-    {
-      "id": "2026-06-23_2030_padel-4",
-      "datum": "2026-06-23",
-      "tijd": "20:30",
-      "baan": "Padel 4",
-      "tekst": "23-06-2026\t20:30 - 21:30\tPadel 4\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
-        "Peter Nijhof",
-        "Chris van Waardenburg",
-        "Jan Verhoeven"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-06-24T10:41:09",
+  "reserveringen": []
 }
