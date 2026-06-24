@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-06-23T10:45:35",
-  "reserveringen": [
-    {
-      "id": "2026-06-23_2000_tennis-06",
-      "datum": "2026-06-23",
-      "tijd": "20:00",
-      "baan": "Tennis 06",
-      "tekst": "23-06-2026\t20:00 - 21:00\t06\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Joris van den Broek",
-        "Josette Pijnenborg",
-        "Jan van Bragt",
-        "Theo Minneboo"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-06-24T10:41:08",
+  "reserveringen": []
 }
