@@ -1,4 +1,4 @@
-const CACHE = 'padel-v55';
+const CACHE = 'padel-v56';
 const STATIC = ['/sw.js', '/logo.png', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', e => {

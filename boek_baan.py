@@ -57,6 +57,31 @@ PADEL_BANEN   = ["Padel 1", "Padel 2", "Padel 3", "Padel 4", "Padel 5", "Padel 6
 TENNIS_BANEN  = ["Tennis 04", "Tennis 05", "Tennis 06", "Tennis 07",
                  "Tennis 08", "Tennis 09", "Tennis 11", "Tennis 12"]
 WACHT_TIMEOUT = 15
+
+_boek_etv_reden = ""  # set by bevestig() when ETV body contains a limit/error message
+
+
+def _schrijf_boekstatus(status: str, reden: str, datum: str = "", tijd: str = "",
+                        sport: str = "", spelers: list = None, baan: str = "") -> None:
+    """Schrijf boekstatus_<gebruiker>.json voor weergave in de PWA."""
+    try:
+        nu_str = datetime.now(tz=_AMS).isoformat(timespec="seconds")
+        data = {
+            "status": status,
+            "reden": reden,
+            "datum": datum,
+            "tijd": tijd,
+            "sport": sport,
+            "spelers": spelers or [],
+            "baan": baan,
+            "tijdstip": nu_str,
+        }
+        pad = f"boekstatus_{GEBRUIKER}.json"
+        with open(pad, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        log.info(f"Boekstatus geschreven: {status} — {reden}")
+    except Exception as e:
+        log.warning(f"_schrijf_boekstatus mislukt: {e}")
 # â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 
@@ -1631,8 +1656,11 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
                     // Controleer op server-side fout in de body (HTTP 200 maar inhoud = fout)
                     var bodyLower = window._bevestigResponse.toLowerCase();
                     if (bodyLower.indexOf('niet gevonden') >= 0 ||
-                        bodyLower.indexOf('not found') >= 0) {
-                        window._bevestigStatus = 'error:not-found';
+                        bodyLower.indexOf('not found') >= 0 ||
+                        bodyLower.indexOf('actieve boekingen') >= 0 ||
+                        bodyLower.indexOf('actieve reservering') >= 0 ||
+                        bodyLower.indexOf('kan niet worden') >= 0) {
+                        window._bevestigStatus = 'error:etv-limiet';
                         window._bevestigFout   = window._bevestigResponse;
                     } else {
                         doeRedirect();
@@ -1694,6 +1722,12 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
                 screenshot(driver, "bevestig_baan_bezet_b")
                 return 'BEZET'
 
+            if b_status == 'error:etv-limiet':
+                global _boek_etv_reden
+                _boek_etv_reden = (b_resp or b_fout or "ETV weigerde reservering")[:200]
+                log.error(f" ETV-limiet/fout in bevestig body: '{_boek_etv_reden}'")
+                screenshot(driver, "bevestig_etv_limiet")
+                return 'FOUT'
             log.info(f" Bevestigd via jQuery.ajax+data! Redirect naar {url_na2}")
             screenshot(driver, "12_na_bevestiging")
             return 'OK'
@@ -1865,12 +1899,14 @@ def main():
 
     if not BONDSNUMMER or not WACHTWOORD:
         log.error(" Stel ETVVOLLEY_BONDSNUMMER en ETVVOLLEY_WACHTWOORD in als GitHub Secrets!")
+        _schrijf_boekstatus("fout", "Inloggegevens ontbreken")
         sys.exit(1)
 
     try:
         speeldatum = datetime.strptime(args.datum, "%Y-%m-%d")
     except ValueError:
         log.error(" Datum moet YYYY-MM-DD zijn")
+        _schrijf_boekstatus("fout", "Ongeldige datum opgegeven")
         sys.exit(1)
 
     # Reserveringsstrategie: vanaf 07:00 op (speeldatum - 2 kalenderdagen) mag worden gereserveerd.
@@ -1887,12 +1923,19 @@ def main():
         if _zet_in_wachtrij(args.datum, args.tijd, args.speler2, args.speler3, args.speler4, args.sport):
             log.info(f" In wachtrij gezet  verwerk_wachtrij workflow start de reservering "
                      f"automatisch op {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00 NL.")
+            _schrijf_boekstatus("wachtrij",
+                                f"In wachtrij — reservering start automatisch op {reserveringsdatum.strftime('%d-%m-%Y')} om 07:00",
+                                datum=args.datum, tijd=args.tijd, sport=args.sport,
+                                spelers=[SPELER1, args.speler2, args.speler3, args.speler4])
             github_output = os.environ.get("GITHUB_OUTPUT", "")
             if github_output:
                 with open(github_output, "a") as f:
                     f.write("boek_resultaat=wachtrij\n")
             sys.exit(0)
         log.error(" Kon wachtrij-bestand niet opslaan  reservering NIET ingepland")
+        _schrijf_boekstatus("fout", "Wachtrij-bestand kon niet worden opgeslagen",
+                            datum=args.datum, tijd=args.tijd, sport=args.sport,
+                            spelers=[SPELER1, args.speler2, args.speler3, args.speler4])
         sys.exit(1)
     else:
         log.info(f" Reserveren! (dag+{dag_verschil}, reserveringsdatum bereikt)")
@@ -1929,9 +1972,15 @@ def main():
                     time.sleep(4)
                     continue
                 log.error(" ETV bleef in onderhoud na alle login-pogingen")
+                _schrijf_boekstatus("fout", "ETV Volley is in onderhoud — alle inlogpogingen mislukt",
+                                    datum=args.datum, tijd=args.tijd, sport=args.sport,
+                                    spelers=[SPELER1, args.speler2, args.speler3, args.speler4])
                 sys.exit(1)
             else:
                 log.error(" Inloggen mislukt  controleer ETVVOLLEY_BONDSNUMMER en ETVVOLLEY_WACHTWOORD")
+                _schrijf_boekstatus("fout", "Inloggen mislukt — controleer bondsnummer en wachtwoord",
+                                    datum=args.datum, tijd=args.tijd, sport=args.sport,
+                                    spelers=[SPELER1, args.speler2, args.speler3, args.speler4])
                 sys.exit(1)
 
         alle_spelers = [SPELER1, args.speler2, args.speler3, args.speler4]
@@ -2102,6 +2151,10 @@ def main():
 
         if not boek_gelukt:
             log.error(f" Na {MAX_OUTER_POGINGEN} boek-pogingen nog geen reservering gelukt")
+            reden = _boek_etv_reden or f"Geen reservering gelukt na {MAX_OUTER_POGINGEN} pogingen"
+            _schrijf_boekstatus("fout", reden,
+                                datum=args.datum, tijd=args.tijd, sport=args.sport,
+                                spelers=[SPELER1, args.speler2, args.speler3, args.speler4])
             sys.exit(1)
 
         # â"€â"€ Verificeer dat reservering zichtbaar is op Mijn Reserveringen â"€â"€â"€â"€â"€â"€â"€â"€
@@ -2130,6 +2183,10 @@ def main():
     log.info(f" GERESERVEERD: {baan} op {datum_nl} om {gereserveerde_tijd}{tijdsverschil}")
     log.info(f"   Spelers: {', '.join(spelers)}")
     log.info("=" * 50)
+    tijdsnoot = f" (voorkeur was {args.tijd})" if gereserveerde_tijd != args.tijd else ""
+    _schrijf_boekstatus("ok", f"Gereserveerd: {baan} om {gereserveerde_tijd}{tijdsnoot}",
+                        datum=args.datum, tijd=gereserveerde_tijd, sport=args.sport,
+                        spelers=spelers, baan=baan)
 
     # Agenda-item wordt aangemaakt in lees_reserveringen.py (beheer_reserveringen.yml)
 
