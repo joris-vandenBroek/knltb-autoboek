@@ -1,7 +1,7 @@
 ﻿# knltb-autoboek -- Volledige documentatie
 
 **GitHub-repository:** `joris-vandenBroek/knltb-autoboek`  
-**Lokale locatie:** `L:\ETV-Volley\knltb-autoboek`  
+**Lokale locatie:** `\\MyCloudEX2Ultra\Transmission\ETV-Volley\knltb-autoboek`  
 **Doel:** Automatisch een padelbaan reserveren bij ETV Volley via de KNLTB-ledenportal, aangestuurd via een PWA op de telefoon, inclusief Google Agenda-integratie en wachtrij voor toekomstige reserveringen.
 
 ---
@@ -588,7 +588,7 @@ PowerShell's `[System.IO.File]::WriteAllBytes` met `UTF8.GetBytes()` schrijft ee
 **Fix:** altijd `[System.IO.File]::WriteAllBytes(C:\Users\broek01\knltb-autoboek\knltb-autoboek.md, [System.Text.Encoding]::UTF8.GetBytes(# knltb-autoboek -- Volledige documentatie
 
 **GitHub-repository:** `joris-vandenBroek/knltb-autoboek`  
-**Lokale locatie:** `L:\ETV-Volley\knltb-autoboek`  
+**Lokale locatie:** `\\MyCloudEX2Ultra\Transmission\ETV-Volley\knltb-autoboek`  
 **Doel:** Automatisch een padelbaan reserveren bij ETV Volley via de KNLTB-ledenportal, aangestuurd via een PWA op de telefoon, inclusief Google Agenda-integratie en wachtrij voor toekomstige reserveringen.
 
 ---

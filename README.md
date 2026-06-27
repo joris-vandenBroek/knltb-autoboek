@@ -1,8 +1,8 @@
-# ETV Volley Baan Auto-Reservering
+﻿# ETV Volley Baan Auto-Reservering
 
 Volledig automatische baan-reservering (padel of tennis) bij ETV Volley via de KNLTB-portal -- aangestuurd via een mobiele PWA, draaiend op GitHub Actions, met Google Agenda-koppeling.
 
-**Lokale locatie:** `L:\ETV-Volley\knltb-autoboek`
+**Lokale locatie:** `\\MyCloudEX2Ultra\Transmission\ETV-Volley\knltb-autoboek`
 
 **Highlights:**
 - Mobiele PWA voor 1-tik-reserveren (padel én tennis)
