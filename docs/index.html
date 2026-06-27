@@ -1580,9 +1580,7 @@
         const statusBadge = gefaald
           ? `<span class="status-badge gefaald">❌ Niet gelukt</span>`
           : `<span class="status-badge gepland">🕒 Gepland voor ${escapeHtml(formatNL(boekDatum))} 07:00</span>`;
-        const actieKnop = gefaald
-          ? `<br><button class="wachtrij-actie" onclick="herboekWachtrij(this,'${datumRaw}','${tijdRaw}','${s2}','${s3}','${s4}')">🔄 Opnieuw proberen</button>`
-          : '';
+        const actieKnop = '';
 
         return `
           <div class="${itemClass}">

@@ -1,0 +1,10 @@
+{
+  "status": "fout",
+  "reden": "Jeannette Warner kan 1 actieve boekingen per dag hebben",
+  "datum": "2026-06-29",
+  "tijd": "09:30",
+  "sport": "padel",
+  "spelers": ["Joris van den Broek", "Jan van Bragt", "Theo Minneboo", "Jeannette Warner"],
+  "baan": "",
+  "tijdstip": "2026-06-27T07:02:53+02:00"
+}
