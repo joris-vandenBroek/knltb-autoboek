@@ -1,8 +1,8 @@
 {
-  "status": "wachtrij",
-  "reden": "In wachtrij — reservering start automatisch op 28-06-2026 om 07:00",
+  "status": "ok",
+  "reden": "Gereserveerd: Padel 3 om 19:30 (voorkeur was 20:00)",
   "datum": "2026-06-30",
-  "tijd": "20:00",
+  "tijd": "19:30",
   "sport": "padel",
   "spelers": [
     "Toine Aanraad",
@@ -10,6 +10,6 @@
     "Theo Minneboo",
     "Jan Verhoeven"
   ],
-  "baan": "",
-  "tijdstip": "2026-06-27T13:10:41+02:00"
+  "baan": "Padel 3",
+  "tijdstip": "2026-06-28T07:02:48+02:00"
 }
