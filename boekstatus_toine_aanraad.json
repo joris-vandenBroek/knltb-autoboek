@@ -1,8 +1,8 @@
 {
-  "status": "wachtrij",
-  "reden": "In wachtrij — reservering start automatisch op 30-06-2026 om 07:00",
+  "status": "ok",
+  "reden": "Gereserveerd: Padel 3 om 19:30 (voorkeur was 20:00)",
   "datum": "2026-07-02",
-  "tijd": "20:00",
+  "tijd": "19:30",
   "sport": "padel",
   "spelers": [
     "Toine Aanraad",
@@ -10,6 +10,6 @@
     "Luis Caballero",
     "Nghia Le"
   ],
-  "baan": "",
-  "tijdstip": "2026-06-29T08:20:13+02:00"
+  "baan": "Padel 3",
+  "tijdstip": "2026-06-30T07:02:46+02:00"
 }
