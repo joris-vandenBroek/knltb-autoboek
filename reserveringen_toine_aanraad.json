@@ -1,5 +1,5 @@
 {
-  "bijgewerkt": "2026-06-29T12:11:49",
+  "bijgewerkt": "2026-06-30T08:34:07",
   "reserveringen": [
     {
       "id": "2026-06-30_1930_padel-3",
@@ -18,6 +18,25 @@
         "Peter Nijhof",
         "Theo Minneboo",
         "Jan Verhoeven"
+      ]
+    },
+    {
+      "id": "2026-07-02_1930_padel-5",
+      "datum": "2026-07-02",
+      "tijd": "19:30",
+      "baan": "Padel 5",
+      "tekst": "02-07-2026\t19:30 - 20:30\tPadel 5\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Toine Aanraad",
+        "Patrick van der Jagt",
+        "Luis Caballero",
+        "Nghia Le"
       ]
     }
   ]
