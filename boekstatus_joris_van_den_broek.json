@@ -1,10 +1,15 @@
 {
-  "status": "fout",
-  "reden": "Jeannette Warner kan 1 actieve boekingen per dag hebben",
-  "datum": "2026-06-29",
-  "tijd": "09:30",
+  "status": "wachtrij",
+  "reden": "In wachtrij — reservering start automatisch op 05-07-2026 om 07:00",
+  "datum": "2026-07-07",
+  "tijd": "20:00",
   "sport": "padel",
-  "spelers": ["Joris van den Broek", "Jan van Bragt", "Theo Minneboo", "Jeannette Warner"],
+  "spelers": [
+    "Joris van den Broek",
+    "Jan van Bragt",
+    "Peter Nijhof",
+    "Theo Minneboo"
+  ],
   "baan": "",
-  "tijdstip": "2026-06-27T07:02:53+02:00"
+  "tijdstip": "2026-07-03T21:41:26+02:00"
 }
