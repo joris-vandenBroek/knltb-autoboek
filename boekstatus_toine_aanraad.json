@@ -1,15 +1,15 @@
 {
-  "status": "ok",
-  "reden": "Gereserveerd: Padel 3 om 19:30 (voorkeur was 20:00)",
-  "datum": "2026-07-02",
+  "status": "wachtrij",
+  "reden": "In wachtrij — reservering start automatisch op 05-07-2026 om 07:00",
+  "datum": "2026-07-07",
   "tijd": "19:30",
-  "sport": "padel",
+  "sport": "tennis",
   "spelers": [
     "Toine Aanraad",
-    "Patrick van der Jagt",
-    "Luis Caballero",
-    "Nghia Le"
+    "Chris van Waardenburg",
+    "Wim Bor",
+    "Dirk Hanssen"
   ],
-  "baan": "Padel 3",
-  "tijdstip": "2026-06-30T07:02:46+02:00"
+  "baan": "",
+  "tijdstip": "2026-07-04T20:07:09+02:00"
 }
