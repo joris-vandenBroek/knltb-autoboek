@@ -1,8 +1,8 @@
 {
-  "status": "wachtrij",
-  "reden": "In wachtrij — reservering start automatisch op 05-07-2026 om 07:00",
+  "status": "ok",
+  "reden": "Gereserveerd: Padel om 20:00 (voorkeur was 19:30)",
   "datum": "2026-07-07",
-  "tijd": "19:30",
+  "tijd": "20:00",
   "sport": "tennis",
   "spelers": [
     "Toine Aanraad",
@@ -10,6 +10,6 @@
     "Wim Bor",
     "Dirk Hanssen"
   ],
-  "baan": "",
-  "tijdstip": "2026-07-04T20:07:09+02:00"
+  "baan": "Padel",
+  "tijdstip": "2026-07-05T07:02:49+02:00"
 }
