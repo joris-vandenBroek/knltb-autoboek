@@ -1,0 +1,48 @@
+name: Publiceer PWA
+
+# Bouwt en publiceert de PWA (docs/) naar GitHub Pages via een eigen
+# Actions-workflow -- i.p.v. de legacy branch-build die op ELKE push naar
+# main bouwde (ook bij data-only commits zoals wachtrij/boekstatus/
+# reserveringen.json, die docs/ niet raken). Trigger nu alleen bij
+# wijzigingen onder docs/, plus handmatig via workflow_dispatch.
+#
+# concurrency met cancel-in-progress:false zorgt dat twee snel opeenvolgende
+# deployments netjes in de rij staan i.p.v. te racen (was de oorzaak van
+# "Deployment failed, try again later" -- zie run #667/#668, 06-07-2026).
+
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configureer Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload docs/ als Pages-artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs'
+
+      - name: Deploy naar GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
