@@ -1,15 +1,15 @@
 {
-  "status": "ok",
-  "reden": "Gereserveerd: Padel 2 om 21:00 (voorkeur was 20:00)",
-  "datum": "2026-07-07",
-  "tijd": "21:00",
+  "status": "wachtrij",
+  "reden": "In wachtrij — reservering start automatisch op 07-07-2026 om 07:00",
+  "datum": "2026-07-09",
+  "tijd": "20:00",
   "sport": "padel",
   "spelers": [
     "Joris van den Broek",
+    "Toine Aanraad",
     "Jan van Bragt",
-    "Peter Nijhof",
-    "Theo Minneboo"
+    "Chris van Waardenburg"
   ],
-  "baan": "Padel 2",
-  "tijdstip": "2026-07-05T07:02:44+02:00"
+  "baan": "",
+  "tijdstip": "2026-07-06T09:09:23+02:00"
 }
