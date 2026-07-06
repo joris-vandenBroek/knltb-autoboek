@@ -59,6 +59,7 @@ Gehost als Progressive Web App op GitHub Pages.
 | `.github/workflows/beheer_reserveringen.yml` | Scrape of annuleer een reservering -- dagelijks 07:30 NL + vanuit PWA |
 | `.github/workflows/haal_leden_op.yml` | Wekelijkse ledenlijst-refresh (maandag 07:00) -- triggert daarna automatisch haal_padel_sterktes.yml |
 | `.github/workflows/haal_padel_sterktes.yml` | Haal padel speelsterktes op via mijnknltb.toernooi.nl (getriggerd na ledenlijst-refresh) |
+| `.github/workflows/publiceer_pwa.yml` | Deployt `docs/` naar GitHub Pages -- alleen bij wijzigingen onder `docs/**`, niet bij elke commit |
 
 ---
 
@@ -197,6 +198,7 @@ De PWA toont onder het ledenaantal "Laatst ververst op DD-MM-YYYY".
 | App vraagt PAT | Voer GitHub PAT in via tandwiel (eenmalig per apparaat, scope `workflow` is genoeg) |
 | Annuleren werkt niet | Check beheer_reserveringen log. Als ETV-annulering slaagt wordt agenda-event direct verwijderd. Als ETV-annulering mislukt blijft het agenda-event bewust staan. |
 | Padel sterktes niet bijgewerkt | Check Actions -> Padel speelsterktes ophalen. Controleer `KNLTB_LOGINNAAM` en `KNLTB_WACHTWOORD` secrets |
+| PWA toont oude versie na een wijziging in `docs/` | Check Actions -> Publiceer PWA. Bouwt alleen bij wijzigingen onder `docs/**` -- geen run gestart betekent dat de commit `docs/` niet raakte. Handmatig opnieuw draaien kan via "Run workflow" |
 
 ---
 

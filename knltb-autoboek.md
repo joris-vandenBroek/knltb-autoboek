@@ -199,10 +199,11 @@ knltb-autoboek/
     |-- verwerk_wachtrij.yml     # Verwerk wachtrij (door cron-job.org getriggerd)
     |-- beheer_reserveringen.yml # Scrape of annuleer reservering (vanuit PWA)
     |-- haal_leden_op.yml        # Ledenlijst-refresh (maandag 07:00) + trigger padel sterktes
-    \-- haal_padel_sterktes.yml  # Padel speelsterktes ophalen via mijnknltb.toernooi.nl
+    |-- haal_padel_sterktes.yml  # Padel speelsterktes ophalen via mijnknltb.toernooi.nl
+    \-- publiceer_pwa.yml        # Deploy docs/ naar GitHub Pages (alleen bij docs/**-wijzigingen)
 ```
 
-GitHub Pages is ingesteld op de `docs/`-map van de `main`-branch. De PWA is bereikbaar via `https://joris-vandenbroek.github.io/knltb-autoboek/`.
+GitHub Pages is ingesteld op de `docs/`-map van de `main`-branch, met `build_type: workflow` (GitHub Actions-deploy via `publiceer_pwa.yml`, niet de legacy branch-build). De PWA is bereikbaar via `https://joris-vandenbroek.github.io/knltb-autoboek/`.
 
 ---
 
@@ -365,6 +366,13 @@ Run: `python lees_reserveringen.py` (of met `--cancel ID`). Schrijft `reserverin
 **Trigger:** `workflow_dispatch` (handmatig of na `haal_leden_op.yml`).  
 **Input:** `max_leden` (0 = alle leden, >0 = testrun).  
 **Secrets:** `KNLTB_LOGINNAAM` + `KNLTB_WACHTWOORD`.
+
+### 8.6 publiceer_pwa.yml
+
+**Naam:** Publiceer PWA  
+**Trigger:** `push` op `main` met `paths: ['docs/**']`, of handmatig via `workflow_dispatch`.
+
+Bouwt en deployt de PWA (`docs/`) naar GitHub Pages via `actions/configure-pages` + `actions/upload-pages-artifact` + `actions/deploy-pages` (Pages-bron staat op `build_type: workflow`, niet meer de legacy branch-build). `concurrency: {group: "pages", cancel-in-progress: false}` zorgt dat opeenvolgende deployments in de rij staan i.p.v. racen. Zie [13.17](#1317-github-pages-legacy-build-raceerde-met-data-only-pushes-run-667668-06-07-2026) voor de aanleiding.
 
 ---
 
@@ -646,6 +654,14 @@ ETV Volley rendert datums in de reserverings-pagina als `DD-MM-YYYY` (bijv. `24-
 
 PowerShell's `WriteAllText` en `Set-Content -Encoding utf8` schrijven een UTF-8 BOM (byte `0xEF 0xBB 0xBF`). Python op Linux weigert bestanden die beginnen met BOM met `SyntaxError: invalid non-printable character U+FEFF`.  
 **Fix:** altijd `[System.IO.File]::WriteAllBytes($p, [System.Text.Encoding]::UTF8.GetBytes($c))` gebruiken (geen BOM), of de Write-tool van Claude Code.
+
+### 13.17 GitHub Pages legacy-build raceerde met data-only pushes (run #667/#668, 06-07-2026)
+
+De PWA (`docs/`) draaide op de **legacy branch-build** van GitHub Pages, die op *elke* push naar `main` herbouwt -- ook bij commits die `docs/` helemaal niet raken (wachtrij-cleanup, boekstatus, `reserveringen_<gebruiker>.json`). `docs/index.html` haalt die data toch al rechtstreeks op via `raw.githubusercontent.com`/`api.github.com`, buiten Pages om -- een rebuild daarvoor is dus pure ruis.
+
+Na een boeking pushen `boek.yml` (2 eigen commits) en het getriggerde `beheer_reserveringen.yml` (1 commit) vlak na elkaar. Twee van die pushes triggerden bijna gelijktijdig een Pages-build; de nieuwste kreeg `Deployment failed, try again later` van GitHub's Pages-API omdat de vorige nog aan het afbreken was.
+
+**Fix:** Pages-bron omgezet naar `build_type: workflow` (via `PUT /repos/{owner}/{repo}/pages -f build_type=workflow`) + nieuwe [`publiceer_pwa.yml`](#86-publiceer_pwayml) die alleen bij `docs/**`-wijzigingen bouwt, met een `concurrency`-group als extra vangnet. Data-only commits raken de Pages-build nu helemaal niet meer.
 
 ---
 
