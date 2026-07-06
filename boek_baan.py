@@ -1024,7 +1024,6 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
 
         if not daypart_el:
             log.error(f"  div.daypart voor {datum} / {gewenst_dagdeel} niet gevonden")
-            screenshot(driver, f"dag_fout_poging{poging}")
             time.sleep(2)
             continue
 
@@ -1042,7 +1041,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         klik_ok = False
         try:
             driver.execute_script("arguments[0].scrollIntoView({block:'center'});", daypart_el)
-            time.sleep(0.3)
+            time.sleep(0.15)
             ActionChains(driver).move_to_element(daypart_el).click().perform()
             log.info("  Daypart geklikt via ActionChains")
             klik_ok = True
@@ -1068,7 +1067,7 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         if not klik_ok:
             time.sleep(1)
             continue
-        time.sleep(0.3)
+        time.sleep(0.15)
 
         # Backup: zet hidden selectedDate input voor sites die 'm uit DOM lezen
         try:
@@ -1107,13 +1106,13 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
             continue
 
         try:
-            WebDriverWait(driver, 1.5).until(
+            WebDriverWait(driver, 1.0, poll_frequency=0.1).until(
                 lambda d: "ReservationsCourt" in d.current_url
                           or "ReservationsPlayers" in d.current_url
                           or "ReservationsDay" not in d.current_url
             )
         except TimeoutException:
-            log.warning("  Geen herkenbare navigatie binnen 1.5s")
+            log.warning("  Geen herkenbare navigatie binnen 1.0s")
         except Exception:
             pass
 
@@ -1135,17 +1134,14 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         if "ReservationsPlayers" in url_na:
             log.warning(f"   Server stuurde terug naar spelers  daypart selectie geweigerd. "
                         f"Retry (poging {poging+1}/3)")
-            screenshot(driver, f"terug_naar_spelers_poging{poging}")
-            time.sleep(2)
+            time.sleep(1)
             continue
 
         # Nog steeds ReservationsDay — ETV heeft submit niet verwerkt.
         # Geen refresh (wist dagpart-selectie); direct opnieuw proberen.
         log.info(f"  Geen navigatie na Volgende — blijft op {url_na}")
-        screenshot(driver, f"geen_nav_poging{poging}")
 
     log.error(f" kies_dag faalde definitief na 3 pogingen")
-    screenshot(driver, "kies_dag_definitief_fout")
     return False
 
 
@@ -1336,7 +1332,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
         except Exception:
             pass
 
-        time.sleep(0.5)
+        time.sleep(0.15)
         # NIET _sluit_cookie_banner() aanroepen hier: de cookie-banner is al gesloten
         # en find_elements() wacht met implicit_wait=5s per XPATH = 25s voor niets.
 
@@ -1352,8 +1348,11 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
             except Exception as e2:
                 log.warning(f"  JS click ook mislukt: {e2}")
 
-        time.sleep(2)
-        screenshot(driver, "10_baan_geselecteerd")
+        # Kort: dit valt binnen het kies->bevestig race-venster met andere
+        # boekers (zie README "Race-conditie afhandeling") -- elke ms hier
+        # is direct concurrentienadeel. DOM-classwissel na klik is synchroon
+        # client-side JS, geen serverroundtrip nodig.
+        time.sleep(0.3)
 
         # â"€â"€ Controleer of de selectie geregistreerd is â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         # Na een geldige klik op een tijdslot verandert de klasse (bijv. 'selected')
@@ -1478,7 +1477,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
                 )
             except TimeoutException:
                 pass
-            time.sleep(1)
+            time.sleep(0.3)
             url_na_vol = driver.current_url
             log.info(f"  URL na Volgende: {url_na_vol}")
             try:
@@ -1594,7 +1593,7 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             )
         except TimeoutException:
             pass
-        time.sleep(0.5)
+        time.sleep(0.2)
 
         # Lees de onderschepte POST-data en AJAX-respons
         intercepted_data  = driver.execute_script("return window._interceptedData;")
@@ -1615,7 +1614,6 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
         ):
             log.warning(f"   Server wees reservering af (Poging A): '{ajax_response}'  "
                         f"vermoedelijk net door iemand anders gereserveerd")
-            screenshot(driver, "bevestig_baan_bezet")
             return 'BEZET'
 
         # Wacht op redirect (kan al gebeurd zijn via de site's eigen success-callback)
@@ -1719,7 +1717,6 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
             ):
                 log.warning(f"   Server wees reservering ook af (Poging B): "
                             f"'{b_fout or b_resp}' — vermoedelijk baan bezet")
-                screenshot(driver, "bevestig_baan_bezet_b")
                 return 'BEZET'
 
             if b_status == 'error:etv-limiet':
@@ -2010,12 +2007,13 @@ def main():
             log.info(f" BOEK-POGING {outer_poging}/{MAX_OUTER_POGINGEN} ")
 
             if outer_poging > 1:
-                time.sleep(30)
                 if spelers_gedaan:
+                    # Alleen dag-selectie moet over  geen 30s-page-reload-buffer nodig,
+                    # spelers staan al vast en er is geen wizard-restart gebeurd.
                     log.info(" Spelers al succesvol ingevoerd — navigeer direct naar dag-pagina.")
                     try:
                         driver.get("https://www.etv-volley.nl/me/ReservationsDay")
-                        time.sleep(2)
+                        time.sleep(1)
                         if "ReservationsDay" not in driver.current_url:
                             log.warning(f" ETV stuurde door naar {driver.current_url} — volledige herstart.")
                             spelers_gedaan = False
@@ -2024,6 +2022,9 @@ def main():
                         spelers_gedaan = False
 
                 if not spelers_gedaan:
+                    # Wel een volledige wizard-restart nodig (spelers/baan-afhangen faalde)
+                    # dat is een minder tijdkritiek pad  hier wél buffer voor ETV server-state.
+                    time.sleep(30)
                     log.info(" Herstart wizard vanaf 'Baan afhangen'...")
                     try:
                         driver.get("https://www.etv-volley.nl/me/Reservations")
@@ -2045,14 +2046,15 @@ def main():
                 _log_zichtbare_spelers(driver, alle_spelers,
                     "na voeg_spelers_toe (4 verwacht)")
 
-            # Dag-selectie: poging 1 om 07:00:10, poging 2 om 07:00:20, etc.
-            # Elke poging wacht tot zijn absolute doeltijd zodat kies_dag-duur
-            # Eerste poging zo vroeg mogelijk (07:00:01). Bij mislukking
-            # direct opnieuw proberen (0.5s cooldown) i.p.v. vaste 10s slots.
-            # Deadline 07:01:30: daarna geeft de outer-retry meer kans.
+            # Dag-selectie: eerste poging zo vroeg mogelijk (07:00:01). Bij mislukking
+            # direct opnieuw proberen (0.15s cooldown, geen vaste 10s-slots).
+            # Deadline 07:03:00: ETV blijkt de dagdeel-klik pas ~1-2 min na 07:00
+            # te accepteren (gezien in run #174-logs) — de binnenlus is goedkoop
+            # (~1 pogingen/sec), dus die laten doorlopen is sneller dan escaleren
+            # naar de outer-retry (die een dure 30s-wachttijd + herstart kost).
             doel_window_open = reserveringsdatum.replace(hour=7, minute=0, second=1, microsecond=0)
-            dag_deadline     = reserveringsdatum.replace(hour=7, minute=1, second=30, microsecond=0)
-            MAX_DAG_POGINGEN = 50
+            dag_deadline     = reserveringsdatum.replace(hour=7, minute=3, second=0, microsecond=0)
+            MAX_DAG_POGINGEN = 150
 
             dag_gelukt = False
             for dag_poging in range(1, MAX_DAG_POGINGEN + 1):
@@ -2075,9 +2077,9 @@ def main():
                 else:
                     # Stop als deadline voorbij (outer-retry pakt het over)
                     if nu.date() == reserveringsdatum.date() and nu > dag_deadline:
-                        log.warning(f" Deadline 07:01:30 bereikt na {dag_poging - 1} pogingen — outer-retry.")
+                        log.warning(f" Deadline 07:03:00 bereikt na {dag_poging - 1} pogingen — outer-retry.")
                         break
-                    time.sleep(0.5)  # korte cooldown tussen pogingen
+                    time.sleep(0.15)  # korte cooldown tussen pogingen
 
                 if kies_dag(driver, args.datum, args.tijd):
                     dag_gelukt = True
@@ -2129,10 +2131,10 @@ def main():
                                 f"na de refresh.")
                     try:
                         driver.get("https://www.etv-volley.nl/me/ReservationsCourt")
-                        time.sleep(2)
+                        time.sleep(1)
                         log.info(" Forceer expliciete refresh  garandeert verse DOM van ETV")
                         driver.refresh()
-                        time.sleep(2)
+                        time.sleep(1)
                     except Exception as e:
                         log.warning(f"Kon niet terug naar baan-keuze: {e}")
                         break  # naar outer-retry

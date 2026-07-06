@@ -145,15 +145,13 @@ De reserveringsdatum is **(speeldatum - 2 kalenderdagen)**. ETV opent het slot o
 ```
 06:50:00  cron-job.org POST -> verwerk_wachtrij start
 06:51:00  triggert boek.yml
-06:52:00  boek_baan.py: login + spelers (~3-4 min)
-06:55:00  klaar voor dag-keuze, sleep tot 07:00:10
-07:00:10  Dag-selectie poging 1 (max 6 pogingen, 10s interval)
-07:00:10  Dag-selectie geslaagd → direct Baan/tijd-selectie + Volgende
-07:00:40  BEVESTIG-KLIK
-07:01:10  Verificatie
+06:51:00  boek_baan.py: login + spelers (klaar ruim voor 07:00)
+07:00:01  Dag-selectie poging 1 (max 150 pogingen, 0,15s cooldown, deadline 07:03:00)
+07:0x:xx  Dag-selectie geslaagd → direct Baan/tijd-selectie + Volgende
+07:0x:xx  BEVESTIG-KLIK + Verificatie
 ```
 
-Login + spelers gebeurt tijdens de wachttijd voor 07:00. Vanaf 07:00:10 (10s buffer voor klok-skew) wordt dag-keuze geprobeerd -- ETV's server weigert daypart-selectie voor 07:00. Bij mislukken: 5 herhalingen met 10s ertussen. Na een geslaagde dag-selectie volgt de rest van de wizard direct zonder extra wachttijd.
+Login + spelers gebeurt ruim voor 07:00. Vanaf 07:00:01 wordt dag-keuze geprobeerd -- ETV's server weigert daypart-selectie doorgaans nog zo'n 1-2 minuten na 07:00 (gezien in run #174: pas rond 07:01:30-07:02:30 geaccepteerd). Het script blijft daarom goedkoop doorproberen (~4s per volledige cyclus, geen screenshots meer per poging) tot 07:03:00 in plaats van na een korte deadline te escaleren naar een volledige wizard-herstart. Alleen als de dag-selectie zelf om een andere reden faalt (bv. spelers-pagina weggevallen) volgt een outer-retry; die kost wél een vaste 30s buffer, maar alleen als spelers opnieuw ingevoerd moeten worden -- als spelers al vaststaan wordt direct doorgegaan zonder die 30s. Na een geslaagde dag-selectie volgt de rest van de wizard direct zonder extra wachttijd.
 
 **Race-conditie afhandeling.** Als iemand anders net sneller dezelfde baan + tijd claimt (~1-2 sec venster tussen kies en bevestig), reageert ETV met "niet gevonden" / "al gereserveerd". Het script detecteert dit, navigeert terug naar de baan-keuze pagina + forceert een refresh (ETV toont bezette tijdcellen daarna niet meer), en probeert de volgende vrije baan voor dezelfde tijd. Pas als alle banen op die tijd weg zijn, valt 'ie terug op alternatieve tijden binnen hetzelfde dagdeel (Ochtend/Middag/Avond). Max 6 pogingen totaal. Zie [knltb-autoboek.md sectie 11.11](knltb-autoboek.md#1111-race-conditie-andere-boeker-pakt-de-baan-tussen-kies-en-bevestig).
 

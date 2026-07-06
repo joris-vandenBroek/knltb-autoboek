@@ -396,8 +396,8 @@ if nu.date() < reserveringsdatum.date():
 1. Login -- Cloudflare-wait, cookie-banner, JS-property setter
 2. Klik "Baan afhangen"
 3. Voeg 3 spelers toe via typeahead
-4. Wacht tot 07:01 NL (alleen op reserveringsdatum)
-5. Kies dag + dagdeel (retry-loop, max 50 pogingen a 1,5s)
+4. Wacht tot 07:00:01 NL (alleen op reserveringsdatum)
+5. Kies dag + dagdeel (retry-loop, max 150 pogingen, 0,15s cooldown, deadline 07:03:00 -- geen screenshots meer per poging)
 6. Kies tijdslot (zoekt `.timeincourt` of `[data-hour]` cellen)
 7. Bevestig (intercepteert jQuery.ajax POST naar `/Ajax/Profile/SaveReservation`)
 8. Verifieer op `/mijn/Reservations`
@@ -544,11 +544,34 @@ Vier bronnen pushen naar main. Alle push-plekken hebben een retry-loop met `git 
 
 ### 13.7 Cron timing vs boekvenster
 
-Login + spelers loopt tijdens de wachttijd voor 07:00. Vanaf 07:01 NL: kies_dag -> kies_baan -> bevestig in een doorloop.
+Login + spelers loopt tijdens de wachttijd voor 07:00. Vanaf 07:00:01 NL: kies_dag -> kies_baan -> bevestig in een doorloop.
 
 ### 13.8 Boekvenster geldt vanaf dag-keuze, niet alleen bevestig
 
 Run #63 bewees dat ETV's server de daypart-selectie zelf weigert voor 07:00. Sleep staat daarom vlak voor `kies_dag`.
+
+### 13.8b ETV weigert dag-selectie nog ~1-2 min na 07:00 (run #174, 05-07-2026)
+
+Log van run #174 liet zien dat `kies_dag` vanaf 07:00:01 tientallen keren achter elkaar werd geweigerd (bleef op `ReservationsDay`) en pas rond 07:01:30-07:02:30 werd geaccepteerd -- ruim ná de toenmalige deadline van 07:01:30. De code escaleerde daardoor naar een outer-retry mét een vaste `time.sleep(30)`, waardoor de daadwerkelijke boeking pas om 07:02:44 bevestigd werd (bijna 3 min na 07:00). Vermoeden: andere leden zonder deze vertraging waren sneller bij het gewenste tijdslot (20:00 was al bezet, uitgeweken naar 21:00).
+
+Aangepast:
+- `dag_deadline` van 07:01:30 → **07:03:00**, `MAX_DAG_POGINGEN` van 50 → **150** zodat de goedkope binnenlus blijft doorproberen i.p.v. te escaleren.
+- Cooldown tussen pogingen van 0,5s → **0,15s**.
+- `WebDriverWait` na "Volgende" van 1,5s → **1,0s** (poll_frequency 0,1s).
+- Kleine sleeps in `kies_dag` van 0,3s → **0,15s**.
+- Screenshots per sub-poging (`dag_fout_poging`, `terug_naar_spelers_poging`, `geen_nav_poging`, `kies_dag_definitief_fout`) **verwijderd** -- kostten disk-I/O per poging, diagnose kan ook via de tekst-logregels (zie 13.8c).
+- De vaste `time.sleep(30)` bij een outer-retry wordt **overgeslagen** zodra spelers al zijn ingevoerd (`spelers_gedaan == True`) -- die 30s was alleen bedoeld om ETV tijd te geven na een volledige wizard-herstart, niet als er enkel opnieuw dag-selectie nodig is.
+
+### 13.8c Ruwe Actions-logs ophalen voor timing-diagnose
+
+`gh` (GitHub CLI) is geïnstalleerd op de werkplek. Run-nummer -> run-id opzoeken en filteren op tijdstip/patroon:
+
+```powershell
+gh run view <run-of-run-id> --repo joris-vandenBroek/knltb-autoboek --log |
+  Select-String -Pattern "kies_dag|Dag-selectie|BOEK-POGING|Op baankeuze"
+```
+
+Zo is de exacte seconde-voor-seconde timing van een boekpoging te reconstrueren zonder dat er losse screenshots nodig zijn.
 
 ### 13.9 ETV "1 actieve reservering"-rule (vermoeden)
 
@@ -644,10 +667,13 @@ tijdEl.value = '15:00';
 
 ### Boekvenster-timing wijzigen
 
-In `boek_baan.py`, vlak voor `kies_dag`:
+In `boek_baan.py`, vlak voor de dag-selectielus:
 ```python
-doel_window_open = reserveringsdatum.replace(hour=7, minute=1, ...)
+doel_window_open = reserveringsdatum.replace(hour=7, minute=0, second=1, microsecond=0)  # 07:00:01
+dag_deadline     = reserveringsdatum.replace(hour=7, minute=3, second=0, microsecond=0)  # 07:03:00
+MAX_DAG_POGINGEN = 150
 ```
+Zie [13.8b](#138b-etv-weigert-dag-selectie-nog-1-2-min-na-0700-run-174-05-07-2026) voor de aanleiding van deze waarden.
 
 ### Cron-tijd wijzigen
 
@@ -672,7 +698,7 @@ Diagnose via screenshots (artifacts bij failed run):
 | `05_spelers_pagina.png` | Spelers-pagina geladen |
 | `06_spelers_toegevoegd.png` | Na toevoegen alle spelers |
 | `07_dag_pagina.png` | Dag-keuze pagina |
-| `08_dag_geselecteerd_poging{N}.png` | Per kies_dag-poging |
+| *(geen per-poging screenshot meer)* | `kies_dag`-retries maken sinds de timing-optimalisatie (13.8b) geen screenshot meer per sub-poging -- kostte te veel tijd in de tijdkritieke 07:00-lus. Diagnose via `gh run view --log` (zie 13.8c) |
 | `09_baan_pagina.png` | Baan/tijdslot-pagina |
 | `10_baan_geselecteerd.png` | Na tijdslot-klik |
 | `11_bevestig_pagina.png` | Confirm-pagina |
