@@ -1355,7 +1355,7 @@
 
   async function laadLeden() {
     try {
-      const r = await fetch(LEDEN_URL + '?t=' + Date.now());
+      const r = await fetch(LEDEN_URL + '?t=' + Date.now(), { cache: 'no-store' });
       if (r.ok) {
         const data = await r.json();
         if (Array.isArray(data) && data.length > 0) {
