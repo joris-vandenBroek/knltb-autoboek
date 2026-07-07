@@ -1,13 +1,13 @@
 """
 ETV Volley Baan Auto-Reservering
 Automatisch een padelbaan reserveren via etv-volley.nl/mijn
-Na een succesvolle reservering wordt de afspraak direct in Google Agenda gezet.
+Het Google Agenda-event wordt niet hier aangemaakt, maar door
+lees_reserveringen.py (getriggerd via beheer_reserveringen.yml
+na een succesvolle boeking) -- zie maak_ontbrekende_agenda_items().
 
 Omgevingsvariabelen (GitHub Secrets):
-  ETVVOLLEY_BONDSNUMMER              - Jouw bondsnummer / gebruikersnaam
-  ETVVOLLEY_WACHTWOORD               - Jouw wachtwoord
-  GOOGLE_CALENDAR_CREDENTIALS    - Inhoud van het service-account JSON-bestand
-  GOOGLE_CALENDAR_ID             - Agenda-ID (bijv. 'primary' of je e-mailadres)
+  ETVVOLLEY_BONDSNUMMER               - Jouw bondsnummer / gebruikersnaam
+  ETVVOLLEY_WACHTWOORD                - Jouw wachtwoord
 """
 
 import os
@@ -49,9 +49,6 @@ BONDSNUMMER  = os.environ.get("ETVVOLLEY_BONDSNUMMER", "")
 WACHTWOORD   = os.environ.get("ETVVOLLEY_WACHTWOORD", "")
 GEBRUIKER    = os.environ.get("GEBRUIKER", "joris")
 SPELER1      = os.environ.get("SPELER1_NAAM", "Joris van den Broek")
-
-GOOGLE_CREDENTIALS = os.environ.get("GOOGLE_CALENDAR_CREDENTIALS", "")
-GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", "")
 
 PADEL_BANEN   = ["Padel 1", "Padel 2", "Padel 3", "Padel 4", "Padel 5", "Padel 6"]
 TENNIS_BANEN  = ["Tennis 04", "Tennis 05", "Tennis 06", "Tennis 07",
@@ -115,69 +112,6 @@ def genereer_tijden(voorkeur_tijd: str) -> list:
             break
         stap += 1
     return [t.strftime("%H:%M") for t in tijden]
-
-
-# â"€â"€ Google Agenda â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-def voeg_toe_aan_agenda(baan: str, datum: str, tijd: str, spelers: list, sport: str = "padel"):
-    """Maak een afspraak aan in Google Agenda via Service Account."""
-    if not GOOGLE_CREDENTIALS or not GOOGLE_CALENDAR_ID:
-        log.warning("Google Calendar overgeslagen (geen credentials of calendar_id).")
-        return
-
-    try:
-        from google.oauth2.service_account import Credentials
-        from googleapiclient.discovery import build
-
-        creds_info = json.loads(GOOGLE_CREDENTIALS)
-        creds = Credentials.from_service_account_info(
-            creds_info,
-            scopes=["https://www.googleapis.com/auth/calendar"]
-        )
-        service = build("calendar", "v3", credentials=creds, cache_discovery=False)
-
-        start_dt = datetime.strptime(f"{datum} {tijd}", "%Y-%m-%d %H:%M")
-        eind_dt  = start_dt + timedelta(hours=1)
-        datum_nl = start_dt.strftime("%d-%m-%Y")
-
-        event = {
-            "summary": f"🎾 {sport.capitalize()} – {baan} – ETV Volley",
-            "location": "ETV Volley, Swaardvenstraat 10, 5048 AV Tilburg",
-            "description": (
-                f"Baan automatisch gereserveerd.\n\n"
-                f"Baan:    {baan}\n"
-                f"Datum:   {datum_nl}\n"
-                f"Tijd:    {tijd} - {eind_dt.strftime('%H:%M')}\n\n"
-                f"Spelers:\n" +
-                "\n".join(f"  {i+1}. {s}" for i, s in enumerate(spelers))
-            ),
-            "start": {
-                "dateTime": start_dt.isoformat(),
-                "timeZone": "Europe/Amsterdam",
-            },
-            "end": {
-                "dateTime": eind_dt.isoformat(),
-                "timeZone": "Europe/Amsterdam",
-            },
-            "colorId": "10",
-            "reminders": {
-                "useDefault": False,
-                "overrides": [
-                    {"method": "popup", "minutes": 60},
-                ],
-            },
-        }
-
-        result = service.events().insert(
-            calendarId=GOOGLE_CALENDAR_ID, body=event
-        ).execute()
-        log.info(f" Google Agenda bijgewerkt: {result.get('htmlLink')}")
-
-    except ImportError:
-        log.error(" google-api-python-client niet genstalleerd.")
-    except json.JSONDecodeError:
-        log.error(" GOOGLE_CALENDAR_CREDENTIALS is geen geldig JSON-bestand.")
-    except Exception as e:
-        log.error(f" Google Agenda bijwerken mislukt: {e}")
 
 
 # â"€â"€ Selenium driver â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -1130,6 +1064,26 @@ def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
         if ":00" in body_na or ":30" in body_na:
             log.info(f" Tijdsloten zichtbaar (AJAX wizard, URL: {url_na})")
             return True
+
+        # Diagnose: onderscheid ETV-eigen weigering van Cloudflare/WAF-interventie
+        # (run #174/#178 lieten kies_dag tot 3+ min falen zonder duidelijkheid
+        # waarom -- dit legt bewijsmateriaal vast i.p.v. te gokken).
+        try:
+            titel_na = driver.title or ""
+        except Exception:
+            titel_na = ""
+        bot_markers = ["cloudflare", "attention required", "checking your browser",
+                       "just a moment", "access denied", "rate limit", "too many requests"]
+        tekst_check = (titel_na + " " + body_na).lower()
+        gedetecteerd = [m for m in bot_markers if m in tekst_check]
+        if gedetecteerd:
+            log.warning(f"  Mogelijke bot-detectie/rate-limiting gesignaleerd: {gedetecteerd} "
+                        f"| titel='{titel_na}' | body[:200]='{body_na[:200]}'")
+        else:
+            # INFO (niet debug): logging.basicConfig staat op INFO, en dit is
+            # juist het bewijsmateriaal dat we nodig hebben als de gok-lijst
+            # met bot-markers de ETV/Cloudflare-bewoording mist.
+            log.info(f"  Diagnose Volgende-mislukking | titel='{titel_na}' | body[:200]='{body_na[:200]}'")
 
         if "ReservationsPlayers" in url_na:
             log.warning(f"   Server stuurde terug naar spelers  daypart selectie geweigerd. "

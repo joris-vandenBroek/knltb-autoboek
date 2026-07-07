@@ -869,13 +869,30 @@ def verwijder_uit_agenda(datum: str, tijd: str, reservering_id: str = "") -> boo
         return False
 
 
+def _git_add_bestaande(bestanden: list) -> None:
+    """
+    Voeg elk bestand afzonderlijk toe i.p.v. in één 'git add a b c'-commando.
+    'git add' faalt atomisch op de VOLLEDIGE lijst zodra één pathspec niet
+    (meer) bestaat -- dan wordt NIETS toegevoegd, ook niet de bestanden die
+    wel bestaan. Overslaan van ontbrekende paden voorkomt dat.
+    """
+    import subprocess
+    for pad in bestanden:
+        if not os.path.exists(pad):
+            log.warning(f"  Pad bestaat niet (meer), overgeslagen bij git add: {pad}")
+            continue
+        r = subprocess.run(["git", "add", pad], check=False)
+        if r.returncode != 0:
+            log.warning(f"  git add faalde voor: {pad}")
+
+
 def commit_en_push(bestanden: list, message: str):
     """Commit en push de gegeven bestanden, met retry op race conditions."""
     import subprocess
     try:
         subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=True)
         subprocess.run(["git", "config", "user.name",  "knltb-autoboek-bot"], check=True)
-        subprocess.run(["git", "add"] + bestanden, check=True)
+        _git_add_bestaande(bestanden)
         # Check of er iets te committen valt
         result = subprocess.run(["git", "diff", "--cached", "--quiet"])
         if result.returncode == 0:
@@ -896,15 +913,24 @@ def commit_en_push(bestanden: list, message: str):
             # (na een verse ETV-scrape zijn wij authoritative).
             log.warning(f"  git pull --rebase conflict (poging {poging}): {rebase.stderr.strip()[:200]}")
             subprocess.run(["git", "rebase", "--abort"], check=False)
-            # Haal remote op + cherry-pick onze commit bovenop remote HEAD
+            # Haal remote op + zet onze bestanden opnieuw bovenop remote HEAD
             subprocess.run(["git", "fetch", "origin", "main"], check=False)
             subprocess.run(["git", "reset", "--mixed", "origin/main"], check=False)
-            # Onze bestanden opnieuw stagen (zijn al gewijzigd door script)
-            subprocess.run(["git", "add"] + bestanden, check=False)
+            _git_add_bestaande(bestanden)
             diff = subprocess.run(["git", "diff", "--cached", "--quiet"])
             if diff.returncode != 0:
                 subprocess.run(["git", "commit", "-m", message + " [conflict-resolved]"],
                                check=False)
+            else:
+                # Niets kon gestaged worden na de reset -- onze wijzigingen
+                # zijn kwijt. NIET als succes verder gaan: een 'push' hierna
+                # zou triviaal slagen ("Everything up-to-date") zonder dat
+                # er daadwerkelijk iets is weggeschreven (was de stille
+                # dataverlies-bug van vóór 07-07-2026).
+                log.error(f"  Na reset kon niets gestaged worden (poging {poging}) "
+                          f"-- wijzigingen zijn nog niet weggeschreven, retry.")
+                time.sleep(poging)
+                continue
 
         if subprocess.run(["git", "push"]).returncode == 0:
             log.info(f"Gecommit en gepusht (poging {poging})")
