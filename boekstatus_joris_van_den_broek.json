@@ -1,8 +1,8 @@
 {
-  "status": "wachtrij",
-  "reden": "In wachtrij — reservering start automatisch op 07-07-2026 om 07:00",
+  "status": "ok",
+  "reden": "Gereserveerd: Padel 2 om 21:30 (voorkeur was 20:00)",
   "datum": "2026-07-09",
-  "tijd": "20:00",
+  "tijd": "21:30",
   "sport": "padel",
   "spelers": [
     "Joris van den Broek",
@@ -10,6 +10,6 @@
     "Jan van Bragt",
     "Chris van Waardenburg"
   ],
-  "baan": "",
-  "tijdstip": "2026-07-06T09:09:23+02:00"
+  "baan": "Padel 2",
+  "tijdstip": "2026-07-07T07:04:12+02:00"
 }
