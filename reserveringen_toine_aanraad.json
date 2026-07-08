@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-07-07T12:21:38",
-  "reserveringen": [
-    {
-      "id": "2026-07-07_2000_tennis-04",
-      "datum": "2026-07-07",
-      "tijd": "20:00",
-      "baan": "Tennis 04",
-      "tekst": "07-07-2026\t20:00 - 21:00\t04\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
-        "Chris van Waardenburg",
-        "Wim Bor",
-        "Dirk Hanssen"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-07-08T09:56:41",
+  "reserveringen": []
 }
