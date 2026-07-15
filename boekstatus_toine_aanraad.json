@@ -1,15 +1,15 @@
 {
-  "status": "ok",
-  "reden": "Gereserveerd: Padel om 20:00 (voorkeur was 19:30)",
-  "datum": "2026-07-07",
+  "status": "wachtrij",
+  "reden": "In wachtrij — reservering start automatisch op 19-07-2026 om 07:00",
+  "datum": "2026-07-21",
   "tijd": "20:00",
-  "sport": "tennis",
+  "sport": "padel",
   "spelers": [
     "Toine Aanraad",
-    "Chris van Waardenburg",
-    "Wim Bor",
-    "Dirk Hanssen"
+    "Joris van den Broek",
+    "Jan Verhoeven",
+    "Peter Nijhof"
   ],
-  "baan": "Padel",
-  "tijdstip": "2026-07-05T07:02:49+02:00"
+  "baan": "",
+  "tijdstip": "2026-07-15T09:36:35+02:00"
 }
