@@ -1,25 +1,4 @@
 {
-  "bijgewerkt": "2026-07-14T09:27:28",
-  "reserveringen": [
-    {
-      "id": "2026-07-14_2000_padel-2",
-      "datum": "2026-07-14",
-      "tijd": "20:00",
-      "baan": "Padel 2",
-      "tekst": "14-07-2026\t20:00 - 21:00\tPadel 2\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
-        "Joris van den Broek",
-        "Jan Verhoeven",
-        "Peter Nijhof",
-        "Herman Brugmans"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-07-15T09:31:12",
+  "reserveringen": []
 }
