@@ -1,4 +1,23 @@
 {
-  "bijgewerkt": "2026-07-17T09:34:42",
-  "reserveringen": []
+  "bijgewerkt": "2026-07-18T09:16:05",
+  "reserveringen": [
+    {
+      "id": "2026-07-18_0930_padel-4",
+      "datum": "2026-07-18",
+      "tijd": "09:30",
+      "baan": "Padel 4",
+      "tekst": "18-07-2026\t09:30 - 10:30\tPadel 4\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Nghia Le",
+        "Sjoerd Klomp",
+        "Toine Aanraad"
+      ]
+    }
+  ]
 }
