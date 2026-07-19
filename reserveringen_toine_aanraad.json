@@ -1,12 +1,12 @@
 {
-  "bijgewerkt": "2026-07-18T09:16:05",
+  "bijgewerkt": "2026-07-19T07:05:54",
   "reserveringen": [
     {
-      "id": "2026-07-18_0930_padel-4",
-      "datum": "2026-07-18",
+      "id": "2026-07-20_0930_padel-4",
+      "datum": "2026-07-20",
       "tijd": "09:30",
       "baan": "Padel 4",
-      "tekst": "18-07-2026\t09:30 - 10:30\tPadel 4\t\t\nWijzigen\n\t\nAnnuleren",
+      "tekst": "20-07-2026\t09:30 - 10:30\tPadel 4\t\t\nWijzigen\n\t\nAnnuleren",
       "cancel": {
         "btnTekst": "Annuleren",
         "btnHref": null,
@@ -14,9 +14,28 @@
         "btnDataId": null
       },
       "spelers": [
-        "Nghia Le",
-        "Sjoerd Klomp",
+        "Jan van Bragt",
+        "Jan Brugmans",
         "Toine Aanraad"
+      ]
+    },
+    {
+      "id": "2026-07-21_2000_padel-1",
+      "datum": "2026-07-21",
+      "tijd": "20:00",
+      "baan": "Padel 1",
+      "tekst": "21-07-2026\t20:00 - 21:00\tPadel 1\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Toine Aanraad",
+        "Peter Nijhof",
+        "Theo Minneboo",
+        "Jan Verhoeven"
       ]
     }
   ]
