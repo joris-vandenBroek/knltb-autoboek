@@ -1,6 +1,6 @@
 {
-  "status": "wachtrij",
-  "reden": "In wachtrij — reservering start automatisch op 19-07-2026 om 07:00",
+  "status": "ok",
+  "reden": "Gereserveerd: Padel 1 om 20:00",
   "datum": "2026-07-21",
   "tijd": "20:00",
   "sport": "padel",
@@ -10,6 +10,6 @@
     "Theo Minneboo",
     "Jan Verhoeven"
   ],
-  "baan": "",
-  "tijdstip": "2026-07-15T21:15:10+02:00"
+  "baan": "Padel 1",
+  "tijdstip": "2026-07-19T07:04:13+02:00"
 }
