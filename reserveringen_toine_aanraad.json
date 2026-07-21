@@ -1,24 +1,6 @@
 {
-  "bijgewerkt": "2026-07-20T10:26:26",
+  "bijgewerkt": "2026-07-21T09:56:39",
   "reserveringen": [
-    {
-      "id": "2026-07-20_0930_padel-4",
-      "datum": "2026-07-20",
-      "tijd": "09:30",
-      "baan": "Padel 4",
-      "tekst": "20-07-2026\t09:30 - 10:30\tPadel 4\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Jan van Bragt",
-        "Jan Brugmans",
-        "Toine Aanraad"
-      ]
-    },
     {
       "id": "2026-07-21_2000_padel-1",
       "datum": "2026-07-21",
