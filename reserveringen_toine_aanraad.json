@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-07-21T09:56:39",
-  "reserveringen": [
-    {
-      "id": "2026-07-21_2000_padel-1",
-      "datum": "2026-07-21",
-      "tijd": "20:00",
-      "baan": "Padel 1",
-      "tekst": "21-07-2026\t20:00 - 21:00\tPadel 1\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
-        "Peter Nijhof",
-        "Theo Minneboo",
-        "Jan Verhoeven"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-07-22T09:56:53",
+  "reserveringen": []
 }
