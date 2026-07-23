@@ -244,10 +244,27 @@ def main():
 
     # Bewaar eventuele sterkte_padel uit huidige leden.json (zodat sterktes niet
     # verloren gaan als alleen de ledenlijst opnieuw gescraped wordt)
-    bestaande_sterktes = {}
+    oud = []
     try:
         with open("leden.json", encoding="utf-8") as f:
             oud = json.load(f)
+    except Exception:
+        pass
+
+    # Bescherming tegen kapotte scrapes (bv. paginering die te vroeg stopt):
+    # als het aantal leden fors lager is dan de vorige keer, is dat vrijwel
+    # zeker een scrape-fout en geen echte massale uitschrijving.
+    MIN_BEHOUD_FRACTIE = 0.85
+    if oud and len(leden_lijst) < len(oud) * MIN_BEHOUD_FRACTIE:
+        log.error(
+            f"Aantal leden kelderde van {len(oud)} naar {len(leden_lijst)} "
+            f"(< {MIN_BEHOUD_FRACTIE:.0%} behouden) -- vermoedelijk een scrape-fout, "
+            f"leden.json wordt NIET overschreven"
+        )
+        sys.exit(1)
+
+    bestaande_sterktes = {}
+    try:
         for item in oud:
             if isinstance(item, dict) and item.get('bondsnummer'):
                 bestaande_sterktes[item['bondsnummer']] = {
