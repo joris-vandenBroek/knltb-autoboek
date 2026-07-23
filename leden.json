@@ -1152,6 +1152,12 @@
     "rating_padel": "9,0000"
   },
   {
+    "bondsnummer": "44882866",
+    "naam": "Emanuela Catana",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
     "bondsnummer": "21501742",
     "naam": "Emile Rasing",
     "sterkte_padel": "9",
@@ -2406,14 +2412,14 @@
     "rating_padel": "7,3903"
   },
   {
-    "bondsnummer": "44622457",
-    "naam": "Joost Van eijk",
+    "bondsnummer": "11398426",
+    "naam": "Joost Verhoeks",
     "sterkte_padel": "7",
     "rating_padel": "7,0000"
   },
   {
-    "bondsnummer": "11398426",
-    "naam": "Joost Verhoeks",
+    "bondsnummer": "44622457",
+    "naam": "Joost van Eijk",
     "sterkte_padel": "7",
     "rating_padel": "7,0000"
   },
@@ -3559,7 +3565,7 @@
   },
   {
     "bondsnummer": "15529444",
-    "naam": "Martijn van Van de ven",
+    "naam": "Martijn van de Ven",
     "sterkte_padel": "9",
     "rating_padel": "7,0000"
   },
@@ -4507,7 +4513,7 @@
   },
   {
     "bondsnummer": "30441838",
-    "naam": "Rein van den Van den muijsenberg",
+    "naam": "Rein van den Muijsenberg",
     "sterkte_padel": "",
     "rating_padel": ""
   },
@@ -4591,7 +4597,7 @@
   },
   {
     "bondsnummer": "30342899",
-    "naam": "Renske van Van riet",
+    "naam": "Renske van Riet",
     "sterkte_padel": "8",
     "rating_padel": "8,0000"
   },
@@ -4742,6 +4748,12 @@
   {
     "bondsnummer": "10437142",
     "naam": "Rob van Wendel de Joode",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
+    "bondsnummer": "19312148",
+    "naam": "Robbert Janssen",
     "sterkte_padel": "",
     "rating_padel": ""
   },
