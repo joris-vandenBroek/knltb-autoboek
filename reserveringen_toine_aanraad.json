@@ -1,25 +1,6 @@
 {
-  "bijgewerkt": "2026-07-27T10:57:10",
+  "bijgewerkt": "2026-07-28T10:02:15",
   "reserveringen": [
-    {
-      "id": "2026-07-28_0900_padel-1",
-      "datum": "2026-07-28",
-      "tijd": "09:00",
-      "baan": "Padel 1",
-      "tekst": "28-07-2026\t09:00 - 10:00\tPadel 1\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
-        "Peter Nijhof",
-        "Chris van Waardenburg",
-        "Herman Brugmans"
-      ]
-    },
     {
       "id": "2026-07-29_0900_padel-1",
       "datum": "2026-07-29",
