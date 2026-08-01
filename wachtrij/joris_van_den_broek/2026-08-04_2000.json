@@ -1,0 +1,13 @@
+{
+  "gebruiker": "joris_van_den_broek",
+  "datum": "2026-08-04",
+  "tijd": "20:00",
+  "sport": "tennis",
+  "spelers": [
+    "Joris van den Broek",
+    "Chris van Waardenburg",
+    "Bert Hovenkamp",
+    "Theo Minneboo"
+  ],
+  "ingediend": "2026-08-01T15:50:37"
+}
