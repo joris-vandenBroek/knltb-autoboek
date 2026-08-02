@@ -1,4 +1,24 @@
 {
-  "bijgewerkt": "2026-08-01T09:49:56",
-  "reserveringen": []
+  "bijgewerkt": "2026-08-02T09:52:09",
+  "reserveringen": [
+    {
+      "id": "2026-08-04_2000_padel-2",
+      "datum": "2026-08-04",
+      "tijd": "20:00",
+      "baan": "Padel 2",
+      "tekst": "04-08-2026\t20:00 - 21:00\tPadel 2\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Toine Aanraad",
+        "Herman Brugmans",
+        "Peter Nijhof",
+        "Jan Verhoeven"
+      ]
+    }
+  ]
 }
