@@ -1,6 +1,6 @@
 {
-  "status": "wachtrij",
-  "reden": "In wachtrij — reservering start automatisch op 02-08-2026 om 07:00",
+  "status": "fout",
+  "reden": "Geen reservering gelukt na 5 pogingen",
   "datum": "2026-08-04",
   "tijd": "20:00",
   "sport": "padel",
@@ -11,5 +11,5 @@
     "Herman Brugmans"
   ],
   "baan": "",
-  "tijdstip": "2026-08-01T15:48:53+02:00"
+  "tijdstip": "2026-08-02T07:07:12+02:00"
 }
