@@ -1,6 +1,6 @@
 {
-  "status": "wachtrij",
-  "reden": "In wachtrij — reservering start automatisch op 02-08-2026 om 07:00",
+  "status": "ok",
+  "reden": "Gereserveerd: Padel om 20:00",
   "datum": "2026-08-04",
   "tijd": "20:00",
   "sport": "tennis",
@@ -10,6 +10,6 @@
     "Bert Hovenkamp",
     "Theo Minneboo"
   ],
-  "baan": "",
-  "tijdstip": "2026-08-01T15:50:38+02:00"
+  "baan": "Padel",
+  "tijdstip": "2026-08-02T07:04:10+02:00"
 }
