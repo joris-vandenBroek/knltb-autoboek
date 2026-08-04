@@ -78,7 +78,9 @@ Google Agenda-events worden gesynchroniseerd vanuit dezelfde flow: aanmaken voor
 
 ```mermaid
 flowchart TD
-    A([Gebruiker tikt 'Baan reserveren' in PWA]) --> B{Speeldatum\ndag+3 of verder?}
+    A([Gebruiker tikt 'Baan reserveren' in PWA]) --> A2{Speler al in\nreservering die dag?}
+    A2 -- Ja --> A3([Foutmelding: dubbele naam\ngeen reservering aangemaakt])
+    A2 -- Nee --> B{Speeldatum\ndag+3 of verder?}
 
     B -- Nee: dag 0/1/2 --> C[boek.yml start direct]
     B -- Ja --> D[Schrijf wachtrij/datum_tijd.json\ngit commit + push]
@@ -298,12 +300,16 @@ const RESERV_URL = `https://raw.githubusercontent.com/${REPO}/main/reserveringen
 
 Verschijnt automatisch als `localStorage.knltb_pat` leeg is. PAT opgeslagen lokaal -- niet naar server gestuurd.
 
+### Namen-check bij boeken
+
+Vlak vóór de `workflow_dispatch`-aanroep in `boekBaan()` checkt `_vindDubbeleSpelers()` of een van de 4 spelers al voorkomt in een actieve of ingeplande reservering van *een van de gebruikers* uit `gebruikers.json` op dezelfde speeldatum (zie [13.9](#139-etv-1-actieve-reservering-rule-vermoeden)). Bij een treffer: foutmelding via toast met de dubbele naam/namen, en er wordt geen reservering aangemaakt. "Gefaalde" wachtrij-items (reserveringsdatum al gepasseerd zonder opruiming) tellen niet mee. Fail-open bij netwerkfouten of een timeout van 5s -- de check mag een legitieme boeking nooit blokkeren door eigen problemen.
+
 ---
 
 ## 7. Service Worker -- docs/sw.js
 
 ```javascript
-const CACHE = 'padel-v54';
+const CACHE = 'padel-v59';
 ```
 
 Elke keer dat `index.html` of `sw.js` inhoudelijk verandert moet dit versienummer omhoog. De SW verwijdert dan automatisch de oude cache bij activate.
@@ -584,6 +590,8 @@ Zo is de exacte seconde-voor-seconde timing van een boekpoging te reconstrueren 
 ### 13.9 ETV "1 actieve reservering"-rule (vermoeden)
 
 ETV lijkt geen 2e actieve reservering toe te staan per lid. Niet 100% gevalideerd.
+
+**Mitigatie:** de PWA voorkomt dit sinds 2026-08 proactief met een namen-check vóór het aanmaken van een 2e reservering op dezelfde dag (zie sectie 6, "Namen-check bij boeken").
 
 ### 13.10 Spelers selecteren via UUID (data-id)
 

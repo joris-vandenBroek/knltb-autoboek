@@ -2219,7 +2219,10 @@ async function laadReserveringen() {
     const eigenNaam = eigenGebruiker ? eigenGebruiker.naam : '';
     const nieuweSpelers = [eigenNaam, speler2, speler3, speler4].filter(Boolean);
 
-    const dubbeleNamen = await _vindDubbeleSpelers(datum, nieuweSpelers);
+    const dubbeleNamen = await Promise.race([
+      _vindDubbeleSpelers(datum, nieuweSpelers),
+      new Promise(resolve => setTimeout(() => resolve([]), 5000))
+    ]);
     if (dubbeleNamen.length > 0) {
       const namenTekst = dubbeleNamen.join(', ');
       const werkwoord = dubbeleNamen.length === 1 ? 'staat' : 'staan';

@@ -12,6 +12,7 @@ Let op: dit project stond eerder lokaal in OneDrive (`OneDrive - Pinkroccade\Doc
 - Overzicht van actieve reserveringen + annuleren vanuit de app
 - Automatische Google Agenda-events: aangemaakt voor alle reserveringen (ook als je medespeler bent), automatisch verwijderd bij annuleren of als een reservering buiten de app om wordt geannuleerd
 - Race-conditie-bestendig: als iemand anders net sneller dezelfde baan claimt, probeert het script automatisch de volgende vrije padelbaan (max 6 pogingen)
+- Namen-check: voorkomt een 2e reservering op dezelfde dag als een speler al in een bestaande (actieve of ingeplande) reservering zit -- die zou bij ETV toch mislukken
 - Dry-run modus: end-to-end test (login + spelers + dag + baan-keuze) zonder echte reservering bij ETV
 - Auto-issue bij failure + dead-man's-switch (Healthchecks.io optioneel) + PAT-expiry badge in PWA
 
@@ -35,7 +36,7 @@ Gehost als Progressive Web App op GitHub Pages.
 2. **Medespelers** -- 3 dropdowns met zoekfilter op de ledenlijst
 3. **Mijn reserveringen** -- actieve ETV-reserveringen, met knop per item om te annuleren (agenda-event wordt bij eerstvolgende scrape verwijderd). Toont direct de laatste cache; bij data >15 min oud wordt op de achtergrond automatisch ververst. Ook bij elke tab-terugkomst
 4. **Ingeplande reserveringen** -- wachtrij voor toekomstige reserveringen, met knop om te verwijderen
-5. **Baan reserveren** -- knop vast onderaan, triggert direct of zet in wachtrij
+5. **Baan reserveren** -- knop vast onderaan, triggert direct of zet in wachtrij. Checkt vooraf of een speler al in een andere reservering voor diezelfde dag zit
 
 ---
 
