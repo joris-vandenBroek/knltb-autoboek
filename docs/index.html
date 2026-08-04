@@ -2214,6 +2214,23 @@ async function laadReserveringen() {
     const [_y, _m, _d] = datum.split('-');
     const datumNL = `${_d}-${_m}-${_y}`;
 
+    const gebruikersVoorCheck = await laadGebruikers();
+    const eigenGebruiker = gebruikersVoorCheck.find(g => g.id === getGebruiker());
+    const eigenNaam = eigenGebruiker ? eigenGebruiker.naam : '';
+    const nieuweSpelers = [eigenNaam, speler2, speler3, speler4].filter(Boolean);
+
+    const dubbeleNamen = await _vindDubbeleSpelers(datum, nieuweSpelers);
+    if (dubbeleNamen.length > 0) {
+      const namenTekst = dubbeleNamen.join(', ');
+      const werkwoord = dubbeleNamen.length === 1 ? 'staat' : 'staan';
+      toonToast('error',
+        `⚠️ ${namenTekst} ${werkwoord} al (in)gepland op ${datumNL}. Een speler kan niet in 2 reserveringen op dezelfde dag zitten.`);
+      btn.disabled = false;
+      document.getElementById('btnTekst').textContent =
+        dryRun ? '🧪  Dry-run baan reserveren' : '🎾  Baan reserveren';
+      return;
+    }
+
     // Bepaal of dit een directe reservering is of een ingeplande (dag+3 of verder).
     const vandaag = new Date(); vandaag.setHours(0, 0, 0, 0);
     const speelDt = new Date(Number(_y), Number(_m) - 1, Number(_d));
