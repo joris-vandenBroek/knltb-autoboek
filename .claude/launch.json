@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pwa-docs",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8730", "--directory", "docs"],
+      "port": 8730
+    }
+  ]
+}

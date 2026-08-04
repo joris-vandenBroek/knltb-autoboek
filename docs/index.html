@@ -2118,6 +2118,79 @@ async function laadReserveringen() {
     toastTimer = setTimeout(() => el.classList.remove('show'), type === 'success' ? 6000 : 8000);
   }
 
+  /* ─── Namen-check: voorkom 2e reservering met overlappende speler ───
+   * ETV staat vermoedelijk maar 1 actieve reservering per lid toe (zie
+   * knltb-autoboek.md 13.9). Check over alle gebruikers heen of een van
+   * de nieuwe spelers al in een actieve of ingeplande reservering voor
+   * dezelfde speeldatum zit. Fail-open: elke fetch-fout wordt genegeerd,
+   * de check mag nooit een boeking blokkeren door eigen netwerkproblemen.
+   */
+  async function _vindDubbeleSpelers(datum, nieuweSpelers) {
+    const bestaandeNamen = new Set();
+    try {
+      const gebruikers = await laadGebruikers();
+      const pat = getPat();
+      const ghHeaders = pat
+        ? { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
+        : { 'Accept': 'application/vnd.github+json' };
+
+      await Promise.all(gebruikers.map(async g => {
+        // Actieve reserveringen
+        try {
+          const r = await fetch(
+            `https://raw.githubusercontent.com/${REPO}/main/reserveringen_${g.id}.json?t=${Date.now()}`,
+            { cache: 'no-store' }
+          );
+          if (r.ok) {
+            const data = await r.json();
+            (data.reserveringen || []).forEach(rv => {
+              if (rv.datum === datum && Array.isArray(rv.spelers)) {
+                rv.spelers.forEach(n => bestaandeNamen.add(n));
+              }
+            });
+          }
+        } catch (_) {}
+
+        // Ingeplande reserveringen (wachtrij), gefaalde items uitgesloten
+        try {
+          const r = await fetch(
+            `https://api.github.com/repos/${REPO}/contents/wachtrij/${g.id}?t=${Date.now()}`,
+            { headers: ghHeaders }
+          );
+          if (r.ok) {
+            const files = await r.json();
+            const jsons = Array.isArray(files)
+              ? files.filter(f => f.name.endsWith('.json') && f.name !== '.gitkeep')
+              : [];
+            const contents = (await Promise.all(jsons.map(async f => {
+              try { const cr = await fetch(f.download_url); return await cr.json(); }
+              catch (_) { return null; }
+            }))).filter(Boolean);
+
+            const nu = new Date();
+            const vandaag = new Date(nu); vandaag.setHours(0, 0, 0, 0);
+            const drempel07 = new Date(vandaag); drempel07.setHours(7, 0, 0, 0);
+
+            contents.forEach(c => {
+              if (c.datum !== datum) return;
+              const boekDatumISO = minusDagen(c.datum, 2);
+              const [by, bm, bd] = boekDatumISO.split('-').map(Number);
+              const boekDt = new Date(by, bm - 1, bd);
+              const gefaald = (boekDt < vandaag) ||
+                              (boekDt.getTime() === vandaag.getTime() && nu > drempel07);
+              if (gefaald) return;
+              (c.spelers || []).forEach(n => bestaandeNamen.add(n));
+            });
+          }
+        } catch (_) {}
+      }));
+    } catch (e) {
+      console.warn('Namen-check mislukt, ga door zonder check:', e);
+      return [];
+    }
+    return nieuweSpelers.filter(n => bestaandeNamen.has(n));
+  }
+
   /* ─── Baan reserveren ──────────────────────────────────────── */
   async function boekBaan() {
     sluitAlles(null);
