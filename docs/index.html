@@ -2214,13 +2214,14 @@ async function laadReserveringen() {
     const [_y, _m, _d] = datum.split('-');
     const datumNL = `${_d}-${_m}-${_y}`;
 
-    const gebruikersVoorCheck = await laadGebruikers();
-    const eigenGebruiker = gebruikersVoorCheck.find(g => g.id === getGebruiker());
-    const eigenNaam = eigenGebruiker ? eigenGebruiker.naam : '';
-    const nieuweSpelers = [eigenNaam, speler2, speler3, speler4].filter(Boolean);
-
     const dubbeleNamen = await Promise.race([
-      _vindDubbeleSpelers(datum, nieuweSpelers),
+      (async () => {
+        const gebruikersVoorCheck = await laadGebruikers();
+        const eigenGebruiker = gebruikersVoorCheck.find(g => g.id === getGebruiker());
+        const eigenNaam = eigenGebruiker ? eigenGebruiker.naam : '';
+        const nieuweSpelers = [eigenNaam, speler2, speler3, speler4].filter(Boolean);
+        return _vindDubbeleSpelers(datum, nieuweSpelers);
+      })(),
       new Promise(resolve => setTimeout(() => resolve([]), 5000))
     ]);
     if (dubbeleNamen.length > 0) {
