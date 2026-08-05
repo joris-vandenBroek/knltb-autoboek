@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-08-04T10:03:49",
-  "reserveringen": [
-    {
-      "id": "2026-08-04_2000_tennis-04",
-      "datum": "2026-08-04",
-      "tijd": "20:00",
-      "baan": "Tennis 04",
-      "tekst": "04-08-2026\t20:00 - 21:00\t04\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Joris van den Broek",
-        "Chris van Waardenburg",
-        "Bert Hovenkamp",
-        "Theo Minneboo"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-08-05T10:05:17",
+  "reserveringen": []
 }
