@@ -155,6 +155,15 @@ De reserveringsdatum is **(speeldatum - 2 kalenderdagen)**. ETV opent het slot o
 
 Login + spelers gebeurt ruim voor 07:00. Vanaf 07:00:01 wordt dag-keuze geprobeerd -- ETV's server weigert daypart-selectie doorgaans nog zo'n 1-2 minuten na 07:00 (gezien in run #174: pas rond 07:01:30-07:02:30 geaccepteerd). Het script blijft daarom goedkoop doorproberen (~4s per volledige cyclus, geen screenshots meer per poging) tot 07:03:00 in plaats van na een korte deadline te escaleren naar een volledige wizard-herstart. Alleen als de dag-selectie zelf om een andere reden faalt (bv. spelers-pagina weggevallen) volgt een outer-retry; die kost wél een vaste 30s buffer, maar alleen als spelers opnieuw ingevoerd moeten worden -- als spelers al vaststaan wordt direct doorgegaan zonder die 30s. Na een geslaagde dag-selectie volgt de rest van de wizard direct zonder extra wachttijd.
 
+**Baankeuze-volgorde.** Bij meerdere vrije banen op de gewenste tijd kiest het script:
+
+| Sport | Volgorde | Waarom |
+|-------|----------|--------|
+| Padel | Padel 1 → 6 (laagste eerst) | Ongewijzigd sinds het begin |
+| Tennis | 12 → 11 → 09 → ... → 04 (hoogste eerst) | Baan 4 is de slechtste baan en werd door de DOM-volgorde altijd als eerste gekozen. Baan 10 bestaat niet |
+
+De log toont per boekpoging `Vrije banen op voorkeursvolgorde: ...`, zodat te controleren is welke banen vrij waren en in welke volgorde ze zijn overwogen. Zie [knltb-autoboek.md sectie 13.18](knltb-autoboek.md#1318-baankeuze-volgorde-en-de-raw-string-valkuil).
+
 **Race-conditie afhandeling.** Als iemand anders net sneller dezelfde baan + tijd claimt (~1-2 sec venster tussen kies en bevestig), reageert ETV met "niet gevonden" / "al gereserveerd". Het script detecteert dit, navigeert terug naar de baan-keuze pagina + forceert een refresh (ETV toont bezette tijdcellen daarna niet meer), en probeert de volgende vrije baan voor dezelfde tijd. Pas als alle banen op die tijd weg zijn, valt 'ie terug op alternatieve tijden binnen hetzelfde dagdeel (Ochtend/Middag/Avond). Max 6 pogingen totaal. Zie [knltb-autoboek.md sectie 11.11](knltb-autoboek.md#1111-race-conditie-andere-boeker-pakt-de-baan-tussen-kies-en-bevestig).
 
 ### Mijn reserveringen / annuleren

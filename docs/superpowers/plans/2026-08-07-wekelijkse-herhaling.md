@@ -1256,10 +1256,12 @@ Wie in dat venster iets anders wil boeken, botst daarop.
 
 - [ ] **Step 3: Voeg een subsectie toe aan `knltb-autoboek.md`**
 
-Voeg toe aan sectie 13 (Technische valkuilen en beslissingen), direct na 13.10:
+Voeg toe aan het eind van sectie 13 (Technische valkuilen en beslissingen), na
+13.18. Let op: 13.11 t/m 13.18 zijn al bezet — controleer met
+`grep -n "^### 13\." knltb-autoboek.md` welk nummer vrij is voordat je schrijft.
 
 ```markdown
-### 13.11 Watermark voorkomt dat verwijderde herhaal-items terugkomen
+### 13.19 Watermark voorkomt dat verwijderde herhaal-items terugkomen
 
 `genereer_herhalingen.py` houdt per regel een `gegenereerd_tot` bij en genereert
 uitsluitend data ná die watermark. Zonder dat mechanisme zou de generator elke
@@ -1276,7 +1278,7 @@ hebben en zou dan onaangeraakt blijven staan tot het vervalt. De watermark-tak
 is nodig omdat een regel die lang op `actief: false` stond anders data in het
 verleden zou opleveren.
 
-### 13.12 Wachtrij-items vervallen na de speeldatum
+### 13.20 Wachtrij-items vervallen na de speeldatum
 
 `ruim_wachtrij_op()` ruimde oorspronkelijk alleen items op die matchten met een
 gescrapete reservering. Faalde een boeking, dan bleef het bestand eeuwig staan

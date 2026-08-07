@@ -1212,52 +1212,88 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
         #     boekbaar 5-min-slot.
         #
         # Strategie:
-        #   1. Loop over .court containers, filter op padel-banen via button-tekst
-        #   2. Per padel-court: vind .timeincourt:not(.disabled) waarvan
-        #      innerText met de gewenste tijd start (bv. "18:30" of "15:00")
-        #   3. Eerste match wint (laagste Padel-nummer eerst)
+        #   1. Loop over .court containers, filter op banen van de juiste sport
+        #   2. Per court: vind .timeincourt:not(.disabled) waarvan innerText
+        #      met de gewenste tijd start (bv. "18:30" of "15:00")
+        #   3. Verzamel ALLE kandidaten en sorteer op voorkeur:
+        #        padel:  laagste baannummer eerst (Padel 1 -> 6, ongewijzigd)
+        #        tennis: HOOGSTE baannummer eerst (12 -> 4). Baan 4 is de
+        #                slechtste baan en werd voorheen altijd als eerste
+        #                gekozen omdat de DOM-volgorde oplopend is.
+        #      Tennisbanen zijn 04-09, 11 en 12 -- baan 10 bestaat niet.
+        #
+        # LET OP: dit blok MOET een raw string blijven. Zonder de r-prefix zet
+        # Python \b in de JS-regex om naar een backspace-teken (0x08); de regex
+        # matchte dan nooit een baannummer en elke tennisbaan kwam terug als
+        # kaal 'Tennis'. Daardoor was sorteren op baannummer onmogelijk.
         #
         # Voordelen vs. de oude Y-coÃ¶rdinaat-aanpak:
         #   - Geen cross-rij mismatches (run #75 koos Padel 1 voor 18:00 want
         #     een tennis/pickle-cel was 53px van Padel 1's label)
         #   - .disabled cellen worden expliciet uitgesloten
         #   - Werkt onafhankelijk van accordion-expand-state / scrollpositie
-        result = driver.execute_script("""
+        result = driver.execute_script(r"""
             var tijd  = arguments[0];
             var sport = arguments[1];
-            var found = null;
+            var kandidaten = [];
             document.querySelectorAll('.court').forEach(function(court) {
-                if (found) return;
                 var btn = court.querySelector('button.btn-link');
                 if (!btn) return;
-                var courtNaam = (btn.innerText || '').trim();
-                var baanLabel;
+                // Buttontekst is "<rij-index> <baan><span>Sporttype</span>", dus
+                // "1 04<span>Smashcourt</span>" of "9 Padel 1<span>Padel</span>".
+                // Er staan bij tennis TWEE getallen in: de rij-index van het grid
+                // (1-15) en het echte baannummer (04-09, 11, 12). Vandaar dat we
+                // op het laatste getal matchen en niet op "twee cijfers" -- dat
+                // laatste gaat mis zodra een tennisrij een index van 2 cijfers
+                // krijgt. Het sporttype komt uit de span, niet uit een substring,
+                // zodat Pickle 1 (span "Hardcourt") er niet tussendoor glipt.
+                var span = btn.querySelector('span');
+                var sportLabel = span ? (span.textContent || '').trim() : '';
+                var kop = (btn.textContent || '');
+                if (span) kop = kop.replace(span.textContent, '');
+                kop = kop.trim();
+                var baanLabel, volgorde;
                 if (sport === 'tennis') {
-                    if (courtNaam.indexOf('Smashcourt') < 0) return;
-                    var nm = courtNaam.match(/\b(\d{2})\b/);
-                    baanLabel = nm ? 'Tennis ' + nm[1] : 'Tennis';
+                    if (sportLabel !== 'Smashcourt') return;
+                    var nm = kop.match(/(\d+)\s*$/);
+                    if (!nm) return;
+                    baanLabel = 'Tennis ' + nm[1];
+                    // Negatief zodat het hoogste baannummer vooraan sorteert.
+                    volgorde = -parseInt(nm[1], 10);
                 } else {
-                    var m = courtNaam.match(/Padel \d/);
+                    if (sportLabel !== 'Padel') return;
+                    var m = kop.match(/Padel\s+(\d+)/);
                     if (!m) return;
-                    baanLabel = m[0];
+                    baanLabel = 'Padel ' + m[1];
+                    volgorde = parseInt(m[1], 10);
                 }
                 var cellen = court.querySelectorAll('.timeincourt:not(.disabled)');
                 for (var i = 0; i < cellen.length; i++) {
                     var cel = cellen[i];
                     var txt = (cel.innerText || '').trim();
                     if (txt === tijd || txt.startsWith(tijd)) {
-                        found = { cel: cel, baan: baanLabel };
-                        return;
+                        kandidaten.push({ cel: cel, baan: baanLabel, volgorde: volgorde });
+                        break;
                     }
                 }
             });
+            kandidaten.sort(function(a, b) { return a.volgorde - b.volgorde; });
+            var found = kandidaten.length ? kandidaten[0] : null;
             window._kiesBaanResult = found ? found.baan : 'geen';
-            return found;
+            window._kiesBaanKandidaten = kandidaten.map(function(k) {
+                return k.baan;
+            }).join(', ');
+            return found ? { cel: found.cel, baan: found.baan } : null;
         """, tijd, sport)
 
         try:
             d_resultaat = driver.execute_script('return window._kiesBaanResult || ""')
+            d_kandidaten = driver.execute_script('return window._kiesBaanKandidaten || ""')
             log.debug(f"  diagnose: match='{d_resultaat}' voor tijd '{tijd}'")
+            if d_kandidaten:
+                # Op volgorde van voorkeur -- zo is in de log te zien dat tennis
+                # met de hoogste baan begint en niet met de slechtste (baan 4).
+                log.info(f"  Vrije banen op voorkeursvolgorde: {d_kandidaten}")
         except Exception:
             pass
 

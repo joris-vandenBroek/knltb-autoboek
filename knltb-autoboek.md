@@ -671,6 +671,36 @@ Na een boeking pushen `boek.yml` (2 eigen commits) en het getriggerde `beheer_re
 
 **Fix:** Pages-bron omgezet naar `build_type: workflow` (via `PUT /repos/{owner}/{repo}/pages -f build_type=workflow`) + nieuwe [`publiceer_pwa.yml`](#86-publiceer_pwayml) die alleen bij `docs/**`-wijzigingen bouwt, met een `concurrency`-group als extra vangnet. Data-only commits raken de Pages-build nu helemaal niet meer.
 
+### 13.18 Baankeuze-volgorde en de raw-string valkuil
+
+`kies_baan_en_tijd` verzamelde vroeger de **eerste** match in DOM-volgorde. Voor
+padel is dat gewenst (Padel 1 eerst), voor tennis niet: de DOM-volgorde is
+oplopend, dus baan 04 -- juist de slechtste baan -- werd altijd als eerste
+gekozen. Sinds 07-08-2026 verzamelt het script alle kandidaten en sorteert het
+op een `volgorde`-veld: padel oplopend, tennis aflopend (12, 11, 09 ... 04).
+
+**De echte bug die dit blootlegde.** Het `execute_script`-blok was géén raw
+string. Python zette `\b` in de JS-regex `/\b(\d{2})\b/` daardoor om naar een
+**backspace-teken (0x08)** vóórdat de browser hem zag. De regex die de JS-engine
+kreeg was `/\x08(\d{2})\x08/` en die matcht nooit iets: `nm` was altijd `null`
+en elke tennisbaan kwam terug als kaal `'Tennis'` zonder nummer. Er was dus geen
+baannummer om op te sorteren. Het viel niet op omdat er nooit een tennisboeking
+via dit script is gedaan -- de padel-tak gebruikt geen `\b`.
+
+Het blok is nu `r"""`-geprefixt. Bij het aanpassen van welk `execute_script`-blok
+dan ook: controleer op `\b`, `\f`, `\v` en `\0` in niet-raw strings.
+
+**Parsing.** De buttontekst is `"<rij-index> <baan><span>Sporttype</span>"`, dus
+`"1 04<span>Smashcourt</span>"` of `"9 Padel 1<span>Padel</span>"`. Er staan bij
+tennis twee getallen in. Het sporttype komt uit de `<span>` (niet uit een
+substring-check, zodat `Pickle 1` met span `Hardcourt` er niet tussendoor glipt)
+en het baannummer is het **laatste** getal ervóór. Matchen op "twee cijfers"
+werkt bij de huidige indeling toevallig ook -- de tennisrijen hebben index 1-8,
+dus één cijfer -- maar breekt zodra een tennisrij een index van twee cijfers
+krijgt.
+
+Diagnose staat in de log als `Vrije banen op voorkeursvolgorde: ...`.
+
 ---
 
 ## 14. Wijzigingen aanbrengen
