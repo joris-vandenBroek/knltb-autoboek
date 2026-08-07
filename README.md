@@ -51,6 +51,10 @@ Gehost als Progressive Web App op GitHub Pages.
 | `haal_padel_sterktes.py` | Haal padel speelsterktes op van mijnknltb.toernooi.nl -> `leden.json` |
 | `leden.json` | Cache van alle ETV-leden met padel speelsterktes (autocomplete bron voor PWA) |
 | `gebruikers.json` | Lijst van actieve gebruikers met ID en naam (niet-gevoelig, in repo) |
+| `herhalingen.json` | Wekelijks terugkerende reserveringen (weekdag, tijd, sport, boeker, 4 spelers). `gegenereerd_tot` wordt door de generator beheerd |
+| `genereer_herhalingen.py` | Maakt wachtrij-items aan uit `herhalingen.json` -- alleen stdlib, geen dependencies |
+| `wachtrij_regels.py` | Gedeelde datum- en padlogica rond wachtrij-items (gebruikt door de generator en `lees_reserveringen.py`) |
+| `tests/` | Unittests (stdlib `unittest`). Draaien met `python -m unittest discover -s tests -t .` |
 | `reserveringen_<gebruiker>.json` | Cache van actieve reserveringen per gebruiker (bijv. `reserveringen_joris.json`) |
 | `wachtrij/<gebruiker>/*.json` | Reserveringen per gebruiker voor speeldatums verder dan dag+2 weg |
 | `agenda_items_<gebruiker>.json` | Mapping van reservering-ID naar Google Agenda event-ID (voor idempotente sync en directe verwijdering) |
@@ -61,6 +65,7 @@ Gehost als Progressive Web App op GitHub Pages.
 | `.github/workflows/haal_leden_op.yml` | Wekelijkse ledenlijst-refresh (maandag 07:00) -- triggert daarna automatisch haal_padel_sterktes.yml |
 | `.github/workflows/haal_padel_sterktes.yml` | Haal padel speelsterktes op via mijnknltb.toernooi.nl (getriggerd na ledenlijst-refresh) |
 | `.github/workflows/publiceer_pwa.yml` | Deployt `docs/` naar GitHub Pages -- alleen bij wijzigingen onder `docs/**`, niet bij elke commit |
+| `.github/workflows/genereer_herhalingen.yml` | Genereert wekelijks (maandag 06:00 NL) wachtrij-items uit `herhalingen.json` |
 
 ---
 
@@ -237,12 +242,52 @@ De sleutel is het **gebruiker-ID** uit `gebruikers.json` (naam in kleine letters
 2. Voeg de credentials toe aan het `GEBRUIKERS_CONFIG` secret
 3. Maak map `wachtrij/<id>/` aan in de repo (leeg bestand `.gitkeep` voldoet)
 
-### Hoe het werkt
+### Hoe het werkt (multi-user)
 
 - `boek.yml` / `beheer_reserveringen.yml` / `verwerk_wachtrij.yml` krijgen `gebruiker` als input
 - Credentials worden per run gelezen uit `GEBRUIKERS_CONFIG` via `jq`
 - Data-isolatie: `reserveringen_<gebruiker>.json` + `wachtrij/<gebruiker>/`
 - PWA: gebruiker-selector in ⚙️ Instellingen; alle workflow-dispatches sturen `gebruiker` mee
 - Concurrency per gebruiker: `knltb-account-<gebruiker>` / `knltb-beheer-<gebruiker>`
+
+---
+
+## Terugkerende reserveringen
+
+`herhalingen.json` beschrijft reserveringen die elke week terugkomen. Elke maandagochtend maakt `genereer_herhalingen.yml` daaruit wachtrij-items aan voor de komende 4 weken; daarna verloopt alles via de normale wachtrij-flow. Aan `boek.yml`, `verwerk_wachtrij.yml` en `boek_baan.py` verandert niets.
+
+```json
+[
+  {
+    "id": "dinsdag-padel-joris",
+    "actief": true,
+    "weekdag": "dinsdag",
+    "tijd": "20:00",
+    "sport": "padel",
+    "gebruiker": "joris_van_den_broek",
+    "spelers": ["Joris van den Broek", "…", "…", "…"],
+    "gegenereerd_tot": "2026-09-01"
+  }
+]
+```
+
+`spelers[0]` is altijd de boeker zelf, met exact de naam uit `gebruikers.json`. `gegenereerd_tot` wordt door de generator beheerd -- niet met de hand aanpassen, behalve om bewust opnieuw te laten genereren.
+
+### Bediening
+
+| Wat | Hoe |
+|-----|-----|
+| Eén week overslaan | 🗑️ op het geplande item in de PWA. Komt niet terug: de generator kijkt nooit vóór `gegenereerd_tot` |
+| Langer stoppen | `actief: false` op de regel. Stopt nieuwe generatie, laat ingeplande items staan |
+| Spelers wijzigen | Pas `spelers` aan. Geldt vanaf de eerstvolgende generatie; al ingeplande items houden de oude namen |
+| Opnieuw genereren | `gegenereerd_tot` terugzetten en de workflow handmatig draaien |
+
+### Validatie
+
+De generator controleert vóór hij iets schrijft, en faalt hard (exit 1) bij een fout: gebruiker moet in `gebruikers.json` staan, alle 4 spelersnamen letterlijk in `leden.json`, `spelers[0]` moet de boeker zijn, sport `padel` of `tennis`, tijd `HH:MM`, en geen speler mag in twee regels op dezelfde weekdag voorkomen (ETV staat geen 2e actieve reservering per lid toe -- zie `knltb-autoboek.md` 13.9). Zonder die check zou een typefout in een naam zich elke week herhalen.
+
+### Let op
+
+Een vaste wekelijkse reservering legt beslag op de enige reserveringsplek van alle betrokken spelers, van de boekdag (speeldatum -2) tot de speeldatum zelf. Wie in dat venster iets anders wil boeken, botst daarop.
 
 ---

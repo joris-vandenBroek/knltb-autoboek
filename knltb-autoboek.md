@@ -701,6 +701,39 @@ krijgt.
 
 Diagnose staat in de log als `Vrije banen op voorkeursvolgorde: ...`.
 
+### 13.19 Watermark voorkomt dat verwijderde herhaal-items terugkomen
+
+`genereer_herhalingen.py` houdt per regel een `gegenereerd_tot` bij en genereert
+uitsluitend data ná die watermark. Zonder dat mechanisme zou de generator elke
+week alle handmatig verwijderde items keurig terugzetten, en kun je nooit een
+week overslaan.
+
+De bestaandheidscheck op het bestandspad is *niet* wat verwijderen respecteert
+-- die vangt alleen dubbele runs binnen hetzelfde venster op.
+
+De ondergrens van het generatievenster is `max(gegenereerd_tot + 1, vandaag + 3)`.
+De `vandaag + 3` is nodig omdat `verwerk_wachtrij.yml` een item oppikt op
+speeldatum -2 om 06:50: een item voor overmorgen kan die trigger al gemist
+hebben en zou dan onaangeraakt blijven staan tot het vervalt. De watermark-tak
+is nodig omdat een regel die lang op `actief: false` stond anders data in het
+verleden zou opleveren.
+
+### 13.20 Wachtrij-items vervallen na de speeldatum
+
+`ruim_wachtrij_op()` ruimde oorspronkelijk alleen items op die matchten met een
+gescrapete reservering. Faalde een boeking, dan bleef het bestand eeuwig staan
+en toonde de PWA het permanent als rood kruis. Sinds 07-08-2026 verwijdert de
+functie ook items waarvan de speeldatum voorbij is.
+
+Het rode kruis blijft daarmee zichtbaar van de boekdag (speeldatum -2) tot en
+met de speeldatum zelf -- precies het venster waarin je nog handmatig een baan
+kunt zoeken. De GitHub-issue die `boek.yml` bij een mislukking opent blijft als
+vangnet staan.
+
+De datumlogica staat in `wachtrij_regels.py`, bewust vrij van selenium-imports
+zodat hij testbaar is: `lees_reserveringen.py` zelf is lokaal niet importeerbaar
+omdat selenium daar op moduleniveau geïmporteerd wordt.
+
 ---
 
 ## 14. Wijzigingen aanbrengen
