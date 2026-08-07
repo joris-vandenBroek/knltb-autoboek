@@ -21,7 +21,9 @@ import time
 import argparse
 import logging
 import re
-from datetime import datetime
+from datetime import date, datetime
+
+from wachtrij_regels import is_verlopen
 
 import undetected_chromedriver as uc
 from selenium.webdriver.common.by import By
@@ -942,8 +944,9 @@ def commit_en_push(bestanden: list, message: str):
 
 def ruim_wachtrij_op(reserveringen: list) -> list:
     """
-    Verwijder wachtrij-items waarvan datum + spelers overeenkomen met een
-    gescrapete reservering -- de boeking is kennelijk geslaagd.
+    Verwijder wachtrij-items die (a) een verstreken speeldatum hebben, of
+    (b) waarvan datum + spelers overeenkomen met een gescrapete reservering
+    -- de boeking is dan kennelijk geslaagd.
     Tijd wordt bewust niet gematcht: bij een race-conditie boekt het script
     automatisch een alternatieve tijd (datum en spelers blijven gelijk).
     Returnt lijst van verwijderde bestandspaden (voor commit).
@@ -960,6 +963,14 @@ def ruim_wachtrij_op(reserveringen: list) -> list:
         datum = item.get('datum', '')
         tijd  = item.get('tijd', '')
         if not datum or not tijd:
+            continue
+        # Speeldatum voorbij: opruimen ongeacht of er een reservering matcht.
+        # Anders blijft een mislukte boeking eeuwig als rood kruis in de PWA
+        # staan, want de match-op-reservering vindt dan nooit iets.
+        if is_verlopen(datum, date.today()):
+            os.remove(f)
+            verwijderd.append(f)
+            log.info(f"Wachtrij opgeruimd: {f} (speeldatum {datum} is voorbij)")
             continue
         wachtrij_spelers = set(item.get('spelers', []))
         match = False
