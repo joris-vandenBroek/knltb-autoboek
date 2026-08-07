@@ -985,6 +985,31 @@
     return _gebruikersCache;
   }
 
+  /** Is dit een gedeeld account (zoals Chris), dat iedereen mag opruimen? */
+  function _isGedeeld(id) {
+    const lijst = _gebruikersCache || [];
+    const g = lijst.find(x => x.id === id);
+    return !!(g && g.gedeeld);
+  }
+
+  /**
+   * Mag de huidige gebruiker items van `eigenaarId` verwijderen?
+   *
+   * LET OP: de volgorde van deze twee condities is load-bearing.
+   * _gebruikersCache kan null zijn wanneer _renderReservList vanuit
+   * laadReserveringen() draait -- die wacht niet op laadGebruikers().
+   * De eigen-eigenaarscheck staat daarom vooraan: die heeft de cache niet
+   * nodig, dus de knop op je eigen lijst verschijnt hoe dan ook. De
+   * _isGedeeld-tak wordt alleen bereikt vanuit laadAndereGebruikers(), dat
+   * wel await laadGebruikers() doet voor het renderen.
+   *
+   * Dit is een drempel tegen per ongeluk klikken, GEEN beveiliging: alle
+   * gebruikers delen hetzelfde GitHub-token.
+   */
+  function magVerwijderen(eigenaarId) {
+    return eigenaarId === getGebruiker() || _isGedeeld(eigenaarId);
+  }
+
   async function openPatSheet() {
     document.getElementById('patInput').value    = getPat();
     document.getElementById('patVerloopt').value = getPatVerloopt();
