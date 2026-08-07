@@ -1638,10 +1638,11 @@
   /* ─── Andere gebruikers (alleen zichtbaar voor Joris) ──────── */
   async function laadAndereGebruikers() {
     const sectie = document.getElementById('andereGebruikersSection');
-    if (getGebruiker() !== BEHEER_EIGENAAR) { sectie.style.display = 'none'; return; }
 
     const gebruikers = await laadGebruikers();
-    const anderen = gebruikers.filter(g => g.id !== BEHEER_EIGENAAR);
+    // Iedereen ziet iedereen. Je eigen boekingen staan al in de hoofdkaarten,
+    // dus die filteren we eruit -- niet BEHEER_EIGENAAR zoals voorheen.
+    const anderen = gebruikers.filter(g => g.id !== getGebruiker());
     if (anderen.length === 0) { sectie.style.display = 'none'; return; }
 
     sectie.style.display = '';
