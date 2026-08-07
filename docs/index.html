@@ -1714,7 +1714,8 @@
           const nu2 = new Date();
           const vandaag2 = new Date(nu2); vandaag2.setHours(0,0,0,0);
           const drempel07b = new Date(vandaag2); drempel07b.setHours(7,0,0,0);
-          el.innerHTML = entries.map(({ content: c }) => {
+          const magWeg = magVerwijderen(g.id);
+          el.innerHTML = entries.map(({ file: f, content: c }) => {
             const datum    = escapeHtml(`${formatNL(c.datum)} om ${c.tijd || ''}`);
             const spelers  = (c.spelers || []).map(escapeHtml).join(', ');
             const boekDatum = minusDagen(c.datum, 2);
@@ -1725,12 +1726,17 @@
             const statusBadge = gefaald
               ? `<span class="status-badge gefaald">❌ Niet gelukt</span>`
               : `<span class="status-badge gepland">🕒 Gepland voor ${escapeHtml(formatNL(boekDatum))} 07:00</span>`;
+            const delKnop = magWeg
+              ? `<button class="wachtrij-del" title="Verwijder deze ingeplande reservering"
+                        onclick="verwijderWachtrij(this,'${escapeHtml(f.path)}','${escapeHtml(f.sha)}')">🗑️</button>`
+              : '';
             return `<div class="wachtrij-item${gefaald ? ' wachtrij-failed' : ''}">
               <div class="wachtrij-item-inhoud">
                 <div class="wachtrij-datum">${gefaald ? '❌' : '🗓️'} ${datum}</div>
                 <div class="wachtrij-spelers">${spelers}</div>
                 <div class="wachtrij-boekt">${statusBadge}</div>
               </div>
+              ${delKnop}
             </div>`;
           }).join('');
         } catch (_) { el.innerHTML = '<div class="wachtrij-leeg">Kon wachtrij niet laden.</div>'; }
