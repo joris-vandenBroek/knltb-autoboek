@@ -213,10 +213,13 @@ Ga naar **Settings → Secrets and variables → Actions** en maak `GEBRUIKERS_C
 
 ```json
 {
-  "joris": { "bondsnummer": "1234567", "wachtwoord": "...", "naam": "Joris van den Broek" },
-  "toine": { "bondsnummer": "7654321", "wachtwoord": "...", "naam": "Toine Aanraad" }
+  "joris_van_den_broek":   { "bondsnummer": "1234567", "wachtwoord": "...", "naam": "Joris van den Broek", "calendar_id": "..." },
+  "toine_aanraad":         { "bondsnummer": "7654321", "wachtwoord": "...", "naam": "Toine Aanraad" },
+  "chris_van_waardenburg": { "bondsnummer": "8765432", "wachtwoord": "...", "naam": "Chris van Waardenburg" }
 }
 ```
+
+De sleutel is het **gebruiker-ID** uit `gebruikers.json` (naam in kleine letters, spaties vervangen door `_`). `calendar_id` is optioneel -- zonder dat veld worden er geen Google Agenda-events aangemaakt voor die gebruiker.
 
 ### Gebruiker toevoegen
 
