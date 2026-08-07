@@ -1684,7 +1684,7 @@
             const items = Array.isArray(data.reserveringen) ? data.reserveringen : [];
             el.innerHTML = items.length === 0
               ? `<div class="leeg-staat"><div class="leeg-staat-icoon">🎾</div><div class="leeg-staat-titel">Geen actieve reserveringen</div></div>`
-              : _renderReservList(items, false);
+              : _renderReservList(items, magVerwijderen(g.id), g.id);
           }
         } catch (_) { el.innerHTML = '<div class="wachtrij-leeg">Kon reserveringen niet laden.</div>'; }
       })();
@@ -1752,7 +1752,7 @@
   let _autoVerversBezig = false;
 
   /** Bouw HTML voor een reserveringen-lijst. */
-  function _renderReservList(items, toonDel = true) {
+  function _renderReservList(items, toonDel = true, eigenaarId = null) {
     items.sort((a, b) => (a.datum + a.tijd).localeCompare(b.datum + b.tijd));
     return items.map(rv => {
       const datum = escapeHtml(`${formatNL(rv.datum)} om ${rv.tijd}`);
@@ -1764,9 +1764,10 @@
         ? `${escapeHtml(baan)} <span class="reserv-met">— met ${escapeHtml(medespelers.join(', '))}</span>`
         : escapeHtml(baan);
 
+      const eig = eigenaarId ? `,'${escapeHtml(eigenaarId)}'` : '';
       const delBtn = toonDel
         ? `<button class="wachtrij-del" title="Annuleer deze reservering"
-                  onclick="annuleerReservering(this,'${id}','${escapeHtml(rv.datum)}','${escapeHtml(rv.tijd)}')">🗑️</button>`
+                  onclick="annuleerReservering(this,'${id}','${escapeHtml(rv.datum)}','${escapeHtml(rv.tijd)}'${eig})">🗑️</button>`
         : '';
 
       return `
@@ -1917,14 +1918,19 @@ async function laadReserveringen() {
     } catch (_) {}
   }
 
-  async function annuleerReservering(btn, id, datum, tijd) {
+  async function annuleerReservering(btn, id, datum, tijd, eigenaarId = null) {
     const pat = getPat();
     if (!pat) { toonToast('error', '⚠️ Stel eerst je GitHub Token in via ⚙️'); return; }
     if (!confirm(`Deze reservering annuleren?\n\n${formatNL(datum)} om ${tijd}`)) return;
     btn.disabled = true;
     btn.textContent = '⏳';
     try {
-      const r = await _dispatchBeheer(pat, getGebruiker(), id);
+      // Annuleren moet gebeuren op het ETV-account van de EIGENAAR van de
+      // reservering, niet op de gebruiker die nu geselecteerd staat. Zonder
+      // dit logt de workflow in op het verkeerde account en vindt daar het
+      // cancel-ID niet -- de dispatch slaagt (204), maar er wordt niets
+      // geannuleerd. Dat faalt volledig stil.
+      const r = await _dispatchBeheer(pat, eigenaarId || getGebruiker(), id);
       if (r === true) {
         toonToast('success', '🗑️ Annulering wordt verwerkt (~1.5 min).\nLijst ververst zelf.');
         // Optimistic UI: verwijder het item direct uit de DOM zodat de
