@@ -5,7 +5,12 @@ Draait wekelijks via .github/workflows/genereer_herhalingen.yml. Schrijft
 gewone wachtrij-items; de bestaande verwerk_wachtrij.yml pikt ze op.
 """
 
+import json
+import logging
+import os
 import re
+import sys
+from datetime import date, datetime
 
 from wachtrij_regels import (
     generatie_venster,
@@ -16,6 +21,17 @@ from wachtrij_regels import (
 
 TIJD_PATROON = re.compile(r"[0-2]\d:[0-5]\d")
 GELDIGE_SPORTEN = ("padel", "tennis")
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+log = logging.getLogger(__name__)
+
+HERHALINGEN_FILE = "herhalingen.json"
+GEBRUIKERS_FILE = "gebruikers.json"
+LEDEN_FILE = "leden.json"
 
 
 def valideer_regels(regels, gebruikers, leden_namen):
@@ -132,3 +148,46 @@ def plan_items(regels, vandaag, bestaat, ingediend, weken=4):
         bijgewerkt.append(r)
 
     return nieuwe, bijgewerkt
+
+
+def _laad_json(pad):
+    with open(pad, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _schrijf_json(pad, data):
+    with open(pad, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=2)
+        fh.write("\n")
+
+
+def main():
+    regels = _laad_json(HERHALINGEN_FILE)
+    gebruikers = _laad_json(GEBRUIKERS_FILE)
+    leden = _laad_json(LEDEN_FILE)
+    leden_namen = {
+        lid["naam"] for lid in leden if isinstance(lid, dict) and "naam" in lid
+    }
+
+    actieve = [r for r in regels if r.get("actief", True)]
+    fouten = valideer_regels(actieve, gebruikers, leden_namen)
+    if fouten:
+        for fout in fouten:
+            log.error(fout)
+        log.error(f"{len(fouten)} validatiefout(en) -- er is niets aangemaakt")
+        sys.exit(1)
+
+    ingediend = datetime.now().isoformat(timespec="seconds")
+    nieuwe, bijgewerkt = plan_items(regels, date.today(), os.path.exists, ingediend)
+
+    for pad, item in nieuwe:
+        os.makedirs(os.path.dirname(pad), exist_ok=True)
+        _schrijf_json(pad, item)
+        log.info(f"Aangemaakt: {pad}")
+
+    _schrijf_json(HERHALINGEN_FILE, bijgewerkt)
+    log.info(f"{len(nieuwe)} nieuw(e) wachtrij-item(s) aangemaakt")
+
+
+if __name__ == "__main__":
+    main()

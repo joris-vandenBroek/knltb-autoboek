@@ -1,0 +1,47 @@
+name: Genereer herhalingen
+
+# Maakt wachtrij-items aan uit herhalingen.json. Bewust NIET tijdkritisch --
+# het venster is dagen breed, dus GitHub's eigen cron volstaat hier en
+# cron-job.org is niet nodig (anders dan bij de 07:00-boeking).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1'  # maandag 06:00 NL (CEST) / 05:00 (CET)
+
+permissions:
+  contents: write
+
+concurrency:
+  group: knltb-genereer-herhalingen
+  cancel-in-progress: false
+
+jobs:
+  genereer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TZ: Europe/Amsterdam
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Geen pip install: genereer_herhalingen.py gebruikt alleen stdlib.
+      - name: Genereer wachtrij-items
+        run: python genereer_herhalingen.py
+
+      - name: Commit en push
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "knltb-autoboek-bot"
+          git add herhalingen.json wachtrij/
+          git diff --cached --quiet && echo "Niets te committen" && exit 0
+          git commit -m "herhalingen: wachtrij-items gegenereerd"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push && break
+            echo "Push poging $i mislukt, retry..."
+            sleep $i
+          done

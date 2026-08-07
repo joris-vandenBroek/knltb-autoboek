@@ -1,0 +1,47 @@
+[
+  {
+    "id": "dinsdag-tennis-chris",
+    "actief": true,
+    "weekdag": "dinsdag",
+    "tijd": "20:00",
+    "sport": "tennis",
+    "gebruiker": "chris_van_waardenburg",
+    "spelers": [
+      "Chris van Waardenburg",
+      "Bert Hovenkamp",
+      "Theo Minneboo",
+      "Wim Bor"
+    ],
+    "gegenereerd_tot": "2026-09-01"
+  },
+  {
+    "id": "dinsdag-padel-joris",
+    "actief": true,
+    "weekdag": "dinsdag",
+    "tijd": "20:00",
+    "sport": "padel",
+    "gebruiker": "joris_van_den_broek",
+    "spelers": [
+      "Joris van den Broek",
+      "Jan Verhoeven",
+      "Herman Brugmans",
+      "Teo van Deurzen"
+    ],
+    "gegenereerd_tot": "2026-09-01"
+  },
+  {
+    "id": "dinsdag-padel-toine",
+    "actief": true,
+    "weekdag": "dinsdag",
+    "tijd": "20:00",
+    "sport": "padel",
+    "gebruiker": "toine_aanraad",
+    "spelers": [
+      "Toine Aanraad",
+      "Peter Nijhof",
+      "Jan van Bragt",
+      "Dirk Hanssen"
+    ],
+    "gegenereerd_tot": "2026-09-01"
+  }
+]
