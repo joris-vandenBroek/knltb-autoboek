@@ -734,6 +734,41 @@ De datumlogica staat in `wachtrij_regels.py`, bewust vrij van selenium-imports
 zodat hij testbaar is: `lees_reserveringen.py` zelf is lokaal niet importeerbaar
 omdat selenium daar op moduleniveau geïmporteerd wordt.
 
+### 13.21 Annuleren gebruikt de eigenaar, niet de geselecteerde gebruiker
+
+`annuleerReservering` in `docs/index.html` riep `_dispatchBeheer(pat,
+getGebruiker(), id)` aan -- de gebruiker die op dat moment in de selector staat.
+Zolang je alleen je eigen reserveringen kon annuleren klopte dat. Sinds gedeelde
+accounts (2026-08) kun je ook die van Chris annuleren, en dan is de
+geselecteerde gebruiker de verkeerde: de workflow logt in op jouw ETV-account en
+zoekt daar een cancel-ID dat niet bestaat.
+
+De eigenaar wordt daarom expliciet meegegeven:
+`annuleerReservering(btn, id, datum, tijd, eigenaarId)`, doorgestuurd naar
+`_dispatchBeheer`. Zonder dat argument valt hij terug op `getGebruiker()`, zodat
+de eigen lijst ongewijzigd blijft werken.
+
+**Dit faalt volledig stil.** De dispatch slaagt (204), de workflow draait, en pas
+in de Actions-log zie je dat er niets geannuleerd is. Controleer bij wijzigingen
+hier altijd de `gebruiker`-waarde in de dispatch-payload.
+
+### 13.22 Rechten in de PWA zijn adviserend, geen beveiliging
+
+`magVerwijderen(eigenaarId)` bepaalt of de 🗑️ getoond wordt: je eigen items plus
+die van elk account met `"gedeeld": true` in `gebruikers.json`. De regel is
+symmetrisch -- er is geen beheerdersrol.
+
+Omdat alle gebruikers hetzelfde GitHub-PAT delen, is dit een drempel tegen per
+ongeluk klikken en **geen beveiligingsgrens**: met dat token kan iedereen via de
+GitHub-API elk bestand verwijderen, wat de PWA ook toont. Wil je echte
+afdwinging, dan zijn aparte GitHub-accounts met eigen tokens nodig en moeten
+deze rechten opnieuw ontworpen worden -- niet uitgebreid.
+
+De volgorde in `magVerwijderen` is load-bearing: de eigen-eigenaarscheck staat
+vooraan omdat `_gebruikersCache` nog `null` kan zijn wanneer
+`_renderReservList` vanuit `laadReserveringen()` draait. Omgedraaid verdwijnt de
+knop soms van je eigen lijst, en alleen bij een koude cache.
+
 ---
 
 ## 14. Wijzigingen aanbrengen

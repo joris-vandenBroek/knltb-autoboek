@@ -235,6 +235,18 @@ Ga naar **Settings → Secrets and variables → Actions** en maak `GEBRUIKERS_C
 
 De sleutel is het **gebruiker-ID** uit `gebruikers.json` (naam in kleine letters, spaties vervangen door `_`). `calendar_id` is optioneel -- zonder dat veld worden er geen Google Agenda-events aangemaakt voor die gebruiker.
 
+### Gedeelde accounts
+
+Een gebruiker die niet zelf boekt maar namens wie anderen boeken, krijgt `"gedeeld": true` in `gebruikers.json`:
+
+```json
+{ "id": "chris_van_waardenburg", "naam": "Chris van Waardenburg", "gedeeld": true }
+```
+
+Gevolg in de PWA: **iedereen** mag de reserveringen en ingeplande reserveringen van zo'n account verwijderen. Boekingen van een persoonlijk account (zonder dat veld) kan alleen de eigenaar zelf weghalen — symmetrisch, dus ook Joris kan Toine's boekingen niet verwijderen.
+
+Dit is een drempel tegen per ongeluk klikken, **geen beveiliging**: alle gebruikers delen hetzelfde GitHub-token en kunnen daarmee via de API alsnog alles verwijderen.
+
 ### Gebruiker toevoegen
 
 1. Open de PWA → 🛠️ → wachtwoord `etv2025` → vul ID en naam in → Toevoegen  
