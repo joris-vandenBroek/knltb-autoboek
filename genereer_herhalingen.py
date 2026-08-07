@@ -7,7 +7,12 @@ gewone wachtrij-items; de bestaande verwerk_wachtrij.yml pikt ze op.
 
 import re
 
-from wachtrij_regels import weekdag_nummer
+from wachtrij_regels import (
+    generatie_venster,
+    komende_weekdagen,
+    wachtrij_pad,
+    weekdag_nummer,
+)
 
 TIJD_PATROON = re.compile(r"[0-2]\d:[0-5]\d")
 GELDIGE_SPORTEN = ("padel", "tennis")
@@ -76,3 +81,54 @@ def valideer_regels(regels, gebruikers, leden_namen):
                     bezet[naam] = rid
 
     return fouten
+
+
+def maak_item(regel, datum, ingediend):
+    """Bouw een wachtrij-item in exact het formaat dat verwerk_wachtrij.yml leest."""
+    return {
+        "gebruiker": regel["gebruiker"],
+        "datum": datum,
+        "tijd": regel["tijd"],
+        "sport": regel["sport"],
+        "spelers": list(regel["spelers"]),
+        "ingediend": ingediend,
+    }
+
+
+def plan_items(regels, vandaag, bestaat, ingediend, weken=4):
+    """
+    Bepaal welke wachtrij-items aangemaakt moeten worden.
+
+    Retourneert (nieuwe_items, bijgewerkte_regels), waarbij nieuwe_items een
+    lijst (pad, item)-tupels is. Raakt het bestandssysteem niet: `bestaat` is
+    een callable (pad) -> bool.
+
+    De watermark `gegenereerd_tot` schuift op naar de laatste datum in het
+    venster, ook als dat bestand al bestond. Daardoor kijkt een volgende run
+    nooit meer naar die datum en komt een handmatig verwijderd item niet terug.
+    """
+    nieuwe = []
+    bijgewerkt = []
+
+    for oorspronkelijk in regels:
+        r = dict(oorspronkelijk)
+        if not r.get("actief", True):
+            bijgewerkt.append(r)
+            continue
+
+        weekdag = weekdag_nummer(r["weekdag"])
+        van, tot = generatie_venster(r.get("gegenereerd_tot"), vandaag, weken)
+
+        laatste = None
+        for dag in komende_weekdagen(weekdag, van, tot):
+            datum = dag.isoformat()
+            pad = wachtrij_pad(r["gebruiker"], datum, r["tijd"])
+            if not bestaat(pad):
+                nieuwe.append((pad, maak_item(r, datum, ingediend)))
+            laatste = datum
+
+        if laatste:
+            r["gegenereerd_tot"] = laatste
+        bijgewerkt.append(r)
+
+    return nieuwe, bijgewerkt
