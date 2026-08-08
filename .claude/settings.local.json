@@ -3,7 +3,13 @@
     "defaultMode": "bypassPermissions",
     "allow": [
       "Bash(*)",
-      "PowerShell(*)"
+      "PowerShell(*)",
+      "mcp__Claude_in_Chrome__list_connected_browsers",
+      "mcp__Claude_in_Chrome__switch_browser",
+      "mcp__Claude_in_Chrome__navigate",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "WebFetch(domain:api.github.com)"
     ]
   }
 }
