@@ -1,25 +1,4 @@
 {
-  "bijgewerkt": "2026-08-09T20:02:45",
-  "reserveringen": [
-    {
-      "id": "2026-08-11_1930_padel-5",
-      "datum": "2026-08-11",
-      "tijd": "19:30",
-      "baan": "Padel 5",
-      "tekst": "11-08-2026\t19:30 - 20:30\tPadel 5\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
-        "Peter Nijhof",
-        "Joris van den Broek",
-        "Jan van Bragt",
-        "Teo van Deurzen"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-08-09T20:24:35",
+  "reserveringen": []
 }
