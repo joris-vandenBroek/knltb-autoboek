@@ -57,6 +57,7 @@ from boek_regels import (          # noqa: E402
     TENNIS_BANEN,
     baan_uit_body,
     baan_voorkeur,
+    boeking_op_datum,
     dag_selectie_actie,
     wizard_ververs_moment,
 )
@@ -908,6 +909,30 @@ def _vind_volgende_knop(driver):
         }
         return alle[alle.length - 1];
     """)
+
+
+def _bestaande_boeking_op(driver: uc.Chrome, datum: str):
+    """
+    Heeft dit account al een reservering op deze speeldatum? Dict of None.
+
+    Hergebruikt de scraper van lees_reserveringen.py — dezelfde code die de
+    PWA voedt, dus geen tweede parser die uit de pas kan gaan lopen. De import
+    is lui zodat een probleem daar nooit het boeken zelf blokkeert.
+
+    Faalt bewust naar None: bij een mislukte scrape proberen we gewoon te
+    boeken. Een overbodige poging is goedkoper dan een gemiste baan, en ETV
+    weigert alsnog als de dagcap echt geraakt wordt.
+    """
+    try:
+        from lees_reserveringen import scrape_reserveringen
+        huidige = scrape_reserveringen(driver)
+        gevonden = boeking_op_datum(huidige, datum)
+        log.info(f" Dagcap-check: {len(huidige or [])} bestaande reservering(en), "
+                 f"op {datum}: {'ja' if gevonden else 'nee'}")
+        return gevonden
+    except Exception as e:
+        log.warning(f" Dagcap-check overgeslagen ({e}) — we proberen gewoon te boeken.")
+        return None
 
 
 def _ververs_wizard(driver: uc.Chrome, args, alle_spelers) -> bool:
@@ -1845,6 +1870,15 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
         log.error(f" Bevestigen definitief mislukt  "
                   f"status={status} fout={fout} url={url_na2}")
         log.error(f"   Body: {body_na2[:400]}")
+        # Geef de ETV-melding door aan de boekstatus. Zonder dit viel de PWA
+        # terug op "Geen reservering gelukt na 5 pogingen", terwijl de echte
+        # reden hier gewoon bekend is -- run #203 (09-08-2026) meldde
+        # "kan 1 actieve boekingen per dag hebben" en dat kwam nergens aan.
+        # De andere etv-limiet-tak hieronder deed dit al wel; deze niet.
+        # (_boek_etv_reden is hierboven al als global gedeclareerd; een tweede
+        # declaratie in dezelfde functie is een SyntaxError.)
+        if status == 'error:etv-limiet' and fout and fout != '(geen fout)':
+            _boek_etv_reden = fout[:200]
         screenshot(driver, "bevestig_fout")
         return 'FOUT'
 
@@ -2097,6 +2131,24 @@ def main():
                 sys.exit(1)
 
         alle_spelers = [SPELER1, args.speler2, args.speler3, args.speler4]
+
+        # â"€â"€ Dagcap-check: ETV staat 1 actieve boeking per dag per lid toe â"€â"€
+        # Zonder deze check draait het script de hele wizard vijf keer af om
+        # daarna pas op de bevestig-POST te horen "kan 1 actieve boekingen per
+        # dag hebben" (run #203, 09-08-2026). Dat kost minuten in de spits en
+        # levert een nietszeggende boekstatus op.
+        bestaand = _bestaande_boeking_op(driver, args.datum)
+        if bestaand:
+            omschrijving = (f"{bestaand.get('baan') or 'baan onbekend'} om "
+                            f"{bestaand.get('tijd') or '??'}")
+            log.error(f" {SPELER1} heeft al een boeking op {args.datum}: {omschrijving}. "
+                      f"ETV staat er per dag maar één toe — boeken heeft geen zin.")
+            _schrijf_boekstatus("fout",
+                                f"Al een boeking op {args.datum} ({omschrijving}) — "
+                                f"ETV staat 1 actieve boeking per dag toe",
+                                datum=args.datum, tijd=args.tijd, sport=args.sport,
+                                spelers=alle_spelers)
+            sys.exit(1)
 
         # â•"â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—
         # â•‘ OUTER-RETRY: volledige wizard-restart bij ETV-restricties        â•‘

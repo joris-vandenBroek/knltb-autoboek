@@ -9,7 +9,44 @@ from boek_regels import (
     dag_selectie_actie,
     baan_voorkeur,
     wizard_ververs_moment,
+    boeking_op_datum,
 )
+
+
+class TestBoekingOpDatum(unittest.TestCase):
+    """
+    ETV staat 1 actieve boeking per dag per lid toe. Run #203 (09-08-2026)
+    verspilde 5 pogingen aan een baan die vrij was maar nooit bevestigd kon
+    worden, omdat Joris die dag al op Padel 5 stond. Vooraf controleren
+    scheelt die pogingen en levert een bruikbare reden op.
+    """
+
+    RESERVERINGEN = [
+        {"datum": "2026-08-11", "tijd": "19:30", "baan": "Padel 5"},
+        {"datum": "2026-08-18", "tijd": "20:00", "baan": "Padel 2"},
+    ]
+
+    def test_vindt_boeking_op_die_datum(self):
+        r = boeking_op_datum(self.RESERVERINGEN, "2026-08-11")
+        self.assertIsNotNone(r)
+        self.assertEqual(r["baan"], "Padel 5")
+
+    def test_geen_boeking_op_andere_datum(self):
+        self.assertIsNone(boeking_op_datum(self.RESERVERINGEN, "2026-08-12"))
+
+    def test_lege_lijst(self):
+        self.assertIsNone(boeking_op_datum([], "2026-08-11"))
+
+    def test_none_lijst_is_veilig(self):
+        # Mislukt scrapen mag nooit een boeking blokkeren.
+        self.assertIsNone(boeking_op_datum(None, "2026-08-11"))
+
+    def test_negeert_items_zonder_datum(self):
+        rommel = [{"tijd": "19:30"}, {"datum": None}, {"datum": "2026-08-11"}]
+        self.assertIsNotNone(boeking_op_datum(rommel, "2026-08-11"))
+
+    def test_lege_datum_blokkeert_niets(self):
+        self.assertIsNone(boeking_op_datum(self.RESERVERINGEN, ""))
 
 
 class TestWizardVerversMoment(unittest.TestCase):

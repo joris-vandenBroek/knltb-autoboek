@@ -74,6 +74,28 @@ def baan_voorkeur(gebruiker: str, sport: str, gebruiker_ids=None) -> list:
     return list(banen[offset:]) + list(banen[:offset])
 
 
+def boeking_op_datum(reserveringen, datum: str):
+    """
+    Zoek een bestaande reservering op deze speeldatum, of None.
+
+    ETV staat één actieve boeking per dag per lid toe. Run #203 (09-08-2026)
+    liep vijf pogingen stuk op een baan die vrij was maar nooit bevestigd kon
+    worden, omdat het account die dag al op Padel 5 stond; de melding
+    "kan 1 actieve boekingen per dag hebben" kwam pas ná de bevestig-POST.
+
+    Bewust tolerant voor rommel: een mislukte of onvolledige scrape mag nooit
+    een boeking blokkeren. Bij twijfel geeft deze functie None terug, zodat we
+    het gewoon proberen — een overbodige poging is goedkoper dan een gemiste
+    baan.
+    """
+    if not reserveringen or not datum:
+        return None
+    for r in reserveringen:
+        if isinstance(r, dict) and r.get("datum") == datum:
+            return r
+    return None
+
+
 def wizard_ververs_moment(nu: datetime, doel_window_open: datetime,
                           marge_s: float = 45):
     """
