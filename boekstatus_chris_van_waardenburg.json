@@ -1,6 +1,6 @@
 {
   "status": "ok",
-  "reden": "Gereserveerd: Padel 3 om 20:00",
+  "reden": "Gereserveerd: Tennis 12 om 20:00",
   "datum": "2026-08-11",
   "tijd": "20:00",
   "sport": "tennis",
@@ -10,6 +10,6 @@
     "Theo Minneboo",
     "Wim Bor"
   ],
-  "baan": "Padel 3",
+  "baan": "Tennis 12",
   "tijdstip": "2026-08-09T07:04:14+02:00"
 }
