@@ -165,8 +165,11 @@ jobs:
           path: '*.png'
           retention-days: 3
 
+      # Geen issue bij een dry-run: dat is een test, geen storing. Verifieren
+      # van een fix leverde anders elke keer een issue op dat handmatig weer
+      # gesloten moest worden (09-08-2026).
       - name: Open issue bij failure
-        if: failure()
+        if: failure() && inputs.dry_run != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
