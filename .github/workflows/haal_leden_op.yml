@@ -35,6 +35,12 @@ jobs:
         run: |
           bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r '.joris_van_den_broek.bondsnummer')
           wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r '.joris_van_den_broek.wachtwoord')
+          # Maskeren zodra we hem hebben -- zie de toelichting in boek.yml.
+          # Hier blijft de waarde weliswaar binnen de stap (export i.p.v.
+          # $GITHUB_ENV), maar een `set -x` of een crash-dump lekt hem alsnog.
+          if [ -n "$wachtwoord" ] && [ "$wachtwoord" != "null" ]; then
+            echo "::add-mask::$wachtwoord"
+          fi
           if [ "$bondsnummer" = "null" ] || [ -z "$bondsnummer" ]; then
             echo "joris_van_den_broek niet gevonden in GEBRUIKERS_CONFIG"
             exit 1

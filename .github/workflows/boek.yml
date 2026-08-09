@@ -76,6 +76,14 @@ jobs:
           bondsnummer=$(echo "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].bondsnummer')
           wachtwoord=$(echo  "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].wachtwoord')
           naam=$(echo         "$GEBRUIKERS_CONFIG" | jq -r --arg u "$gebruiker" '.[$u].naam')
+          # Meteen maskeren, VOORDAT de waarde in $GITHUB_ENV komt: Actions
+          # dumpt de env van elke stap in de log, en omdat het wachtwoord uit
+          # GEBRUIKERS_CONFIG komt (en niet zelf een secret is) kende de runner
+          # het niet. Daardoor stond het leesbaar in de logs van een publieke
+          # repo -- ontdekt 09-08-2026.
+          if [ -n "$wachtwoord" ] && [ "$wachtwoord" != "null" ]; then
+            echo "::add-mask::$wachtwoord"
+          fi
           if [ "$bondsnummer" = "null" ] || [ -z "$bondsnummer" ]; then
             echo "Gebruiker '$gebruiker' niet gevonden in GEBRUIKERS_CONFIG"
             exit 1
