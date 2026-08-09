@@ -1,15 +1,15 @@
 {
-  "status": "ok",
-  "reden": "Gereserveerd: Padel om 20:00",
-  "datum": "2026-08-04",
+  "status": "fout",
+  "reden": "Geen reservering gelukt na 5 pogingen",
+  "datum": "2026-08-11",
   "tijd": "20:00",
-  "sport": "tennis",
+  "sport": "padel",
   "spelers": [
     "Joris van den Broek",
-    "Chris van Waardenburg",
-    "Bert Hovenkamp",
-    "Theo Minneboo"
+    "Jan Verhoeven",
+    "Herman Brugmans",
+    "Teo van Deurzen"
   ],
-  "baan": "Padel",
-  "tijdstip": "2026-08-02T07:04:10+02:00"
+  "baan": "",
+  "tijdstip": "2026-08-09T07:04:28+02:00"
 }
