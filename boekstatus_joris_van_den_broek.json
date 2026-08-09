@@ -2,7 +2,7 @@
   "status": "fout",
   "reden": "Geen reservering gelukt na 5 pogingen",
   "datum": "2026-08-11",
-  "tijd": "20:00",
+  "tijd": "20:30",
   "sport": "padel",
   "spelers": [
     "Joris van den Broek",
@@ -11,5 +11,5 @@
     "Teo van Deurzen"
   ],
   "baan": "",
-  "tijdstip": "2026-08-09T07:04:28+02:00"
+  "tijdstip": "2026-08-09T20:04:54+02:00"
 }
