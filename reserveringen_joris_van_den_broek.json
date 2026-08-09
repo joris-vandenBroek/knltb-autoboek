@@ -1,23 +1,4 @@
 {
-  "bijgewerkt": "2026-08-08T08:09:57",
-  "reserveringen": [
-    {
-      "id": "2026-08-08_1200_padel-6",
-      "datum": "2026-08-08",
-      "tijd": "12:00",
-      "baan": "Padel 6",
-      "tekst": "08-08-2026\t12:00 - 13:00\tPadel 6\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Milou de Kort",
-        "Joris van den Broek",
-        "Waihang Cheung"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-08-09T08:11:41",
+  "reserveringen": []
 }
