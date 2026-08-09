@@ -1,4 +1,42 @@
 {
-  "bijgewerkt": "2026-08-08T08:09:41",
-  "reserveringen": []
+  "bijgewerkt": "2026-08-09T07:06:09",
+  "reserveringen": [
+    {
+      "id": "2026-08-10_0930_padel-3",
+      "datum": "2026-08-10",
+      "tijd": "09:30",
+      "baan": "Padel 3",
+      "tekst": "10-08-2026\t09:30 - 10:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Jeannette Warner",
+        "Chris van Waardenburg",
+        "Teo van Deurzen"
+      ]
+    },
+    {
+      "id": "2026-08-11_2000_tennis-12",
+      "datum": "2026-08-11",
+      "tijd": "20:00",
+      "baan": "Tennis 12",
+      "tekst": "11-08-2026\t20:00 - 21:00\t12\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Bert Hovenkamp",
+        "Theo Minneboo",
+        "Wim Bor"
+      ]
+    }
+  ]
 }
