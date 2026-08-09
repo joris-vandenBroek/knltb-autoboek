@@ -1,5 +1,5 @@
 {
-  "bijgewerkt": "2026-08-09T08:11:11",
+  "bijgewerkt": "2026-08-09T19:59:56",
   "reserveringen": [
     {
       "id": "2026-08-10_0930_padel-3",
@@ -20,11 +20,11 @@
       ]
     },
     {
-      "id": "2026-08-11_2000_tennis-12",
+      "id": "2026-08-11_2030_padel-3",
       "datum": "2026-08-11",
-      "tijd": "20:00",
-      "baan": "Tennis 12",
-      "tekst": "11-08-2026\t20:00 - 21:00\t12\t\t\nWijzigen\n\t\nAnnuleren",
+      "tijd": "20:30",
+      "baan": "Padel 3",
+      "tekst": "11-08-2026\t20:30 - 21:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
       "cancel": {
         "btnTekst": "Annuleren",
         "btnHref": null,
@@ -33,9 +33,9 @@
       },
       "spelers": [
         "Chris van Waardenburg",
-        "Bert Hovenkamp",
+        "Walther Slaats",
         "Theo Minneboo",
-        "Wim Bor"
+        "Bert Hovenkamp"
       ]
     }
   ]
