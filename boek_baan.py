@@ -50,10 +50,48 @@ WACHTWOORD   = os.environ.get("ETVVOLLEY_WACHTWOORD", "")
 GEBRUIKER    = os.environ.get("GEBRUIKER", "joris")
 SPELER1      = os.environ.get("SPELER1_NAAM", "Joris van den Broek")
 
-PADEL_BANEN   = ["Padel 1", "Padel 2", "Padel 3", "Padel 4", "Padel 5", "Padel 6"]
-TENNIS_BANEN  = ["Tennis 04", "Tennis 05", "Tennis 06", "Tennis 07",
-                 "Tennis 08", "Tennis 09", "Tennis 11", "Tennis 12"]
+# Banenlijsten en de pure beslisregels staan in boek_regels.py, zodat ze
+# testbaar zijn zonder selenium/Chrome (zelfde patroon als wachtrij_regels.py).
+from boek_regels import (          # noqa: E402
+    PADEL_BANEN,
+    TENNIS_BANEN,
+    baan_uit_body,
+    baan_voorkeur,
+    dag_selectie_actie,
+    wizard_ververs_moment,
+)
+
 WACHT_TIMEOUT = 15
+
+# Hoeveel seconden vóór 07:00:01 de wizard ververst wordt. Ruim genoeg om een
+# volledige heropbouw (baan afhangen + spelers, ~15s) te overleven als ETV ons
+# terugstuurt naar de spelerspagina, en kort genoeg om het formulier vers te
+# houden. Zie boek_regels.wizard_ververs_moment.
+WIZARD_VERVERS_MARGE_S = 45
+
+_gebruiker_ids_cache = None
+
+
+def _laad_gebruiker_ids() -> list:
+    """
+    Account-ids uit gebruikers.json, voor het spreiden van de baanvoorkeur.
+
+    Faalt bewust zacht: kan het bestand niet gelezen worden, dan geeft
+    baan_voorkeur() gewoon de basisvolgorde terug. Een boeking mag hier nooit
+    op stuklopen — spreiden is een optimalisatie, geen voorwaarde.
+    """
+    global _gebruiker_ids_cache
+    if _gebruiker_ids_cache is not None:
+        return _gebruiker_ids_cache
+    try:
+        pad = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gebruikers.json")
+        with open(pad, encoding="utf-8") as f:
+            data = json.load(f)
+        _gebruiker_ids_cache = [g["id"] for g in data if isinstance(g, dict) and g.get("id")]
+    except Exception as e:
+        log.warning(f"gebruikers.json niet leesbaar ({e}) — baanvoorkeur valt terug op basisvolgorde.")
+        _gebruiker_ids_cache = []
+    return _gebruiker_ids_cache
 
 _boek_etv_reden = ""  # set by bevestig() when ETV body contains a limit/error message
 
@@ -872,6 +910,47 @@ def _vind_volgende_knop(driver):
     """)
 
 
+def _ververs_wizard(driver: uc.Chrome, args, alle_spelers) -> bool:
+    """
+    Herlaad de wizard vlak vóór het startsein, zodat de dagdeel-submit met een
+    verse sessie gebeurt in plaats van met een formulier dat 8 minuten heeft
+    staan verlopen (run #199/#200, 09-08-2026).
+
+    ETV stuurt bij een herladen ReservationsDay soms terug naar de
+    spelerspagina — dat gebeurde in de outer-retry van 09-08. In dat geval
+    bouwen we de wizard opnieuw op. Daarom draait dit ruim vóór 07:00: er moet
+    tijd zijn om dat te herstellen.
+
+    Faalt bewust zacht. Lukt het verversen niet, dan houden we gewoon de oude
+    wizard en vangt het escalatiebudget in de dag-lus het alsnog op — een
+    mislukte verversing mag nooit de boeking kosten.
+    """
+    log.info(" Wizard verversen vóór het startsein...")
+    try:
+        driver.get("https://www.etv-volley.nl/me/ReservationsDay")
+        time.sleep(1)
+        if "ReservationsDay" in driver.current_url:
+            log.info(" Wizard ververst — verse sessie op de dag-pagina.")
+            return True
+
+        log.warning(f" ETV stuurde door naar {driver.current_url} — wizard opnieuw opbouwen.")
+        driver.get("https://www.etv-volley.nl/me/Reservations")
+        time.sleep(2)
+        if not klik_baan_afhangen(driver):
+            log.warning(" 'Baan afhangen' niet gevonden tijdens verversen — oude wizard blijft staan.")
+            return False
+        if not voeg_spelers_toe(driver, args.speler2, args.speler3, args.speler4, is_retry=True):
+            log.warning(" Spelers niet opnieuw ingevoerd tijdens verversen — oude wizard blijft staan.")
+            return False
+
+        _log_zichtbare_spelers(driver, alle_spelers, "na verversen wizard (4 verwacht)")
+        log.info(" Wizard opnieuw opgebouwd vóór het startsein.")
+        return True
+    except Exception as e:
+        log.warning(f" Verversen van de wizard mislukt: {e} — oude wizard blijft staan.")
+        return False
+
+
 def kies_dag(driver: uc.Chrome, datum: str, tijd: str) -> bool:
     """
     Selecteer dag+dagdeel en navigeer door naar baankeuze.
@@ -1141,6 +1220,12 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
     """
     log.info("Baankeuze pagina laden...")
 
+    # Voorkeursvolgorde van banen voor DIT account. Bij padel start elk account
+    # op een andere baan, zodat twee eigen runs die dezelfde avond boeken niet
+    # om dezelfde baan vechten (zie boek_regels.baan_voorkeur).
+    baan_volgorde = baan_voorkeur(GEBRUIKER, sport, _laad_gebruiker_ids())
+    log.info(f"Baanvoorkeur voor {GEBRUIKER} ({sport}): {', '.join(baan_volgorde)}")
+
     # Wacht tot de tijdslot-pagina geladen is
     try:
         WebDriverWait(driver, 30).until(
@@ -1215,11 +1300,16 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
         #   1. Loop over .court containers, filter op banen van de juiste sport
         #   2. Per court: vind .timeincourt:not(.disabled) waarvan innerText
         #      met de gewenste tijd start (bv. "18:30" of "15:00")
-        #   3. Verzamel ALLE kandidaten en sorteer op voorkeur:
-        #        padel:  laagste baannummer eerst (Padel 1 -> 6, ongewijzigd)
-        #        tennis: HOOGSTE baannummer eerst (12 -> 4). Baan 4 is de
-        #                slechtste baan en werd voorheen altijd als eerste
-        #                gekozen omdat de DOM-volgorde oplopend is.
+        #   3. Verzamel ALLE kandidaten en sorteer op de voorkeurslijst die
+        #      boek_regels.baan_voorkeur() voor DIT account oplevert:
+        #        padel:  elk account start op een andere baan en rolt door.
+        #                Was: altijd Padel 1 eerst -- waardoor twee accounts die
+        #                dezelfde avond boeken (Joris + Toine, 09-08-2026)
+        #                gegarandeerd om dezelfde baan vochten.
+        #        tennis: HOOGSTE baannummer eerst (12 -> 4), voor alle accounts
+        #                gelijk. Baan 4 is de slechtste baan en werd voorheen
+        #                altijd als eerste gekozen omdat de DOM-volgorde
+        #                oplopend is.
         #      Tennisbanen zijn 04-09, 11 en 12 -- baan 10 bestaat niet.
         #
         # LET OP: dit blok MOET een raw string blijven. Zonder de r-prefix zet
@@ -1233,8 +1323,9 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
         #   - .disabled cellen worden expliciet uitgesloten
         #   - Werkt onafhankelijk van accordion-expand-state / scrollpositie
         result = driver.execute_script(r"""
-            var tijd  = arguments[0];
-            var sport = arguments[1];
+            var tijd     = arguments[0];
+            var sport    = arguments[1];
+            var voorkeur = arguments[2];   // baannamen, meest gewenste eerst
             var kandidaten = [];
             document.querySelectorAll('.court').forEach(function(court) {
                 var btn = court.querySelector('button.btn-link');
@@ -1249,8 +1340,29 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
                 // zodat Pickle 1 (span "Hardcourt") er niet tussendoor glipt.
                 var span = btn.querySelector('span');
                 var sportLabel = span ? (span.textContent || '').trim() : '';
-                var kop = (btn.textContent || '');
-                if (span) kop = kop.replace(span.textContent, '');
+                // Pak ALLEEN de directe tekstnodes van de knop, dus zonder de
+                // <span>. NIET via textContent.replace(span.textContent, ''):
+                // die haalt de EERSTE treffer weg, en bij padel staat 'Padel'
+                // ook in de baannaam zelf. "9 Padel 1Padel" werd zo "9  1Padel",
+                // waarna /Padel\s+(\d+)/ nooit matchte en ELKE padelbaan werd
+                // overgeslagen. Padel boeken was daardoor onmogelijk vanaf
+                // commit e9a76b1 (07-08-2026) -- zichtbaar als "Geen padel
+                // tijdslot gevonden" op elk tijdstip, ook op een lege ochtend.
+                // Tennis had er geen last van: 'Smashcourt' botst niet met de
+                // baannaam.
+                var kop = '';
+                for (var n = 0; n < btn.childNodes.length; n++) {
+                    if (btn.childNodes[n].nodeType === 3) {
+                        kop += btn.childNodes[n].textContent || '';
+                    }
+                }
+                if (!kop && span) {
+                    // Terugval voor onverwachte DOM: knip de span-tekst van het
+                    // EIND af in plaats van de eerste treffer weg te halen.
+                    kop = (btn.textContent || '');
+                    var staart = kop.lastIndexOf(span.textContent);
+                    if (staart >= 0) kop = kop.slice(0, staart);
+                }
                 kop = kop.trim();
                 var baanLabel, volgorde;
                 if (sport === 'tennis') {
@@ -1258,15 +1370,19 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
                     var nm = kop.match(/(\d+)\s*$/);
                     if (!nm) return;
                     baanLabel = 'Tennis ' + nm[1];
-                    // Negatief zodat het hoogste baannummer vooraan sorteert.
-                    volgorde = -parseInt(nm[1], 10);
                 } else {
                     if (sportLabel !== 'Padel') return;
                     var m = kop.match(/Padel\s+(\d+)/);
                     if (!m) return;
                     baanLabel = 'Padel ' + m[1];
-                    volgorde = parseInt(m[1], 10);
                 }
+                // Sorteren op de voorkeurslijst van dit account (zie
+                // boek_regels.baan_voorkeur). LET OP: indexOf geeft -1 voor een
+                // baan die niet in de lijst staat -- zonder deze correctie zou
+                // zo'n onbekende baan juist vooraan sorteren en dus altijd
+                // gekozen worden.
+                volgorde = voorkeur.indexOf(baanLabel);
+                if (volgorde < 0) volgorde = voorkeur.length + 1;
                 var cellen = court.querySelectorAll('.timeincourt:not(.disabled)');
                 for (var i = 0; i < cellen.length; i++) {
                     var cel = cellen[i];
@@ -1284,7 +1400,7 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
                 return k.baan;
             }).join(', ');
             return found ? { cel: found.cel, baan: found.baan } : null;
-        """, tijd, sport)
+        """, tijd, sport, baan_volgorde)
 
         try:
             d_resultaat = driver.execute_script('return window._kiesBaanResult || ""')
@@ -1739,11 +1855,17 @@ def bevestig(driver: uc.Chrome, dry_run: bool = False) -> str:
 
 
 # â"€â"€ STAP 7: Verificatie â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
+def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str,
+                          sport: str = "padel", verwachte_baan: str = "") -> str:
     """
     Controleer of de reservering zichtbaar is op de reserveringspagina.
     Probeert zowel /mijn/Reservations als /me/Reservations.
     Geeft de naam van de gereserveerde baan terug (bijv. 'Padel 1'), of '' als niet gevonden.
+
+    `sport` en `verwachte_baan` zijn nodig omdat de overzichtspagina ALLE
+    reserveringen toont. Zonder die twee pakte de oude implementatie de eerste
+    padelbaan die ergens in de bodytekst stond — een tennisboeking op Tennis 12
+    werd zo als 'Padel 3' gerapporteerd (run #198). Zie boek_regels.baan_uit_body.
     """
     log.info("Reservering verifiren...")
 
@@ -1775,9 +1897,13 @@ def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str) -> str:
             datum_ok = any(t in body for t in datum_tekens)
             tijd_ok  = tijd in body
             if datum_ok and tijd_ok:
-                baan_naam = next((b for b in PADEL_BANEN if b in body), "")
-                log.info(f" Reservering BEVESTIGD op {url}! baan={baan_naam or '(onbekend)'}")
-                return baan_naam or "Padel"
+                baan_naam = baan_uit_body(body, sport, verwachte_baan)
+                log.info(f" Reservering BEVESTIGD op {url}! baan={baan_naam or '(onbekend)'}"
+                         f" (sport={sport}, verwacht='{verwachte_baan or '-'}')")
+                # Geen terugval op een generieke naam: liever '' dan een baan
+                # die niet klopt, want deze waarde gaat naar de agenda-afspraak
+                # en de boekstatus die de spelers te zien krijgen.
+                return baan_naam
 
             log.info(f"  Reservering NIET gevonden op {url} "
                      f"(datum_ok={datum_ok} tijd_ok={tijd_ok} "
@@ -1992,6 +2118,7 @@ def main():
         baan = ""
         gereserveerde_tijd = ""
         spelers_gedaan = False
+        dag_stall_herstart = False  # True als de dag-selectie de herstart forceerde
 
         for outer_poging in range(1, MAX_OUTER_POGINGEN + 1):
             log.info(f" BOEK-POGING {outer_poging}/{MAX_OUTER_POGINGEN} ")
@@ -2014,7 +2141,17 @@ def main():
                 if not spelers_gedaan:
                     # Wel een volledige wizard-restart nodig (spelers/baan-afhangen faalde)
                     # dat is een minder tijdkritiek pad  hier wél buffer voor ETV server-state.
-                    time.sleep(30)
+                    #
+                    # Uitzondering: komt de herstart doordat de dag-selectie bleef
+                    # hangen in de 07:00-spits, dan is die 30s juist schadelijk —
+                    # elke seconde kost banen. De wizard is dan niet stuk maar
+                    # verlopen, en een verse sessie is direct bruikbaar. 3s is
+                    # genoeg om de pagina netjes te laten laden.
+                    buffer_s = 3 if dag_stall_herstart else 30
+                    log.info(f" Wizard-herstart: {buffer_s}s buffer "
+                             f"({'dag-selectie hing' if dag_stall_herstart else 'wizard-fout'}).")
+                    time.sleep(buffer_s)
+                    dag_stall_herstart = False
                     log.info(" Herstart wizard vanaf 'Baan afhangen'...")
                     try:
                         driver.get("https://www.etv-volley.nl/me/Reservations")
@@ -2038,15 +2175,27 @@ def main():
 
             # Dag-selectie: eerste poging zo vroeg mogelijk (07:00:01). Bij mislukking
             # direct opnieuw proberen (0.15s cooldown, geen vaste 10s-slots).
-            # Deadline 07:03:00: ETV blijkt de dagdeel-klik pas ~1-2 min na 07:00
-            # te accepteren (gezien in run #174-logs) — de binnenlus is goedkoop
-            # (~1 pogingen/sec), dus die laten doorlopen is sneller dan escaleren
-            # naar de outer-retry (die een dure 30s-wachttijd + herstart kost).
+            #
+            # Escalatiebudget (was: absolute deadline 07:03:00). Run #199/#200 op
+            # 09-08-2026 liet zien waarom die 3 minuten fout waren: de wizard staat
+            # vanaf ~06:52 idle op ReservationsDay te wachten op 07:00, en ETV
+            # accepteert de dagdeel-submit daarna niet meer — 34 pogingen zonder
+            # navigatie. Een verse wizard doet het meteen in poging 1 (~2s). Het
+            # script bleef dus 3 minuten op een dode sessie hameren; om 07:04 was
+            # elke padelbaan voor die avond weg. Tennis overleefde het alleen omdat
+            # daar nog 8 banen vrij waren.
+            #
+            # Het budget is RELATIEF aan het begin van de dag-selectie binnen déze
+            # wizard-poging. Een absolute deadline zou na een herstart (die zelf
+            # ~30s kost) meteen weer verstreken zijn en in één klap alle
+            # outer-pogingen opbranden. `dag_hard_stop` is de absolute bovengrens.
             doel_window_open = reserveringsdatum.replace(hour=7, minute=0, second=1, microsecond=0)
-            dag_deadline     = reserveringsdatum.replace(hour=7, minute=3, second=0, microsecond=0)
+            dag_hard_stop    = reserveringsdatum.replace(hour=7, minute=6, second=0, microsecond=0)
+            DAG_BUDGET_S     = 20
             MAX_DAG_POGINGEN = 150
 
             dag_gelukt = False
+            dag_fase_start = None  # gezet zodra de eerste echte poging start
             for dag_poging in range(1, MAX_DAG_POGINGEN + 1):
                 nu = _nu_nl()
 
@@ -2055,6 +2204,23 @@ def main():
                     if nu.date() == reserveringsdatum.date() and nu < doel_window_open:
                         wacht_sec = (doel_window_open - nu).total_seconds()
                         log.info(f" Wacht {wacht_sec:.1f}s tot 07:00:01 NL...")
+
+                        # Ververs de wizard vlak vóór het startsein. Dit is de
+                        # eigenlijke oorzaakbestrijding: het formulier staat
+                        # anders 8 minuten stil en wordt door ETV niet meer
+                        # geaccepteerd (run #199/#200). Het escalatiebudget
+                        # verderop is het vangnet, dit is de preventie.
+                        ververs_op = wizard_ververs_moment(_nu_nl(), doel_window_open,
+                                                           marge_s=WIZARD_VERVERS_MARGE_S)
+                        if ververs_op:
+                            slaap = (ververs_op - _nu_nl()).total_seconds()
+                            if slaap > 0:
+                                time.sleep(slaap)
+                            _ververs_wizard(driver, args, alle_spelers)
+
+                        # Resterende wachttijd na de verversing opnieuw bepalen.
+                        nu1 = _nu_nl()
+                        wacht_sec = (doel_window_open - nu1).total_seconds()
                         if wacht_sec > 5:
                             time.sleep(max(0, wacht_sec - 4))
                             _sluit_cookie_banner(driver)
@@ -2062,13 +2228,30 @@ def main():
                             resterend = (doel_window_open - nu2).total_seconds()
                             if resterend > 0:
                                 time.sleep(resterend)
-                        else:
+                        elif wacht_sec > 0:
                             time.sleep(wacht_sec)
+                    # Pas ná de wachtlus starten: de 8 minuten idle-wachten tellen
+                    # niet mee in het budget, alleen het echte proberen.
+                    dag_fase_start = _nu_nl()
                 else:
-                    # Stop als deadline voorbij (outer-retry pakt het over)
-                    if nu.date() == reserveringsdatum.date() and nu > dag_deadline:
-                        log.warning(f" Deadline 07:03:00 bereikt na {dag_poging - 1} pogingen — outer-retry.")
-                        break
+                    # Blijft de dagdeel-submit hangen, escaleer dan snel naar een
+                    # verse wizard in plaats van door te hameren op een dode sessie.
+                    if nu.date() == reserveringsdatum.date():
+                        actie = dag_selectie_actie(nu=nu, fase_start=dag_fase_start,
+                                                   budget_s=DAG_BUDGET_S,
+                                                   hard_stop=dag_hard_stop)
+                        if actie == "stop":
+                            log.warning(f" Hard stop {dag_hard_stop.strftime('%H:%M:%S')} bereikt na "
+                                        f"{dag_poging - 1} pogingen — dag-selectie opgegeven.")
+                            break
+                        if actie == "herstart":
+                            verstreken = (nu - dag_fase_start).total_seconds()
+                            log.warning(f" Dag-selectie hangt al {verstreken:.0f}s "
+                                        f"({dag_poging - 1} pogingen) — wizard is vermoedelijk "
+                                        f"verlopen, forceer een verse wizard via outer-retry.")
+                            spelers_gedaan = False       # dwing een volledige herstart af
+                            dag_stall_herstart = True    # ...maar zonder de 30s-buffer
+                            break
                     time.sleep(0.15)  # korte cooldown tussen pogingen
 
                 if kies_dag(driver, args.datum, args.tijd):
@@ -2150,16 +2333,22 @@ def main():
             sys.exit(1)
 
         # â"€â"€ Verificeer dat reservering zichtbaar is op Mijn Reserveringen â"€â"€â"€â"€â"€â"€â"€â"€
-        geverifieerde_baan = verifieer_reservering(driver, args.datum, gereserveerde_tijd)
+        geverifieerde_baan = verifieer_reservering(driver, args.datum, gereserveerde_tijd,
+                                                   sport=args.sport, verwachte_baan=baan)
         if not geverifieerde_baan:
             # Verificatie mislukt maar reservering is WEL gemaakt (bevestig() returnte 'OK').
             # sys.exit(1) hier zou de cleanup-stap in boek.yml overslaan en het wachtrij-bestand
             # laten staan — waardoor morgen opnieuw geprobeerd wordt te boeken voor dezelfde datum.
             # Daarom: log een warning en ga door zodat de cleanup altijd plaatsvindt.
-            log.warning(" Reservering niet zichtbaar op reserveringspagina — verificatie overgeslagen, "
-                        "baan-naam onbekend. Agenda wordt NIET bijgewerkt.")
+            log.warning(f" Geen {args.sport}-baan herkend op de reserveringspagina — "
+                        f"val terug op de baan uit de grid-klik: '{baan or '(onbekend)'}'.")
         else:
-            # Gebruik geverifieerde baan-naam (betrouwbaarder dan detectie tijdens grid-klik)
+            # Beide bronnen zijn het eens, of de overzichtspagina is specifieker.
+            # Wijkt hij af van de grid-klik, dan is dat het loggen waard: dan
+            # heeft ETV ons een andere baan toegewezen dan we aanklikten.
+            if baan and geverifieerde_baan != baan:
+                log.warning(f" Baan wijkt af: grid-klik gaf '{baan}', "
+                            f"reserveringspagina geeft '{geverifieerde_baan}'.")
             baan = geverifieerde_baan
 
     finally:
