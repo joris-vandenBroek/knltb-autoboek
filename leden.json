@@ -822,6 +822,12 @@
     "rating_padel": "8,3996"
   },
   {
+    "bondsnummer": "44951868",
+    "naam": "Dajon Gorissen",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
     "bondsnummer": "37447602",
     "naam": "Dakshina Murthy Muthusamy",
     "sterkte_padel": "8",
@@ -1158,6 +1164,12 @@
     "rating_padel": ""
   },
   {
+    "bondsnummer": "44951930",
+    "naam": "Emil Iliyanov",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
     "bondsnummer": "21501742",
     "naam": "Emile Rasing",
     "sterkte_padel": "9",
@@ -1324,6 +1336,12 @@
     "naam": "Fleur Bok",
     "sterkte_padel": "8",
     "rating_padel": "8,1500"
+  },
+  {
+    "bondsnummer": "44952015",
+    "naam": "Fleur Verhoeven",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "39767698",
@@ -1558,6 +1576,12 @@
     "naam": "Gyunam Park",
     "sterkte_padel": "8",
     "rating_padel": "8,0000"
+  },
+  {
+    "bondsnummer": "41155351",
+    "naam": "Haidar Sakhi",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "17276160",
@@ -2008,6 +2032,12 @@
     "naam": "Jaap de Wit",
     "sterkte_padel": "9",
     "rating_padel": "9,0000"
+  },
+  {
+    "bondsnummer": "18008836",
+    "naam": "Jacco van Van leeuwen",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "16763491",
@@ -3432,16 +3462,16 @@
     "rating_padel": "8,0000"
   },
   {
-    "bondsnummer": "",
-    "naam": "Marion De Vries",
-    "sterkte_padel": "",
-    "rating_padel": ""
-  },
-  {
     "bondsnummer": "24165190",
     "naam": "Marion Henckens",
     "sterkte_padel": "8",
     "rating_padel": "8,0000"
+  },
+  {
+    "bondsnummer": "",
+    "naam": "Marion de Vries",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "12541788",
@@ -3628,6 +3658,12 @@
     "naam": "Mathijs Jansen",
     "sterkte_padel": "9",
     "rating_padel": "8,7424"
+  },
+  {
+    "bondsnummer": "22344039",
+    "naam": "Mathijs Rosielle",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "41390466",
@@ -4848,6 +4884,12 @@
     "rating_padel": "9,1500"
   },
   {
+    "bondsnummer": "44951779",
+    "naam": "Romy Kuipers",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
     "bondsnummer": "17378206",
     "naam": "Ron Diebels",
     "sterkte_padel": "7",
@@ -5106,12 +5148,6 @@
     "rating_padel": "7,1137"
   },
   {
-    "bondsnummer": "44815069",
-    "naam": "Simo Sato",
-    "sterkte_padel": "",
-    "rating_padel": ""
-  },
-  {
     "bondsnummer": "12326828",
     "naam": "Simone van Dongen",
     "sterkte_padel": "7",
@@ -5286,6 +5322,12 @@
     "rating_padel": "8,4247"
   },
   {
+    "bondsnummer": "17818907",
+    "naam": "Susan van der Sman",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
     "bondsnummer": "15974944",
     "naam": "Susanne Meijering",
     "sterkte_padel": "",
@@ -5352,6 +5394,12 @@
     "rating_padel": "6,6000"
   },
   {
+    "bondsnummer": "44952023",
+    "naam": "Tejas Kalavalapalli",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
     "bondsnummer": "14772744",
     "naam": "Teo van Deurzen",
     "sterkte_padel": "8",
@@ -5392,6 +5440,12 @@
     "naam": "Teun Swinkels",
     "sterkte_padel": "8",
     "rating_padel": "8,0000"
+  },
+  {
+    "bondsnummer": "44951973",
+    "naam": "Teun van Van veldhuizen",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "10435808",
@@ -5560,6 +5614,12 @@
     "naam": "Timo Meijer",
     "sterkte_padel": "8",
     "rating_padel": "8,0000"
+  },
+  {
+    "bondsnummer": "44951795",
+    "naam": "Timofei Volkov",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "44447639",
@@ -5910,6 +5970,12 @@
     "rating_padel": "7,9649"
   },
   {
+    "bondsnummer": "15250180",
+    "naam": "Wouter van Leeuwen",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
     "bondsnummer": "44269145",
     "naam": "Wouter van Stipdonk",
     "sterkte_padel": "9",
@@ -5950,6 +6016,12 @@
     "naam": "Yannick van der Zwart",
     "sterkte_padel": "8",
     "rating_padel": "8,3000"
+  },
+  {
+    "bondsnummer": "44974124",
+    "naam": "Yaren Floris",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "42725968",
