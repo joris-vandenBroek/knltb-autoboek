@@ -1,24 +1,6 @@
 {
-  "bijgewerkt": "2026-08-10T08:54:05",
+  "bijgewerkt": "2026-08-11T08:31:08",
   "reserveringen": [
-    {
-      "id": "2026-08-10_0930_padel-3",
-      "datum": "2026-08-10",
-      "tijd": "09:30",
-      "baan": "Padel 3",
-      "tekst": "10-08-2026\t09:30 - 10:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Jeannette Warner",
-        "Chris van Waardenburg",
-        "Teo van Deurzen"
-      ]
-    },
     {
       "id": "2026-08-11_2030_padel-3",
       "datum": "2026-08-11",
