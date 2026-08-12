@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-08-11T08:31:08",
-  "reserveringen": [
-    {
-      "id": "2026-08-11_2030_padel-3",
-      "datum": "2026-08-11",
-      "tijd": "20:30",
-      "baan": "Padel 3",
-      "tekst": "11-08-2026\t20:30 - 21:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Chris van Waardenburg",
-        "Walther Slaats",
-        "Theo Minneboo",
-        "Bert Hovenkamp"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-08-12T08:55:45",
+  "reserveringen": []
 }
