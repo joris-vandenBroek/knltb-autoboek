@@ -1,4 +1,22 @@
 {
-  "bijgewerkt": "2026-08-14T08:57:04",
-  "reserveringen": []
+  "bijgewerkt": "2026-08-15T07:54:35",
+  "reserveringen": [
+    {
+      "id": "2026-08-17_0900_padel-1",
+      "datum": "2026-08-17",
+      "tijd": "09:00",
+      "baan": "Padel 1",
+      "tekst": "17-08-2026\t09:00 - 10:00\tPadel 1\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Teo van Deurzen",
+        "Chris van Waardenburg"
+      ]
+    }
+  ]
 }
