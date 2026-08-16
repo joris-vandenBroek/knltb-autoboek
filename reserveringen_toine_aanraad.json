@@ -1,4 +1,24 @@
 {
-  "bijgewerkt": "2026-08-15T07:54:05",
-  "reserveringen": []
+  "bijgewerkt": "2026-08-16T07:03:07",
+  "reserveringen": [
+    {
+      "id": "2026-08-18_2000_padel-6",
+      "datum": "2026-08-18",
+      "tijd": "20:00",
+      "baan": "Padel 6",
+      "tekst": "18-08-2026\t20:00 - 21:00\tPadel 6\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Toine Aanraad",
+        "Peter Nijhof",
+        "Jan van Bragt",
+        "Dirk Hanssen"
+      ]
+    }
+  ]
 }
