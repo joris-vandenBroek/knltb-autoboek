@@ -1,5 +1,5 @@
 {
-  "bijgewerkt": "2026-08-15T07:54:35",
+  "bijgewerkt": "2026-08-16T07:03:05",
   "reserveringen": [
     {
       "id": "2026-08-17_0900_padel-1",
@@ -16,6 +16,25 @@
       "spelers": [
         "Teo van Deurzen",
         "Chris van Waardenburg"
+      ]
+    },
+    {
+      "id": "2026-08-18_2000_tennis-12",
+      "datum": "2026-08-18",
+      "tijd": "20:00",
+      "baan": "Tennis 12",
+      "tekst": "18-08-2026\t20:00 - 21:00\t12\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Bert Hovenkamp",
+        "Theo Minneboo",
+        "Wim Bor"
       ]
     }
   ]
