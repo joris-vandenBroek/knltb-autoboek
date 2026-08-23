@@ -1,7 +1,7 @@
 {
   "status": "ok",
-  "reden": "Gereserveerd: Padel 6 om 19:00",
-  "datum": "2026-08-18",
+  "reden": "Gereserveerd: Padel 2 om 19:00",
+  "datum": "2026-08-25",
   "tijd": "19:00",
   "sport": "padel",
   "spelers": [
@@ -10,6 +10,6 @@
     "Herman Brugmans",
     "Teo van Deurzen"
   ],
-  "baan": "Padel 6",
-  "tijdstip": "2026-08-16T07:01:04+02:00"
+  "baan": "Padel 2",
+  "tijdstip": "2026-08-23T07:01:03+02:00"
 }
