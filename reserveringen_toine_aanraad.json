@@ -1,12 +1,12 @@
 {
-  "bijgewerkt": "2026-08-22T07:56:16",
+  "bijgewerkt": "2026-08-23T07:03:02",
   "reserveringen": [
     {
-      "id": "2026-08-22_1030_padel-3",
-      "datum": "2026-08-22",
-      "tijd": "10:30",
+      "id": "2026-08-25_2030_padel-3",
+      "datum": "2026-08-25",
+      "tijd": "20:30",
       "baan": "Padel 3",
-      "tekst": "22-08-2026\t10:30 - 11:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
+      "tekst": "25-08-2026\t20:30 - 21:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
       "cancel": {
         "btnTekst": "Annuleren",
         "btnHref": null,
@@ -14,9 +14,10 @@
         "btnDataId": null
       },
       "spelers": [
-        "Nghia Le",
         "Toine Aanraad",
-        "Niels Dorresteijn"
+        "Peter Nijhof",
+        "Jan van Bragt",
+        "Dirk Hanssen"
       ]
     }
   ]
