@@ -1,8 +1,8 @@
 {
   "status": "ok",
-  "reden": "Gereserveerd: Padel 6 om 20:00",
-  "datum": "2026-08-18",
-  "tijd": "20:00",
+  "reden": "Gereserveerd: Padel 3 om 20:30 (voorkeur was 20:00)",
+  "datum": "2026-08-25",
+  "tijd": "20:30",
   "sport": "padel",
   "spelers": [
     "Toine Aanraad",
@@ -10,6 +10,6 @@
     "Jan van Bragt",
     "Dirk Hanssen"
   ],
-  "baan": "Padel 6",
-  "tijdstip": "2026-08-16T07:00:59+02:00"
+  "baan": "Padel 3",
+  "tijdstip": "2026-08-23T07:00:59+02:00"
 }
