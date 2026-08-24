@@ -1,5 +1,11 @@
 [
   {
+    "bondsnummer": "45015252",
+    "naam": "Abdulkhaliq Noori",
+    "sterkte_padel": "",
+    "rating_padel": ""
+  },
+  {
     "bondsnummer": "44218427",
     "naam": "Abdulrahman Faez Ahmed Ali Saeed",
     "sterkte_padel": "8",
@@ -1426,12 +1432,6 @@
     "naam": "Frank van Hal",
     "sterkte_padel": "8",
     "rating_padel": "8,0000"
-  },
-  {
-    "bondsnummer": "13346326",
-    "naam": "Frans Broekman",
-    "sterkte_padel": "",
-    "rating_padel": ""
   },
   {
     "bondsnummer": "14878992",
@@ -3496,6 +3496,12 @@
     "naam": "Marion van der Heijden",
     "sterkte_padel": "8",
     "rating_padel": "8,0000"
+  },
+  {
+    "bondsnummer": "40752763",
+    "naam": "Marisa van Eeuwijk",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "43010954",
