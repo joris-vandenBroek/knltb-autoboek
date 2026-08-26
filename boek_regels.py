@@ -7,7 +7,7 @@ deze logica in tests draait zonder browser. boek_baan.py importeert hieruit.
 
 from datetime import datetime, timedelta
 
-PADEL_BANEN = ["Padel 1", "Padel 2", "Padel 3", "Padel 4", "Padel 5", "Padel 6"]
+PADEL_BANEN = ["Padel 4", "Padel 6", "Padel 5", "Padel 3", "Padel 2", "Padel 1"]
 TENNIS_BANEN = ["Tennis 04", "Tennis 05", "Tennis 06", "Tennis 07",
                 "Tennis 08", "Tennis 09", "Tennis 11", "Tennis 12"]
 
@@ -47,12 +47,13 @@ def baan_voorkeur(gebruiker: str, sport: str, gebruiker_ids=None) -> list:
     """
     Voorkeursvolgorde van banen voor dit account.
 
-    Padel: elk account start op een andere baan en rolt door. Run #199/#200
-    (09-08-2026) liet zien waarom: Joris en Toine wilden allebei padel om 20:00,
-    vuurden op dezelfde seconde, en de oplopende sortering liet ze allebei eerst
-    naar Padel 1 grijpen. Dat is zelfgemaakte concurrentie — bij schaarste
-    verliest er per definitie één. De banen zijn onderling gelijkwaardig, dus
-    spreiden kost niets.
+    Padel: elk account start op een andere baan (in PADEL_BANEN-volgorde) en
+    rolt door. Run #199/#200 (09-08-2026) liet zien waarom: Joris en Toine
+    wilden allebei padel om 20:00, vuurden op dezelfde seconde, en een vaste
+    sortering liet ze allebei naar dezelfde eerste baan grijpen. Dat is
+    zelfgemaakte concurrentie — bij schaarste verliest er per definitie één.
+    PADEL_BANEN staat op voorkeursvolgorde (26-08-2026: 4, 6, 5, 3, 2, 1);
+    spreiden zorgt ervoor dat niet alle accounts tegelijk naar baan 4 grijpen.
 
     De offset komt uit de positie in de (gesorteerde) gebruikerslijst, niet uit
     een hash of toeval: dat spreidt N accounts gelijkmatig over de banen, botst
