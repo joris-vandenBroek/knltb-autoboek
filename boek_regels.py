@@ -11,6 +11,16 @@ PADEL_BANEN = ["Padel 4", "Padel 6", "Padel 5", "Padel 3", "Padel 2", "Padel 1"]
 TENNIS_BANEN = ["Tennis 04", "Tennis 05", "Tennis 06", "Tennis 07",
                 "Tennis 08", "Tennis 09", "Tennis 11", "Tennis 12"]
 
+# Vaste padelvoorkeur per account (26-08-2026, op verzoek van Joris): Joris en
+# Toine boeken op verschillende tijden (19:00 resp. 20:00), dus het
+# botsingsrisico dat de offset-spreiding in baan_voorkeur() ondervangt speelt
+# hier niet. Accounts die hier niet in staan (bv. chris_van_waardenburg, die
+# alleen tennis boekt) vallen terug op de offset-spreiding over PADEL_BANEN.
+PADEL_VOORKEUR_PER_ACCOUNT = {
+    "joris_van_den_broek": ["Padel 4", "Padel 6", "Padel 5", "Padel 3", "Padel 2", "Padel 1"],
+    "toine_aanraad":       ["Padel 6", "Padel 4", "Padel 5", "Padel 3", "Padel 2", "Padel 1"],
+}
+
 
 def banen_voor_sport(sport: str) -> list:
     """Banenlijst voor een sport. Onbekende sport valt terug op padel."""
@@ -47,13 +57,13 @@ def baan_voorkeur(gebruiker: str, sport: str, gebruiker_ids=None) -> list:
     """
     Voorkeursvolgorde van banen voor dit account.
 
-    Padel: elk account start op een andere baan (in PADEL_BANEN-volgorde) en
-    rolt door. Run #199/#200 (09-08-2026) liet zien waarom: Joris en Toine
-    wilden allebei padel om 20:00, vuurden op dezelfde seconde, en een vaste
-    sortering liet ze allebei naar dezelfde eerste baan grijpen. Dat is
-    zelfgemaakte concurrentie — bij schaarste verliest er per definitie één.
-    PADEL_BANEN staat op voorkeursvolgorde (26-08-2026: 4, 6, 5, 3, 2, 1);
-    spreiden zorgt ervoor dat niet alle accounts tegelijk naar baan 4 grijpen.
+    Padel: accounts met een vaste voorkeur in PADEL_VOORKEUR_PER_ACCOUNT
+    krijgen die exacte volgorde. Andere accounts starten op een andere baan
+    (in PADEL_BANEN-volgorde) en rollen door. Run #199/#200 (09-08-2026) liet
+    zien waarom dat spreiden nodig is: Joris en Toine wilden allebei padel om
+    20:00, vuurden op dezelfde seconde, en een vaste sortering liet ze allebei
+    naar dezelfde eerste baan grijpen. Dat is zelfgemaakte concurrentie — bij
+    schaarste verliest er per definitie één.
 
     De offset komt uit de positie in de (gesorteerde) gebruikerslijst, niet uit
     een hash of toeval: dat spreidt N accounts gelijkmatig over de banen, botst
@@ -66,6 +76,9 @@ def baan_voorkeur(gebruiker: str, sport: str, gebruiker_ids=None) -> list:
     banen = banen_voor_sport(sport)
     if (sport or "").strip().lower() == "tennis":
         return list(reversed(banen))
+
+    if gebruiker in PADEL_VOORKEUR_PER_ACCOUNT:
+        return list(PADEL_VOORKEUR_PER_ACCOUNT[gebruiker])
 
     ids = sorted(gebruiker_ids or [])
     if not ids or gebruiker not in ids:

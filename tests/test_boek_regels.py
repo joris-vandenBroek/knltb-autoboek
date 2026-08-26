@@ -91,40 +91,61 @@ class TestBaanVoorkeur(unittest.TestCase):
     dag om 20:00 en vuurden op dezelfde seconde. De padel-sortering was oplopend,
     dus beide runs mikten gegarandeerd eerst op Padel 1 — zelfgemaakte
     concurrentie. Elk account krijgt daarom een eigen startbaan.
+
+    26-08-2026: Joris en Toine boeken padel op verschillende tijden (19:00 resp.
+    20:00), dus voor hen is de botsingsangst uit run #199/#200 niet meer aan de
+    orde. Zij krijgen daarom een vaste voorkeur uit PADEL_VOORKEUR_PER_ACCOUNT
+    in plaats van de offset-rotatie. Accounts zonder vaste voorkeur (bv. een
+    nieuw account) vallen terug op die rotatie.
     """
 
     def test_geeft_alle_banen_terug(self):
-        volgorde = baan_voorkeur("joris_van_den_broek", "padel", ALLE_GEBRUIKERS)
+        volgorde = baan_voorkeur("chris_van_waardenburg", "padel", ALLE_GEBRUIKERS)
         self.assertEqual(sorted(volgorde), sorted(PADEL_BANEN))
 
     def test_is_een_rotatie_van_de_basisvolgorde(self):
-        volgorde = baan_voorkeur("toine_aanraad", "padel", ALLE_GEBRUIKERS)
+        # chris_van_waardenburg staat niet in PADEL_VOORKEUR_PER_ACCOUNT (hij
+        # boekt in de praktijk alleen tennis), dus die valt terug op de rotatie.
+        volgorde = baan_voorkeur("chris_van_waardenburg", "padel", ALLE_GEBRUIKERS)
         start = PADEL_BANEN.index(volgorde[0])
         self.assertEqual(volgorde, PADEL_BANEN[start:] + PADEL_BANEN[:start])
 
-    def test_accounts_starten_op_verschillende_banen(self):
-        eersten = [baan_voorkeur(g, "padel", ALLE_GEBRUIKERS)[0] for g in ALLE_GEBRUIKERS]
-        self.assertEqual(len(set(eersten)), len(ALLE_GEBRUIKERS),
-                         f"accounts botsen nog steeds op dezelfde baan: {eersten}")
+    def test_joris_krijgt_vaste_voorkeur_4_dan_6(self):
+        volgorde = baan_voorkeur("joris_van_den_broek", "padel", ALLE_GEBRUIKERS)
+        self.assertEqual(volgorde, ["Padel 4", "Padel 6", "Padel 5", "Padel 3", "Padel 2", "Padel 1"])
+
+    def test_toine_krijgt_vaste_voorkeur_6_dan_4(self):
+        volgorde = baan_voorkeur("toine_aanraad", "padel", ALLE_GEBRUIKERS)
+        self.assertEqual(volgorde, ["Padel 6", "Padel 4", "Padel 5", "Padel 3", "Padel 2", "Padel 1"])
+
+    def test_vaste_voorkeuren_botsen_niet_op_eerste_baan(self):
+        eersten = [baan_voorkeur(g, "padel", ALLE_GEBRUIKERS)[0]
+                   for g in ("joris_van_den_broek", "toine_aanraad")]
+        self.assertEqual(len(set(eersten)), 2,
+                         f"Joris en Toine botsen nog steeds op dezelfde baan: {eersten}")
 
     def test_is_deterministisch(self):
-        a = baan_voorkeur("joris_van_den_broek", "padel", ALLE_GEBRUIKERS)
-        b = baan_voorkeur("joris_van_den_broek", "padel", ALLE_GEBRUIKERS)
+        a = baan_voorkeur("chris_van_waardenburg", "padel", ALLE_GEBRUIKERS)
+        b = baan_voorkeur("chris_van_waardenburg", "padel", ALLE_GEBRUIKERS)
         self.assertEqual(a, b)
 
     def test_volgorde_van_de_gebruikerslijst_maakt_niet_uit(self):
         # gebruikers.json mag herordend worden zonder dat iedereen ineens
         # een andere baan krijgt.
-        a = baan_voorkeur("toine_aanraad", "padel", ALLE_GEBRUIKERS)
-        b = baan_voorkeur("toine_aanraad", "padel", list(reversed(ALLE_GEBRUIKERS)))
+        a = baan_voorkeur("chris_van_waardenburg", "padel", ALLE_GEBRUIKERS)
+        b = baan_voorkeur("chris_van_waardenburg", "padel", list(reversed(ALLE_GEBRUIKERS)))
         self.assertEqual(a, b)
 
     def test_onbekende_gebruiker_krijgt_geldige_volgorde(self):
         volgorde = baan_voorkeur("iemand_anders", "padel", ALLE_GEBRUIKERS)
         self.assertEqual(sorted(volgorde), sorted(PADEL_BANEN))
 
-    def test_zonder_gebruikerslijst_valt_terug_op_basisvolgorde(self):
-        self.assertEqual(baan_voorkeur("joris_van_den_broek", "padel", []), PADEL_BANEN)
+    def test_zonder_gebruikerslijst_valt_terug_op_vaste_voorkeur(self):
+        self.assertEqual(baan_voorkeur("joris_van_den_broek", "padel", []),
+                         ["Padel 4", "Padel 6", "Padel 5", "Padel 3", "Padel 2", "Padel 1"])
+
+    def test_zonder_gebruikerslijst_en_zonder_vaste_voorkeur_valt_terug_op_basisvolgorde(self):
+        self.assertEqual(baan_voorkeur("chris_van_waardenburg", "padel", []), PADEL_BANEN)
 
     def test_tennis_houdt_hoogste_baan_eerst(self):
         # Bewust ongemoeid: baan 04 is de slechtste tennisbaan, daarom hoogste
