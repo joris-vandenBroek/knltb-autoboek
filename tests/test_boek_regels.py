@@ -110,13 +110,13 @@ class TestBaanVoorkeur(unittest.TestCase):
         start = PADEL_BANEN.index(volgorde[0])
         self.assertEqual(volgorde, PADEL_BANEN[start:] + PADEL_BANEN[:start])
 
-    def test_joris_krijgt_vaste_voorkeur_4_dan_6(self):
+    def test_joris_krijgt_vaste_voorkeur_6_dan_5(self):
         volgorde = baan_voorkeur("joris_van_den_broek", "padel", ALLE_GEBRUIKERS)
-        self.assertEqual(volgorde, ["Padel 4", "Padel 6", "Padel 5", "Padel 3", "Padel 2", "Padel 1"])
+        self.assertEqual(volgorde, ["Padel 6", "Padel 5", "Padel 4", "Padel 3", "Padel 2", "Padel 1"])
 
-    def test_toine_krijgt_vaste_voorkeur_6_dan_4(self):
+    def test_toine_krijgt_vaste_voorkeur_5_dan_6(self):
         volgorde = baan_voorkeur("toine_aanraad", "padel", ALLE_GEBRUIKERS)
-        self.assertEqual(volgorde, ["Padel 6", "Padel 4", "Padel 5", "Padel 3", "Padel 2", "Padel 1"])
+        self.assertEqual(volgorde, ["Padel 5", "Padel 6", "Padel 4", "Padel 3", "Padel 2", "Padel 1"])
 
     def test_vaste_voorkeuren_botsen_niet_op_eerste_baan(self):
         eersten = [baan_voorkeur(g, "padel", ALLE_GEBRUIKERS)[0]
@@ -142,7 +142,7 @@ class TestBaanVoorkeur(unittest.TestCase):
 
     def test_zonder_gebruikerslijst_valt_terug_op_vaste_voorkeur(self):
         self.assertEqual(baan_voorkeur("joris_van_den_broek", "padel", []),
-                         ["Padel 4", "Padel 6", "Padel 5", "Padel 3", "Padel 2", "Padel 1"])
+                         ["Padel 6", "Padel 5", "Padel 4", "Padel 3", "Padel 2", "Padel 1"])
 
     def test_zonder_gebruikerslijst_en_zonder_vaste_voorkeur_valt_terug_op_basisvolgorde(self):
         self.assertEqual(baan_voorkeur("chris_van_waardenburg", "padel", []), PADEL_BANEN)

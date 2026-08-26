@@ -17,8 +17,8 @@ TENNIS_BANEN = ["Tennis 04", "Tennis 05", "Tennis 06", "Tennis 07",
 # hier niet. Accounts die hier niet in staan (bv. chris_van_waardenburg, die
 # alleen tennis boekt) vallen terug op de offset-spreiding over PADEL_BANEN.
 PADEL_VOORKEUR_PER_ACCOUNT = {
-    "joris_van_den_broek": ["Padel 4", "Padel 6", "Padel 5", "Padel 3", "Padel 2", "Padel 1"],
-    "toine_aanraad":       ["Padel 6", "Padel 4", "Padel 5", "Padel 3", "Padel 2", "Padel 1"],
+    "joris_van_den_broek": ["Padel 6", "Padel 5", "Padel 4", "Padel 3", "Padel 2", "Padel 1"],
+    "toine_aanraad":       ["Padel 5", "Padel 6", "Padel 4", "Padel 3", "Padel 2", "Padel 1"],
 }
 
 
