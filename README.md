@@ -2,8 +2,8 @@
 
 Volledig automatische baan-reservering (padel of tennis) bij ETV Volley via de KNLTB-portal -- aangestuurd via een mobiele PWA, draaiend op GitHub Actions, met Google Agenda-koppeling.
 
-**Lokale locatie:** `\\MyCloudEX2Ultra\Transmission\ETV-Volley\knltb-autoboek` (ook bereikbaar als `L:\ETV-Volley\knltb-autoboek`).
-Let op: dit project stond eerder lokaal in OneDrive (`OneDrive - Pinkroccade\Documents 1\knltb-autoboek`) -- dat is verplaatst naar de NAS. Start nieuwe sessies/tools vanaf het NAS-pad hierboven, niet vanaf de oude OneDrive-map (die is leeg).
+**Werkmap:** `C:\Projecten\ETV-Volley\knltb-autoboek` (verplaatst hierheen op 2026-08-27 vanaf `L:\ETV-Volley\knltb-autoboek` / `\\MyCloudEX2Ultra\Transmission\ETV-Volley\knltb-autoboek`, wat nu alleen nog de back-up-bestemming is -- zie `scripts/backup.ps1`; werk niet meer op L:).
+Let op: dit project stond daarvoor lokaal in OneDrive (`OneDrive - Pinkroccade\Documents 1\knltb-autoboek`) -- ook die map is leeg en niet meer in gebruik.
 
 **Highlights:**
 - Mobiele PWA voor 1-tik-reserveren (padel én tennis)
