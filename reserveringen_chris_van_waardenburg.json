@@ -1,5 +1,5 @@
 {
-  "bijgewerkt": "2026-08-29T13:47:32",
+  "bijgewerkt": "2026-08-30T07:03:12",
   "reserveringen": [
     {
       "id": "2026-08-31_0900_padel-1",
@@ -16,6 +16,25 @@
       "spelers": [
         "Theo Minneboo",
         "Chris van Waardenburg"
+      ]
+    },
+    {
+      "id": "2026-09-01_1800_tennis-09",
+      "datum": "2026-09-01",
+      "tijd": "18:00",
+      "baan": "Tennis 09",
+      "tekst": "01-09-2026\t18:00 - 18:15\t09\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Bert Hovenkamp",
+        "Theo Minneboo",
+        "Wim Bor"
       ]
     }
   ]
