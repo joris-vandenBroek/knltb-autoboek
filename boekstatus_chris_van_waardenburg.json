@@ -1,8 +1,8 @@
 {
   "status": "ok",
-  "reden": "Gereserveerd: Tennis 12 om 20:00",
-  "datum": "2026-08-25",
-  "tijd": "20:00",
+  "reden": "Gereserveerd: Tennis 09 om 18:00 (voorkeur was 20:00)",
+  "datum": "2026-09-01",
+  "tijd": "18:00",
   "sport": "tennis",
   "spelers": [
     "Chris van Waardenburg",
@@ -10,6 +10,6 @@
     "Theo Minneboo",
     "Wim Bor"
   ],
-  "baan": "Tennis 12",
-  "tijdstip": "2026-08-23T07:01:02+02:00"
+  "baan": "Tennis 09",
+  "tijdstip": "2026-08-30T07:01:33+02:00"
 }
