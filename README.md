@@ -171,6 +171,8 @@ De log toont per boekpoging `Vrije banen op voorkeursvolgorde: ...`, zodat te co
 
 **Race-conditie afhandeling.** Als iemand anders net sneller dezelfde baan + tijd claimt (~1-2 sec venster tussen kies en bevestig), reageert ETV met "niet gevonden" / "al gereserveerd". Het script detecteert dit, navigeert terug naar de baan-keuze pagina + forceert een refresh (ETV toont bezette tijdcellen daarna niet meer), en probeert de volgende vrije baan voor dezelfde tijd. Pas als alle banen op die tijd weg zijn, valt 'ie terug op alternatieve tijden binnen hetzelfde dagdeel (Ochtend/Middag/Avond). Max 6 pogingen totaal. Zie [knltb-autoboek.md sectie 11.11](knltb-autoboek.md#1111-race-conditie-andere-boeker-pakt-de-baan-tussen-kies-en-bevestig).
 
+**Vals-positief afhandeling.** ETV kan een tijdslot tonen als selecteerbaar maar de boeking toch niet opslaan (bijv. bij clubkampioenschappen die een specifiek slot blokkeren zonder foutmelding op de bevestigingspagina). `bevestig()` keert dan `'OK'` terug, maar de reservering is niet zichtbaar op "Mijn Reserveringen". Het script herkent dit nu als vals-positief: het tijdslot wordt toegevoegd aan `uitsluit_tijden` en de baan-loop gaat direct door naar het volgende beschikbare tijdslot (bijv. 22:00 als 18:00–21:00 geblokkeerd zijn). Zie [knltb-autoboek.md sectie 13.23](knltb-autoboek.md#1323-vals-positief-bevestig-ok-maar-etv-slaat-niet-op).
+
 ### Mijn reserveringen / annuleren
 
 In de PWA-kaart "Mijn reserveringen":
@@ -207,6 +209,7 @@ De PWA toont onder het ledenaantal "Laatst ververst op DD-MM-YYYY".
 | Rode badge op tandwiel-icoon in PWA | Je GitHub PAT verloopt binnen 7 dagen (of is al verlopen). Genereer nieuwe op github.com/settings/tokens (scope `workflow`) -> tandwiel -> vul in + nieuwe verloopdatum |
 | Automatisch issue `auto-failure,boek` in repo | Workflow `boek.yml` faalde. Check link in het issue voor de run-log + download screenshots-artifact. Sluit issue na onderzoek (volgende failure = nieuw issue) |
 | Log toont `Padel X was bezet door iemand anders` | Klopt -- race-conditie, script probeert automatisch volgende vrije baan. Eindigt 'ie alsnog met OK: alles goed. Eindigt 'ie met fout na 6 pogingen: alle banen op alle alternatieve tijden (binnen hetzelfde dagdeel) waren bezet (zeldzaam) |
+| Log toont `Vals-positief gedetecteerd` | ETV accepteerde de klik maar sloeg de boeking niet op (bijv. clubkampioenschappen blokkeren het slot zonder foutmelding). Het script slaat dat tijdslot over en probeert de volgende beschikbare tijd. Geen enkel tijdslot meer vrij: boekstatus `fout`. Zie [sectie 13.23](knltb-autoboek.md#1323-vals-positief-bevestig-ok-maar-etv-slaat-niet-op) |
 | Wachtrij-item niet verwerkt | Check Actions -> Verwerk Wachtrij. Cron-job.org kan ook 401 geven -> PAT-scope checken |
 | Afspraak niet in agenda | Events worden aangemaakt bij de volgende Verversen in de PWA of de dagelijkse cron om 07:30. Controleer ook of agenda gedeeld is met het serviceaccount en of `GOOGLE_CALENDAR_CREDENTIALS` correct is |
 | Naam niet gevonden in autocomplete | Tik Verversen om de ledenlijst bij te werken |

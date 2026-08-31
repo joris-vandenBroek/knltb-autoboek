@@ -769,6 +769,31 @@ vooraan omdat `_gebruikersCache` nog `null` kan zijn wanneer
 `_renderReservList` vanuit `laadReserveringen()` draait. Omgedraaid verdwijnt de
 knop soms van je eigen lijst, en alleen bij een koude cache.
 
+### 13.23 Vals-positief: `bevestig OK` maar ETV slaat niet op
+
+**Symptoom.** `bevestig()` keert `'OK'` terug (de bevestigingspagina ziet er
+normaal uit), maar de reservering verschijnt niet op `/mijn/Reservations` of
+`/me/Reservations`. `boekstatus_<gebruiker>.json` toonde `status: "ok"` terwijl
+`reserveringen_<gebruiker>.json` leeg bleef.
+
+**Oorzaak.** ETV toont sommige tijdslots als selecteerbaar in het rooster, maar
+weigert de boeking stil -- zonder foutmelding op de bevestigingspagina. Dit deed
+zich voor bij clubkampioenschappen (30 aug 2026): de banen waren voor het toernooi
+gereserveerd maar de UI liet ze toch klikbaar.
+
+**Fix (commit 572a748).** `verifieer_reservering()` wordt nu direct na `bevestig()`
+aangeroepen in de baan-loop, niet pas ná de loop. Bij een lege terugkeer:
+
+1. Het tijdslot wordt aan `uitsluit_tijden` toegevoegd.
+2. `uitsluit_tijden` wordt doorgegeven aan `kies_baan_en_tijd()` -- dat tijdslot
+   wordt in de volgende baan-poging overgeslagen.
+3. `uitsluit_tijden` is scoped vóór de outer-retry-loop: een tijdslot dat in
+   poging 1 vals-positief was, wordt ook in poging 2 niet opnieuw geprobeerd.
+
+**Praktisch effect.** Hadden Padel 1-5 om 18:00-21:00 een vals-positief gegeven
+maar Padel 6 om 22:00 was echt vrij, dan vindt het script dat slot alsnog --
+i.p.v. te stoppen met een onjuist `status: "ok"`.
+
 ---
 
 ## 14. Wijzigingen aanbrengen
