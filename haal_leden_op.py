@@ -143,6 +143,7 @@ def scrape_ledenlijst(driver) -> list:
     log.info(f"Eerste batch: {len(leden)} rijen, {verwerk_batch(leden)} nieuw")
 
     pagina = 1
+    opeenvolgend_leeg = 0  # ETV-paginering lust soms 1-2 dubbele pagina's voor hij echt stopt
     while True:
         volgende = None
         try:
@@ -185,8 +186,13 @@ def scrape_ledenlijst(driver) -> list:
         nieuw = verwerk_batch(leden)
         log.info(f"Pagina {pagina}: {len(leden)} rijen, totaal: {len(alle_leden)} (+{nieuw})")
         if nieuw == 0:
-            log.info("Geen nieuwe leden -- stoppen")
-            break
+            opeenvolgend_leeg += 1
+            if opeenvolgend_leeg >= 3:
+                log.info(f"Geen nieuwe leden op {opeenvolgend_leeg} opeenvolgende pagina's -- stoppen")
+                break
+            log.info(f"Geen nieuwe leden (poging {opeenvolgend_leeg}/3) -- volgende pagina proberen")
+        else:
+            opeenvolgend_leeg = 0
 
     log.info(f"Klaar: {pagina} pagina's, {len(alle_leden)} unieke leden")
 
