@@ -1,4 +1,4 @@
-"""
+﻿"""
 ETV Volley Baan Auto-Reservering
 Automatisch een padelbaan reserveren via etv-volley.nl/mijn
 Het Google Agenda-event wordt niet hier aangemaakt, maar door
@@ -1233,7 +1233,8 @@ def _sluit_cookie_banner(driver: uc.Chrome):
         driver.implicitly_wait(5)
 
 
-def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel") -> tuple:
+def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel",
+                      uitsluit_tijden: set = None) -> tuple:
     """
     Kies een padelbaan + tijdslot.
 
@@ -1309,6 +1310,9 @@ def kies_baan_en_tijd(driver: uc.Chrome, voorkeur_tijd: str, sport: str = "padel
         log.warning(f"Scroll naar padel mislukt: {e}")
 
     for tijd in tijden:
+        if uitsluit_tijden and tijd in uitsluit_tijden:
+            log.info(f"  Tijdslot '{tijd}' overgeslagen (eerder vals-positief gedetecteerd)")
+            continue
         log.info(f"Zoek {sport} tijdslot '{tijd}'...")
 
         # Zoek tijdslot in een padel-rij via ABSOLUTE document-Y (scroll-onafhankelijk).
@@ -2171,6 +2175,7 @@ def main():
         gereserveerde_tijd = ""
         spelers_gedaan = False
         dag_stall_herstart = False  # True als de dag-selectie de herstart forceerde
+        uitsluit_tijden: set = set()  # tijden met vals-positief, persistent over outer-retries
 
         for outer_poging in range(1, MAX_OUTER_POGINGEN + 1):
             log.info(f" BOEK-POGING {outer_poging}/{MAX_OUTER_POGINGEN} ")
@@ -2330,7 +2335,8 @@ def main():
 
             for baan_poging in range(1, MAX_BAAN_POGINGEN + 1):
                 log.info(f" Baan-poging {baan_poging}/{MAX_BAAN_POGINGEN} ")
-                baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd, args.sport)
+                baan, gereserveerde_tijd = kies_baan_en_tijd(driver, args.tijd, args.sport,
+                                                              uitsluit_tijden=uitsluit_tijden)
                 if not baan:
                     log.warning(f" Geen {args.sport}-baan beschikbaar in baan-poging {baan_poging}")
                     break  # naar outer-retry
@@ -2347,8 +2353,36 @@ def main():
                         log.info(" Geen verdere stappen (verificatie/agenda/reserveringen.json overgeslagen).")
                         sys.exit(0)
                     log.info(f" Bevestigd op baan-poging {baan_poging}: {baan} om {gereserveerde_tijd}")
-                    bevestig_ok = True
-                    break
+
+                    # Verificeer direct: een vals-positief (bevestig OK maar ETV sloeg niet op,
+                    # bijv. door clubkampioenschappen) wordt hier al onderschept zodat het script
+                    # doorzoekt naar een echt vrij tijdslot i.p.v. te stoppen met een valse 'ok'.
+                    geverifieerde_baan = verifieer_reservering(
+                        driver, args.datum, gereserveerde_tijd,
+                        sport=args.sport, verwachte_baan=baan)
+                    if geverifieerde_baan:
+                        if baan and geverifieerde_baan != baan:
+                            log.warning(f" Baan wijkt af: grid-klik gaf '{baan}', "
+                                        f"reserveringspagina geeft '{geverifieerde_baan}'.")
+                        baan = geverifieerde_baan
+                        bevestig_ok = True
+                        break
+
+                    # Vals-positief: tijdslot overslaan en volgende proberen.
+                    log.warning(f" Vals-positief gedetecteerd: bevestig OK maar reservering "
+                                f"niet zichtbaar ({baan} om {gereserveerde_tijd}) -- "
+                                f"sla dit tijdslot over en probeer volgende.")
+                    uitsluit_tijden.add(gereserveerde_tijd)
+                    try:
+                        driver.get("https://www.etv-volley.nl/me/ReservationsCourt")
+                        time.sleep(1)
+                        log.info(" Terug naar baan-keuze na vals-positief")
+                        driver.refresh()
+                        time.sleep(1)
+                    except Exception as e:
+                        log.warning(f"Kon niet terug naar baan-keuze na vals-positief: {e}")
+                        break  # naar outer-retry
+                    continue
 
                 if resultaat == 'BEZET':
                     log.warning(f" {baan} om {gereserveerde_tijd} werd net door iemand anders "
@@ -2383,25 +2417,6 @@ def main():
                                 datum=args.datum, tijd=args.tijd, sport=args.sport,
                                 spelers=[SPELER1, args.speler2, args.speler3, args.speler4])
             sys.exit(1)
-
-        # â"€â"€ Verificeer dat reservering zichtbaar is op Mijn Reserveringen â"€â"€â"€â"€â"€â"€â"€â"€
-        geverifieerde_baan = verifieer_reservering(driver, args.datum, gereserveerde_tijd,
-                                                   sport=args.sport, verwachte_baan=baan)
-        if not geverifieerde_baan:
-            # Verificatie mislukt maar reservering is WEL gemaakt (bevestig() returnte 'OK').
-            # sys.exit(1) hier zou de cleanup-stap in boek.yml overslaan en het wachtrij-bestand
-            # laten staan — waardoor morgen opnieuw geprobeerd wordt te boeken voor dezelfde datum.
-            # Daarom: log een warning en ga door zodat de cleanup altijd plaatsvindt.
-            log.warning(f" Geen {args.sport}-baan herkend op de reserveringspagina — "
-                        f"val terug op de baan uit de grid-klik: '{baan or '(onbekend)'}'.")
-        else:
-            # Beide bronnen zijn het eens, of de overzichtspagina is specifieker.
-            # Wijkt hij af van de grid-klik, dan is dat het loggen waard: dan
-            # heeft ETV ons een andere baan toegewezen dan we aanklikten.
-            if baan and geverifieerde_baan != baan:
-                log.warning(f" Baan wijkt af: grid-klik gaf '{baan}', "
-                            f"reserveringspagina geeft '{geverifieerde_baan}'.")
-            baan = geverifieerde_baan
 
     finally:
         if driver:
