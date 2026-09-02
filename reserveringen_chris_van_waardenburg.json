@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-09-01T12:23:18",
-  "reserveringen": [
-    {
-      "id": "2026-09-01_1800_tennis-09",
-      "datum": "2026-09-01",
-      "tijd": "18:00",
-      "baan": "Tennis 09",
-      "tekst": "01-09-2026\t18:00 - 18:15\t09\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Chris van Waardenburg",
-        "Bert Hovenkamp",
-        "Theo Minneboo",
-        "Wim Bor"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-09-02T11:51:47",
+  "reserveringen": []
 }
