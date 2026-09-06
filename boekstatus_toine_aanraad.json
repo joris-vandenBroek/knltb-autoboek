@@ -1,8 +1,8 @@
 {
   "status": "ok",
-  "reden": "Gereserveerd: Padel 2 om 22:00 (voorkeur was 20:00)",
-  "datum": "2026-09-01",
-  "tijd": "22:00",
+  "reden": "Gereserveerd: Padel 2 om 20:00",
+  "datum": "2026-09-08",
+  "tijd": "20:00",
   "sport": "padel",
   "spelers": [
     "Toine Aanraad",
@@ -11,5 +11,5 @@
     "Dirk Hanssen"
   ],
   "baan": "Padel 2",
-  "tijdstip": "2026-08-30T07:01:33+02:00"
+  "tijdstip": "2026-09-06T07:01:05+02:00"
 }
