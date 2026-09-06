@@ -1,8 +1,8 @@
 {
-  "status": "ok",
-  "reden": "Gereserveerd: Tennis 09 om 18:00 (voorkeur was 20:00)",
-  "datum": "2026-09-01",
-  "tijd": "18:00",
+  "status": "fout",
+  "reden": "Chris van Waardenburg kan 1 actieve boekingen per dag hebben",
+  "datum": "2026-09-08",
+  "tijd": "20:00",
   "sport": "tennis",
   "spelers": [
     "Chris van Waardenburg",
@@ -10,6 +10,6 @@
     "Theo Minneboo",
     "Wim Bor"
   ],
-  "baan": "Tennis 09",
-  "tijdstip": "2026-08-30T07:01:33+02:00"
+  "baan": "",
+  "tijdstip": "2026-09-06T07:05:14+02:00"
 }
