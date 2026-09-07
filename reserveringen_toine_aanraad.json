@@ -1,12 +1,12 @@
 {
-  "bijgewerkt": "2026-09-07T12:51:22",
+  "bijgewerkt": "2026-09-07T18:41:07",
   "reserveringen": [
     {
-      "id": "2026-09-08_2000_padel-2",
-      "datum": "2026-09-08",
-      "tijd": "20:00",
-      "baan": "Padel 2",
-      "tekst": "08-09-2026\t20:00 - 21:00\tPadel 2\t\t\nWijzigen\n\t\nAnnuleren",
+      "id": "2026-09-09_2030_padel-5",
+      "datum": "2026-09-09",
+      "tijd": "20:30",
+      "baan": "Padel 5",
+      "tekst": "09-09-2026\t20:30 - 21:30\tPadel 5\t\t\nWijzigen\n\t\nAnnuleren",
       "cancel": {
         "btnTekst": "Annuleren",
         "btnHref": null,
@@ -14,10 +14,9 @@
         "btnDataId": null
       },
       "spelers": [
+        "Nghia Le",
         "Toine Aanraad",
-        "Peter Nijhof",
-        "Jan van Bragt",
-        "Dirk Hanssen"
+        "Joris van den Broek"
       ]
     }
   ]
