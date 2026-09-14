@@ -1,15 +1,15 @@
 {
   "status": "ok",
-  "reden": "Gereserveerd: Padel 2 om 20:00",
-  "datum": "2026-09-15",
-  "tijd": "20:00",
+  "reden": "Gereserveerd: Padel 5 om 20:30",
+  "datum": "2026-09-16",
+  "tijd": "20:30",
   "sport": "padel",
   "spelers": [
     "Toine Aanraad",
-    "Peter Nijhof",
-    "Jan van Bragt",
-    "Dirk Hanssen"
+    "Jan Verhoeven",
+    "Rob Klein",
+    "Emile Rasing"
   ],
-  "baan": "Padel 2",
-  "tijdstip": "2026-09-13T07:01:02+02:00"
+  "baan": "Padel 5",
+  "tijdstip": "2026-09-14T07:01:02+02:00"
 }
