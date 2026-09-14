@@ -2508,10 +2508,10 @@
     "rating_padel": "9,0000"
   },
   {
-    "bondsnummer": "22290516",
+    "bondsnummer": "45200300",
     "naam": "Jordi Peerlings",
-    "sterkte_padel": "8",
-    "rating_padel": "7,8294"
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "41377486",
@@ -4804,6 +4804,12 @@
     "naam": "Roald Couwenberg",
     "sterkte_padel": "6",
     "rating_padel": "6,3384"
+  },
+  {
+    "bondsnummer": "28653076",
+    "naam": "Rob Engelen",
+    "sterkte_padel": "",
+    "rating_padel": ""
   },
   {
     "bondsnummer": "26390779",
