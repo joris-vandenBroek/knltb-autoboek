@@ -1,23 +1,4 @@
 {
-  "bijgewerkt": "2026-09-16T12:15:34",
-  "reserveringen": [
-    {
-      "id": "2026-09-17_0930_padel-3",
-      "datum": "2026-09-17",
-      "tijd": "09:30",
-      "baan": "Padel 3",
-      "tekst": "17-09-2026\t09:30 - 10:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Chris van Waardenburg",
-        "Jan van Bragt",
-        "Herman Brugmans"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-09-17T12:21:33",
+  "reserveringen": []
 }
