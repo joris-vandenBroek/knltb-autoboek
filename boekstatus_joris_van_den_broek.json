@@ -1,7 +1,7 @@
 {
   "status": "ok",
   "reden": "Gereserveerd: Padel 2 om 19:00",
-  "datum": "2026-09-15",
+  "datum": "2026-09-22",
   "tijd": "19:00",
   "sport": "padel",
   "spelers": [
@@ -11,5 +11,5 @@
     "Teo van Deurzen"
   ],
   "baan": "Padel 2",
-  "tijdstip": "2026-09-13T07:01:00+02:00"
+  "tijdstip": "2026-09-20T07:01:04+02:00"
 }
