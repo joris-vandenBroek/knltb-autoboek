@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-09-22T12:16:15",
-  "reserveringen": [
-    {
-      "id": "2026-09-22_2000_tennis-12",
-      "datum": "2026-09-22",
-      "tijd": "20:00",
-      "baan": "Tennis 12",
-      "tekst": "22-09-2026\t20:00 - 21:00\t12\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Chris van Waardenburg",
-        "Bert Hovenkamp",
-        "Theo Minneboo",
-        "Wim Bor"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-09-23T12:15:39",
+  "reserveringen": []
 }
