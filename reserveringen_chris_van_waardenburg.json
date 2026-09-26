@@ -1,4 +1,23 @@
 {
-  "bijgewerkt": "2026-09-25T12:29:16",
-  "reserveringen": []
+  "bijgewerkt": "2026-09-26T12:10:23",
+  "reserveringen": [
+    {
+      "id": "2026-09-28_0930_padel-4",
+      "datum": "2026-09-28",
+      "tijd": "09:30",
+      "baan": "Padel 4",
+      "tekst": "28-09-2026\t09:30 - 10:30\tPadel 4\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Herman Brugmans",
+        "Chris van Waardenburg",
+        "Jeannette Warner"
+      ]
+    }
+  ]
 }
