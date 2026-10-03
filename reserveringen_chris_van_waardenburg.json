@@ -1,4 +1,23 @@
 {
-  "bijgewerkt": "2026-10-02T13:17:25",
-  "reserveringen": []
+  "bijgewerkt": "2026-10-03T12:33:54",
+  "reserveringen": [
+    {
+      "id": "2026-10-05_0930_padel-4",
+      "datum": "2026-10-05",
+      "tijd": "09:30",
+      "baan": "Padel 4",
+      "tekst": "05-10-2026\t09:30 - 10:30\tPadel 4\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Jeannette Warner",
+        "Jan van Bragt"
+      ]
+    }
+  ]
 }
