@@ -1,4 +1,23 @@
 {
-  "bijgewerkt": "2026-10-09T14:04:19",
-  "reserveringen": []
+  "bijgewerkt": "2026-10-10T13:20:54",
+  "reserveringen": [
+    {
+      "id": "2026-10-12_0930_padel-3",
+      "datum": "2026-10-12",
+      "tijd": "09:30",
+      "baan": "Padel 3",
+      "tekst": "12-10-2026\t09:30 - 10:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Jeannette Warner",
+        "Chris van Waardenburg",
+        "Jan van Bragt"
+      ]
+    }
+  ]
 }
