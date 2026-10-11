@@ -1,7 +1,7 @@
 {
   "status": "ok",
   "reden": "Gereserveerd: Padel 5 om 20:30",
-  "datum": "2026-10-06",
+  "datum": "2026-10-13",
   "tijd": "20:30",
   "sport": "padel",
   "spelers": [
@@ -11,5 +11,5 @@
     "Dirk Hanssen"
   ],
   "baan": "Padel 5",
-  "tijdstip": "2026-10-04T07:01:03+02:00"
+  "tijdstip": "2026-10-11T07:00:18+02:00"
 }
