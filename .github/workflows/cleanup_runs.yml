@@ -4,9 +4,10 @@ name: Opruimen oude Actions-runs
 # 1. Schedule: elke zondag 03:00 UTC (04:00/05:00 NL) — automatische cleanup
 # 2. Workflow_dispatch: handmatig via Actions → "Run workflow" voor ad-hoc
 #
-# Defaults zijn aggressief (gebruikt door schedule + leeg-gelaten dispatch):
-# - Behoudt altijd de 2 nieuwste runs per workflow
-# - Verwijdert runs ouder dan 0 dagen (= alles behalve keep_last_n)
+# Defaults (gebruikt door schedule + leeg-gelaten dispatch):
+# - Behoudt altijd de 10 nieuwste runs per workflow
+# - Verwijdert runs ouder dan 14 dagen (zodat boeklogs na een vreemde
+#   boeking nog twee weken te raadplegen zijn)
 # - Werkt op ALLE workflows in deze repo (boek, beheer, verwerk_wachtrij,
 #   haal_leden_op + deze cleanup zelf)
 # - Dry-run modus om eerst te zien wat er weg zou gaan zonder echt te wissen
@@ -15,13 +16,13 @@ on:
   workflow_dispatch:
     inputs:
       max_age_days:
-        description: 'Verwijder runs ouder dan N dagen (0 = aggressief: alles weg behalve keep_last_n nieuwste)'
+        description: 'Verwijder runs ouder dan N dagen (0 = alles weg behalve keep_last_n nieuwste)'
         required: false
-        default: '0'
+        default: '14'
       keep_last_n:
         description: 'Bewaar altijd minstens N nieuwste runs per workflow'
         required: false
-        default: '2'
+        default: '10'
       dry_run:
         description: 'Dry-run: toon wat er weg zou gaan, geen echte delete'
         required: false
@@ -51,8 +52,8 @@ jobs:
         env:
           GH_TOKEN:    ${{ secrets.GITHUB_TOKEN }}
           # Defaults voor schedule-trigger (inputs.X is leeg buiten workflow_dispatch)
-          MAX_AGE:     ${{ inputs.max_age_days || '0' }}
-          KEEP_LAST:   ${{ inputs.keep_last_n  || '2' }}
+          MAX_AGE:     ${{ inputs.max_age_days || '14' }}
+          KEEP_LAST:   ${{ inputs.keep_last_n  || '10' }}
           DRY_RUN:     ${{ inputs.dry_run      || 'false' }}
           REPO:        ${{ github.repository }}
         run: |
