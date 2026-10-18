@@ -1,5 +1,5 @@
 {
-  "bijgewerkt": "2026-10-17T11:37:57",
+  "bijgewerkt": "2026-10-18T11:50:52",
   "reserveringen": [
     {
       "id": "2026-10-19_0930_padel-3",
@@ -17,6 +17,44 @@
         "Peter Nijhof",
         "Chris van Waardenburg",
         "Jan van Bragt"
+      ]
+    },
+    {
+      "id": "2026-10-20_1930_tennis-12",
+      "datum": "2026-10-20",
+      "tijd": "19:30",
+      "baan": "Tennis 12",
+      "tekst": "20-10-2026\t19:30 - 20:00\t12\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Bert Hovenkamp",
+        "Theo Minneboo",
+        "Wim Bor"
+      ]
+    },
+    {
+      "id": "2026-10-20_2000_tennis-12",
+      "datum": "2026-10-20",
+      "tijd": "20:00",
+      "baan": "Tennis 12",
+      "tekst": "20-10-2026\t20:00 - 21:30\t12\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Bert Hovenkamp",
+        "Theo Minneboo",
+        "Wim Bor"
       ]
     }
   ]
