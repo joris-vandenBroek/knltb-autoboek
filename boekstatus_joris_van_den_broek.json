@@ -1,8 +1,8 @@
 {
   "status": "ok",
-  "reden": "Gereserveerd: Padel 5 om 19:30",
-  "datum": "2026-10-13",
-  "tijd": "19:30",
+  "reden": "Gereserveerd: Padel 6 om 20:00 (voorkeur was 19:30)",
+  "datum": "2026-10-20",
+  "tijd": "20:00",
   "sport": "padel",
   "spelers": [
     "Joris van den Broek",
@@ -10,6 +10,6 @@
     "Herman Brugmans",
     "Teo van Deurzen"
   ],
-  "baan": "Padel 5",
-  "tijdstip": "2026-10-11T07:00:14+02:00"
+  "baan": "Padel 6",
+  "tijdstip": "2026-10-18T07:01:42+02:00"
 }
