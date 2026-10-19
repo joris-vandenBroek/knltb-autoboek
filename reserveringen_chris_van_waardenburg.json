@@ -1,24 +1,6 @@
 {
-  "bijgewerkt": "2026-10-18T11:50:52",
+  "bijgewerkt": "2026-10-19T13:09:43",
   "reserveringen": [
-    {
-      "id": "2026-10-19_0930_padel-3",
-      "datum": "2026-10-19",
-      "tijd": "09:30",
-      "baan": "Padel 3",
-      "tekst": "19-10-2026\t09:30 - 10:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Peter Nijhof",
-        "Chris van Waardenburg",
-        "Jan van Bragt"
-      ]
-    },
     {
       "id": "2026-10-20_1930_tennis-12",
       "datum": "2026-10-20",
