@@ -1,4 +1,23 @@
 {
-  "bijgewerkt": "2026-10-23T12:27:00",
-  "reserveringen": []
+  "bijgewerkt": "2026-10-24T11:46:08",
+  "reserveringen": [
+    {
+      "id": "2026-10-26_0930_padel-3",
+      "datum": "2026-10-26",
+      "tijd": "09:30",
+      "baan": "Padel 3",
+      "tekst": "26-10-2026\t09:30 - 10:30\tPadel 3\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Kartal Gurcan",
+        "Jan van Bragt",
+        "Chris van Waardenburg"
+      ]
+    }
+  ]
 }
