@@ -1,7 +1,7 @@
 {
   "status": "fout",
   "reden": "Chris van Waardenburg kan 1 actieve boekingen per dag hebben",
-  "datum": "2026-10-20",
+  "datum": "2026-10-27",
   "tijd": "20:00",
   "sport": "tennis",
   "spelers": [
@@ -11,5 +11,5 @@
     "Wim Bor"
   ],
   "baan": "",
-  "tijdstip": "2026-10-18T07:04:06+02:00"
+  "tijdstip": "2026-10-25T07:07:08+01:00"
 }
