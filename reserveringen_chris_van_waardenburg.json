@@ -1,5 +1,5 @@
 {
-  "bijgewerkt": "2026-10-24T11:46:08",
+  "bijgewerkt": "2026-10-25T11:05:23",
   "reserveringen": [
     {
       "id": "2026-10-26_0930_padel-3",
@@ -17,6 +17,63 @@
         "Kartal Gurcan",
         "Jan van Bragt",
         "Chris van Waardenburg"
+      ]
+    },
+    {
+      "id": "2026-10-27_1900_tennis-07",
+      "datum": "2026-10-27",
+      "tijd": "19:00",
+      "baan": "Tennis 07",
+      "tekst": "27-10-2026\t19:00 - 19:30\t07\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Bert Hovenkamp",
+        "Theo Minneboo",
+        "Wim Bor"
+      ]
+    },
+    {
+      "id": "2026-10-27_1930_tennis-12",
+      "datum": "2026-10-27",
+      "tijd": "19:30",
+      "baan": "Tennis 12",
+      "tekst": "27-10-2026\t19:30 - 20:00\t12\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Bert Hovenkamp",
+        "Theo Minneboo",
+        "Wim Bor"
+      ]
+    },
+    {
+      "id": "2026-10-27_2000_tennis-12",
+      "datum": "2026-10-27",
+      "tijd": "20:00",
+      "baan": "Tennis 12",
+      "tekst": "27-10-2026\t20:00 - 21:30\t12\t\t\nWijzigen\n\t\nAnnuleren",
+      "cancel": {
+        "btnTekst": "Annuleren",
+        "btnHref": null,
+        "btnDataUrl": null,
+        "btnDataId": null
+      },
+      "spelers": [
+        "Chris van Waardenburg",
+        "Bert Hovenkamp",
+        "Theo Minneboo",
+        "Wim Bor"
       ]
     }
   ]
