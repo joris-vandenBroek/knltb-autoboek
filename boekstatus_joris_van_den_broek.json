@@ -1,6 +1,6 @@
 {
-  "status": "wachtrij",
-  "reden": "In wachtrij — reservering start automatisch op 07-11-2026 om 07:00",
+  "status": "ok",
+  "reden": "Gereserveerd: Padel 5 om 19:30",
   "datum": "2026-11-09",
   "tijd": "19:30",
   "sport": "padel",
@@ -10,6 +10,6 @@
     "Johan Janssen",
     "Daniel Enderink"
   ],
-  "baan": "",
-  "tijdstip": "2026-11-02T17:47:00+01:00"
+  "baan": "Padel 5",
+  "tijdstip": "2026-11-07T07:01:19+01:00"
 }
