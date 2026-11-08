@@ -1,7 +1,7 @@
 {
   "status": "fout",
   "reden": "Geen reservering gelukt na 5 pogingen",
-  "datum": "2026-11-03",
+  "datum": "2026-11-10",
   "tijd": "20:00",
   "sport": "tennis",
   "spelers": [
@@ -11,5 +11,5 @@
     "Wim Bor"
   ],
   "baan": "",
-  "tijdstip": "2026-11-01T07:08:02+01:00"
+  "tijdstip": "2026-11-08T07:07:32+01:00"
 }
