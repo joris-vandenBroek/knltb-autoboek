@@ -1,15 +1,15 @@
 {
   "status": "ok",
-  "reden": "Gereserveerd: Padel 5 om 19:30",
-  "datum": "2026-11-09",
+  "reden": "Gereserveerd: Padel 4 om 19:30",
+  "datum": "2026-11-10",
   "tijd": "19:30",
   "sport": "padel",
   "spelers": [
     "Joris van den Broek",
-    "Toine Aanraad",
-    "Johan Janssen",
-    "Daniel Enderink"
+    "Jan Verhoeven",
+    "Herman Brugmans",
+    "Teo van Deurzen"
   ],
-  "baan": "Padel 5",
-  "tijdstip": "2026-11-07T07:01:19+01:00"
+  "baan": "Padel 4",
+  "tijdstip": "2026-11-08T07:01:02+01:00"
 }
