@@ -56,6 +56,7 @@ from boek_regels import (          # noqa: E402
     PADEL_BANEN,
     TENNIS_BANEN,
     baan_uit_body,
+    baan_uit_reserveringsregel,
     baan_voorkeur,
     boeking_op_datum,
     dag_selectie_actie,
@@ -1935,7 +1936,14 @@ def verifieer_reservering(driver: uc.Chrome, datum: str, tijd: str,
             datum_ok = any(t in body for t in datum_tekens)
             tijd_ok  = tijd in body
             if datum_ok and tijd_ok:
-                baan_naam = baan_uit_body(body, sport, verwachte_baan)
+                baan_naam = (baan_uit_reserveringsregel(body, datum_tekens, tijd, sport)
+                             or baan_uit_body(body, sport, verwachte_baan))
+                if not baan_naam and verwachte_baan:
+                    # Datum en tijd staan er: de reservering bestaat. Een
+                    # onleesbare baannaam mag dat niet ongedaan maken (run #245/#250).
+                    log.warning(f"  Baannaam niet te lezen uit de reserveringspagina; "
+                                f"gebruik de gekozen baan '{verwachte_baan}'.")
+                    baan_naam = verwachte_baan
                 log.info(f" Reservering BEVESTIGD op {url}! baan={baan_naam or '(onbekend)'}"
                          f" (sport={sport}, verwacht='{verwachte_baan or '-'}')")
                 # Geen terugval op een generieke naam: liever '' dan een baan

@@ -6,6 +6,7 @@ from boek_regels import (
     TENNIS_BANEN,
     banen_voor_sport,
     baan_uit_body,
+    baan_uit_reserveringsregel,
     dag_selectie_actie,
     baan_voorkeur,
     wizard_ververs_moment,
@@ -300,6 +301,43 @@ class TestReplayRun199(unittest.TestCase):
             1 for n in range(2, 40) if self._poging_tijd(n) <= oude_deadline
         )
         self.assertGreaterEqual(pogingen_onder_oude_regel, 32)
+
+
+class TestBaanUitReserveringsregel(unittest.TestCase):
+    """
+    Regressie voor run #245 en #250 (Chris van Waardenburg): ETV toont een
+    tennisbaan als kaal nummer ('20:00 - 21:30 12'). baan_uit_body vond daardoor
+    niets en een bestaande reservering gold als 'niet gevonden'.
+    """
+    TEKENS = ["2026-11-03", "3-11", "3 november", "03-11-2026"]
+    BODY = ("Mijn boekingen\n"
+            "02-11-2026 09:30 - 10:30 Padel 3\nWijzigen\nAnnuleren\n"
+            "03-11-2026 20:00 - 21:30 12\nWijzigen\nAnnuleren\n")
+
+    def test_tennisbaan_als_kaal_nummer(self):
+        self.assertEqual(
+            baan_uit_reserveringsregel(self.BODY, self.TEKENS, "20:00", "tennis"), "Tennis 12")
+
+    def test_nummer_onder_tien_krijgt_voorloopnul(self):
+        body = "03-11-2026 20:00 - 21:30 4\n"
+        self.assertEqual(
+            baan_uit_reserveringsregel(body, self.TEKENS, "20:00", "tennis"), "Tennis 04")
+
+    def test_padelbaan_met_naam(self):
+        body = "03-11-2026 19:00 - 20:00 Padel 6\n"
+        self.assertEqual(
+            baan_uit_reserveringsregel(body, self.TEKENS, "19:00", "padel"), "Padel 6")
+
+    def test_andere_tijd_op_zelfde_datum_matcht_niet(self):
+        self.assertEqual(
+            baan_uit_reserveringsregel(self.BODY, self.TEKENS, "18:00", "tennis"), "")
+
+    def test_padelregel_van_andere_datum_wordt_genegeerd(self):
+        self.assertEqual(
+            baan_uit_reserveringsregel(self.BODY, self.TEKENS, "09:30", "padel"), "")
+
+    def test_lege_body(self):
+        self.assertEqual(baan_uit_reserveringsregel("", self.TEKENS, "20:00", "tennis"), "")
 
 
 if __name__ == "__main__":

@@ -794,6 +794,28 @@ aangeroepen in de baan-loop, niet pas ná de loop. Bij een lege terugkeer:
 maar Padel 6 om 22:00 was echt vrij, dan vindt het script dat slot alsnog --
 i.p.v. te stoppen met een onjuist `status: "ok"`.
 
+### 13.24 Verificatie zag een bestaande tennisreservering niet (false negative)
+
+**Symptoom.** Run #245 (boeking 3 nov) en #250 (boeking 10 nov) van Chris van
+Waardenburg eindigden met `Geen reservering gelukt na 5 pogingen` en een
+`auto-failure`-issue, terwijl de baan er wel stond (Tennis 12, 20:00). De PWA toonde
+dezelfde datum tegelijk onder "Reserveringen" en onder "Niet gelukt".
+
+**Oorzaak.** `verifieer_reservering()` gebruikte de baannaam als succesindicator:
+een lege naam betekende "niet gevonden". ETV toont padelbanen als `Padel 3`, maar
+tennisbanen alleen als nummer (`03-11-2026 20:00 - 21:30 12`). `baan_uit_body()`
+zocht op `Tennis 12`, vond niets en gaf `''` terug, ook al logde de functie
+"Reservering BEVESTIGD". De oplossing van 13.23 behandelde dat als vals-positief,
+sloeg 20:00 over en probeerde 19:30, 21:30 en 18:00; die werden door de regel van
+1 baan per dag niet meer geaccepteerd.
+
+**Fix.** `boek_regels.baan_uit_reserveringsregel()` leest de baan uit de regel met
+datum en tijd en vult een kaal nummer aan tot `Tennis NN`. Is de naam daarna nog
+steeds onleesbaar terwijl datum en tijd er wel staan, dan gebruikt
+`verifieer_reservering()` de baan die tijdens de grid-klik is gekozen. Een gevonden
+reservering kan dus niet meer ongeldig worden door een onleesbare baannaam.
+Tests: `TestBaanUitReserveringsregel` in `tests/test_boek_regels.py`.
+
 ---
 
 ## 14. Wijzigingen aanbrengen

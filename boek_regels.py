@@ -5,6 +5,7 @@ Net als wachtrij_regels.py bewust zonder selenium/undetected_chromedriver, zodat
 deze logica in tests draait zonder browser. boek_baan.py importeert hieruit.
 """
 
+import re
 from datetime import datetime, timedelta
 
 PADEL_BANEN = ["Padel 4", "Padel 6", "Padel 5", "Padel 3", "Padel 2", "Padel 1"]
@@ -51,6 +52,34 @@ def baan_uit_body(body: str, sport: str, verwachte_baan: str = "") -> str:
     if verwachte_baan and verwachte_baan in banen and verwachte_baan in body:
         return verwachte_baan
     return next((b for b in banen if b in body), "")
+
+
+def baan_uit_reserveringsregel(body: str, datum_tekens, tijd: str, sport: str) -> str:
+    """
+    Lees de baannaam uit de regel van de reservering met deze datum en tijd.
+
+    ETV toont padelbanen als 'Padel 3', maar tennisbanen alleen als nummer:
+    '03-11-2026 20:00 - 21:30 12'. baan_uit_body zoekt op 'Tennis 12' en vond
+    daardoor niets, waarna verifieer_reservering een bestaande reservering als
+    'niet gevonden' behandelde (run #245 en #250, Chris van Waardenburg).
+
+    Geeft '' als de regel er niet is of de baan niet te herleiden is.
+    """
+    banen = banen_voor_sport(sport)
+    tennis = banen is TENNIS_BANEN
+    for regel in (body or "").splitlines():
+        if tijd not in regel or not any(d in regel for d in datum_tekens):
+            continue
+        genoemd = next((b for b in banen if b in regel), "")
+        if genoemd:
+            return genoemd
+        if tennis:
+            m = re.search(re.escape(tijd) + r"\s*-\s*\d{1,2}:\d{2}\s+(\d{1,2})\b", regel)
+            if m:
+                kandidaat = f"Tennis {int(m.group(1)):02d}"
+                if kandidaat in banen:
+                    return kandidaat
+    return ""
 
 
 def baan_voorkeur(gebruiker: str, sport: str, gebruiker_ids=None) -> list:
