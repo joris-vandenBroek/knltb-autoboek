@@ -1,24 +1,4 @@
 {
-  "bijgewerkt": "2026-11-10T14:43:53",
-  "reserveringen": [
-    {
-      "id": "2026-11-10_1930_padel-4",
-      "datum": "2026-11-10",
-      "tijd": "19:30",
-      "baan": "Padel 4",
-      "tekst": "10-11-2026\t19:30 - 20:30\tPadel 4\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Joris van den Broek",
-        "Jan Verhoeven",
-        "Herman Brugmans",
-        "Teo van Deurzen"
-      ]
-    }
-  ]
+  "bijgewerkt": "2026-11-11T13:55:50",
+  "reserveringen": []
 }
