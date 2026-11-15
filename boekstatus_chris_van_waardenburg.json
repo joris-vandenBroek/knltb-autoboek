@@ -1,7 +1,7 @@
 {
-  "status": "fout",
-  "reden": "Geen reservering gelukt na 5 pogingen",
-  "datum": "2026-11-10",
+  "status": "ok",
+  "reden": "Gereserveerd: Tennis 12 om 20:00",
+  "datum": "2026-11-17",
   "tijd": "20:00",
   "sport": "tennis",
   "spelers": [
@@ -10,6 +10,6 @@
     "Theo Minneboo",
     "Wim Bor"
   ],
-  "baan": "",
-  "tijdstip": "2026-11-08T07:07:32+01:00"
+  "baan": "Tennis 12",
+  "tijdstip": "2026-11-15T07:01:04+01:00"
 }
