@@ -1,7 +1,7 @@
 {
   "status": "ok",
   "reden": "Gereserveerd: Tennis 12 om 20:00",
-  "datum": "2026-11-17",
+  "datum": "2026-11-24",
   "tijd": "20:00",
   "sport": "tennis",
   "spelers": [
@@ -11,5 +11,5 @@
     "Wim Bor"
   ],
   "baan": "Tennis 12",
-  "tijdstip": "2026-11-15T07:01:04+01:00"
+  "tijdstip": "2026-11-22T07:00:59+01:00"
 }
