@@ -1,24 +1,6 @@
 {
-  "bijgewerkt": "2026-11-23T17:24:07",
+  "bijgewerkt": "2026-11-24T17:15:08",
   "reserveringen": [
-    {
-      "id": "2026-11-23_1930_padel-5",
-      "datum": "2026-11-23",
-      "tijd": "19:30",
-      "baan": "Padel 5",
-      "tekst": "23-11-2026\t19:30 - 20:30\tPadel 5\t\t\nWijzigen\n\t\nAnnuleren",
-      "cancel": {
-        "btnTekst": "Annuleren",
-        "btnHref": null,
-        "btnDataUrl": null,
-        "btnDataId": null
-      },
-      "spelers": [
-        "Toine Aanraad",
-        "Kevin Sijmens",
-        "Niek Theunissen"
-      ]
-    },
     {
       "id": "2026-11-24_2030_padel-5",
       "datum": "2026-11-24",
